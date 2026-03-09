@@ -2,35 +2,49 @@ version: "3.9"
 
 services:
 
+############################
+# DATABASE
+############################
+
   postgres:
     image: postgres:15
     container_name: postgres
+    profiles: ["core"]
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin
-      POSTGRES_DB: saas
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+############################
+# REDIS
+############################
+
   redis:
     image: redis:7
     container_name: redis
+    profiles: ["core"]
     ports:
       - "6379:6379"
+
+############################
+# KAFKA
+############################
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
+    profiles: ["core"]
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
-    ports:
-      - "2181:2181"
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
+    profiles: ["core"]
     depends_on:
       - zookeeper
     ports:
@@ -40,50 +54,73 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
+############################
+# KAFKA UI
+############################
+
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    image: provectuslabs/kafka-ui
     container_name: kafka-ui
-    depends_on:
-      - kafka
+    profiles: ["core"]
     ports:
       - "8080:8080"
+    depends_on:
+      - kafka
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
 
+############################
+# API GATEWAY
+############################
+
   api-gateway:
     build: ../services/api-gateway
     container_name: api-gateway
+    profiles: ["core"]
     ports:
       - "3000:3000"
     depends_on:
-      - kafka
       - postgres
+      - kafka
+      - redis
+
+############################
+# SERVICES
+############################
 
   auth-service:
     build: ../services/auth-service
     container_name: auth-service
+    profiles: ["core"]
     depends_on:
-      - kafka
       - postgres
+      - kafka
 
   task-service:
     build: ../services/task-service
     container_name: task-service
+    profiles: ["core"]
     depends_on:
-      - kafka
       - postgres
+      - kafka
 
   notification-service:
     build: ../services/notification-service
     container_name: notification-service
+    profiles: ["core"]
     depends_on:
       - kafka
       - redis
 
+############################
+# WORKERS
+############################
+
   notification-worker:
     build: ../workers/notification-worker
     container_name: notification-worker
+    profiles: ["core"]
     depends_on:
       - redis
       - kafka
@@ -91,16 +128,117 @@ services:
   analytics-worker:
     build: ../workers/analytics-worker
     container_name: analytics-worker
+    profiles: ["core"]
     depends_on:
       - kafka
 
-  frontend:
-    build: ../frontend
-    container_name: frontend
+############################
+# FRONTENDS
+############################
+
+  react-frontend:
+    build: ../frontends/react-dashboard
+    container_name: react-frontend
+    profiles: ["core"]
     ports:
       - "5173:5173"
+    environment:
+      - API_URL=http://api-gateway:3000
     depends_on:
       - api-gateway
+
+  nextjs-frontend:
+    build: ../frontends/nextjs-dashboard
+    container_name: nextjs-frontend
+    profiles: ["core"]
+    ports:
+      - "3002:3002"
+    environment:
+      - API_URL=http://api-gateway:3000
+    depends_on:
+      - api-gateway
+
+############################
+# REDIS-INSIGHT
+############################
+
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: redis-insight
+    profiles: ["observability"]
+    ports:
+      - "5540:5540"
+    depends_on:
+      - redis
+
+############################
+# PROMETHEUS
+############################
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    profiles: ["observability"]
+    ports:
+      - "9090:9090"
+
+############################
+# GRAFANA
+############################
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    profiles: ["observability"]
+    ports:
+      - "3001:3000"
+
+############################
+# ELASTICSEARCH
+############################
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    profiles: ["observability"]
+    environment:
+      discovery.type: single-node
+    ports:
+      - "9200:9200"
+
+############################
+# KIBANA
+############################
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: kibana
+    profiles: ["observability"]
+    depends_on:
+      - elasticsearch
+    ports:
+      - "5601:5601"
+
+############################
+# DATADOG
+############################
+
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:latest
+    container_name: datadog-agent
+    profiles: ["datadog"]
+    environment:
+      - DD_API_KEY=${DATADOG_API_KEY}
+      - DD_SITE=${DATADOG_SITE}
+      - DD_APM_ENABLED=true
+      - DD_LOGS_ENABLED=true
+      - DD_PROCESS_AGENT_ENABLED=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+############################
+# VOLUMES
+############################
 
 volumes:
   postgres_data:
