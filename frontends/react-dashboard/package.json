@@ -1,10 +1,11 @@
 {
-    "name": "frontend",
+    "name": "react-frontend",
     "private": true,
     "scripts": {
       "dev": "vite"
     },
     "dependencies": {
+      "typescript": "^5.3.0",
       "react": "^18.2.0",
       "react-dom": "^18.2.0"
     },
