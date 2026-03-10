@@ -79,7 +79,7 @@ services:
     container_name: api-gateway
     profiles: ["core"]
     ports:
-      - "3000:3000"
+      - "8000:8000"
     depends_on:
       - postgres
       - kafka
@@ -143,7 +143,7 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - API_URL=http://api-gateway:3000
+      - API_URL=http://api-gateway:8000
     depends_on:
       - api-gateway
 
@@ -154,7 +154,7 @@ services:
     ports:
       - "3002:3002"
     environment:
-      - API_URL=http://api-gateway:3000
+      - API_URL=http://api-gateway:8000
     depends_on:
       - api-gateway
 
