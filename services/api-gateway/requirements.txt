@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+
+httpx
+
+structlog
+prometheus-client
+
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-instrumentation-fastapi
