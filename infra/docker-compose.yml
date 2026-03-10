@@ -99,6 +99,8 @@ services:
 
   task-service:
     build: ../services/task-service
+    env_file:
+      - ../services/task-service/.env
     container_name: task-service
     profiles: ["core"]
     depends_on:
