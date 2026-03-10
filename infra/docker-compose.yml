@@ -9,6 +9,7 @@ services:
   postgres:
     image: postgres:15
     container_name: postgres
+    restart: unless-stopped
     profiles: ["core"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -26,6 +27,7 @@ services:
   redis:
     image: redis:7
     container_name: redis
+    restart: unless-stopped
     profiles: ["core"]
     ports:
       - "6379:6379"
@@ -37,6 +39,7 @@ services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
+    restart: unless-stopped
     profiles: ["core"]
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
@@ -44,6 +47,7 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
+    restart: unless-stopped
     profiles: ["core"]
     depends_on:
       - zookeeper
@@ -61,6 +65,7 @@ services:
   kafka-ui:
     image: provectuslabs/kafka-ui
     container_name: kafka-ui
+    restart: unless-stopped
     profiles: ["core"]
     ports:
       - "8080:8080"
@@ -77,13 +82,14 @@ services:
   api-gateway:
     build: ../services/api-gateway
     container_name: api-gateway
+    restart: unless-stopped
     profiles: ["core"]
+    env_file:
+      - ../services/api-gateway/.env
     ports:
       - "8000:8000"
     depends_on:
-      - postgres
-      - kafka
-      - redis
+      - task-service
 
 ############################
 # SERVICES
@@ -92,6 +98,7 @@ services:
   auth-service:
     build: ../services/auth-service
     container_name: auth-service
+    restart: unless-stopped
     profiles: ["core"]
     depends_on:
       - postgres
@@ -99,10 +106,13 @@ services:
 
   task-service:
     build: ../services/task-service
+    container_name: task-service
+    restart: unless-stopped
+    profiles: ["core"]
     env_file:
       - ../services/task-service/.env
-    container_name: task-service
-    profiles: ["core"]
+    ports:
+      - "8001:8000"
     depends_on:
       - postgres
       - kafka
@@ -110,6 +120,7 @@ services:
   notification-service:
     build: ../services/notification-service
     container_name: notification-service
+    restart: unless-stopped
     profiles: ["core"]
     depends_on:
       - kafka
@@ -122,6 +133,7 @@ services:
   notification-worker:
     build: ../workers/notification-worker
     container_name: notification-worker
+    restart: unless-stopped
     profiles: ["core"]
     depends_on:
       - redis
@@ -130,6 +142,7 @@ services:
   analytics-worker:
     build: ../workers/analytics-worker
     container_name: analytics-worker
+    restart: unless-stopped
     profiles: ["core"]
     depends_on:
       - kafka
@@ -141,6 +154,7 @@ services:
   react-frontend:
     build: ../frontends/react-dashboard
     container_name: react-frontend
+    restart: unless-stopped
     profiles: ["core"]
     ports:
       - "5173:5173"
@@ -152,6 +166,7 @@ services:
   nextjs-frontend:
     build: ../frontends/nextjs-dashboard
     container_name: nextjs-frontend
+    restart: unless-stopped
     profiles: ["core"]
     ports:
       - "3002:3002"
@@ -161,12 +176,13 @@ services:
       - api-gateway
 
 ############################
-# REDIS-INSIGHT
+# REDIS INSIGHT
 ############################
 
   redis-insight:
     image: redis/redisinsight:latest
     container_name: redis-insight
+    restart: unless-stopped
     profiles: ["observability"]
     ports:
       - "5540:5540"
@@ -180,9 +196,12 @@ services:
   prometheus:
     image: prom/prometheus
     container_name: prometheus
+    restart: unless-stopped
     profiles: ["observability"]
     ports:
       - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
 
 ############################
 # GRAFANA
@@ -191,9 +210,12 @@ services:
   grafana:
     image: grafana/grafana
     container_name: grafana
+    restart: unless-stopped
     profiles: ["observability"]
     ports:
       - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
 
 ############################
 # ELASTICSEARCH
@@ -202,6 +224,7 @@ services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
     container_name: elasticsearch
+    restart: unless-stopped
     profiles: ["observability"]
     environment:
       discovery.type: single-node
@@ -215,6 +238,7 @@ services:
   kibana:
     image: docker.elastic.co/kibana/kibana:8.11.0
     container_name: kibana
+    restart: unless-stopped
     profiles: ["observability"]
     depends_on:
       - elasticsearch
@@ -228,6 +252,7 @@ services:
   datadog-agent:
     image: gcr.io/datadoghq/agent:latest
     container_name: datadog-agent
+    restart: unless-stopped
     profiles: ["datadog"]
     environment:
       - DD_API_KEY=${DATADOG_API_KEY}
@@ -244,3 +269,4 @@ services:
 
 volumes:
   postgres_data:
+  grafana_data:
