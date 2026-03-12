@@ -1,0 +1,12 @@
+node_modules
+dist
+build
+
+.vite
+
+Dockerfile
+
+.env
+.env.local
+
+npm-debug.log
