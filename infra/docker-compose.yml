@@ -117,15 +117,6 @@ services:
       - postgres
       - kafka
 
-  notification-service:
-    build: ../services/notification-service
-    container_name: notification-service
-    restart: unless-stopped
-    profiles: ["core"]
-    depends_on:
-      - kafka
-      - redis
-
 ############################
 # WORKERS
 ############################
@@ -169,7 +160,7 @@ services:
     restart: unless-stopped
     profiles: ["core"]
     ports:
-      - "3002:3002"
+      - "3000:3000"
     environment:
       - API_URL=http://api-gateway:8000
     depends_on:

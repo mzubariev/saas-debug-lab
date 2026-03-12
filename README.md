@@ -8,11 +8,9 @@ docker compose \
 
 localhost:5173 - frontend React
 
-localhost:3002 - frontend Next
+localhost:3000 - frontend Next
 
 localhost:8080 - Kafka UI
-
-localhost:5540 - Redis
 
 localhost:9090 - Prometheus
 

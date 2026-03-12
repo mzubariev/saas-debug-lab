@@ -1,0 +1,17 @@
+pydantic
+pydantic-settings
+
+sqlalchemy
+asyncpg
+
+aiokafka
+redis
+
+structlog
+tenacity
+
+prometheus-client
+
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp
