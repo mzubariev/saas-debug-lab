@@ -1,6 +1,8 @@
 import httpx
 
+from .config import settings
+
 
 client = httpx.AsyncClient(
-    timeout=5.0
+    timeout=settings.gateway_timeout
 )

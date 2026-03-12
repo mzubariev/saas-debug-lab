@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from prometheus_client import make_asgi_app
 
-from .observability import setup_telemetry
+from .telemetry import setup_telemetry
 from .routes import proxy
 
 
