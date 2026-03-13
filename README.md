@@ -1,21 +1,35 @@
-docker compose \
-    --profile core \
-    --profile observability \
-    --profile datadog \
-    up --build
+# SaaS Debug Lab
 
----
+This repository simulates a production-like SaaS microservices architecture.
 
-localhost:5173 - frontend React
+### Project goals:
 
-localhost:3000 - frontend Next
+`docs/PROJECT_SPEC.md`
 
-localhost:8080 - Kafka UI
+### Architecture is described in:
 
-localhost:9090 - Prometheus
+`docs/ARCHITECTURE.md`
 
-localhost:3001 - Grafana
+### Service relationships:
 
-localhost:5601 - Kibana
+`docs/SERVICE_MAP.md`
 
-app.datadoghq.com - Datadog
+## Useful commands
+
+`docker compose --profile core --profile observability --profile datadog up --build`
+
+## Services URLs to use in a browser
+
+`localhost:5173` - frontend React
+
+`localhost:3000` - frontend Next
+
+`localhost:8080` - Kafka UI
+
+`localhost:9090` - Prometheus
+
+`localhost:3001` - Grafana
+
+`localhost:5601` - Kibana
+
+`app.datadoghq.com` - Datadog
