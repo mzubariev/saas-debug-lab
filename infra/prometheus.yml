@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+
+  - job_name: api-gateway
+    static_configs:
+      - targets: ["api-gateway:8000"]
+
+  - job_name: task-service
+    static_configs:
+      - targets: ["task-service:8000"]

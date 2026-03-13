@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
 
     service_name: str
-    postgres_dsn: str
+    postgres_dsn: str = f"postgresql+asyncpg://{postgres_user}:{postgres_password}@{postgres_host}:{postgres_port}/{postgres_db}"
     kafka_bootstrap_servers: str
     log_level: str = "INFO"
 
