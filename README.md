@@ -32,4 +32,6 @@ This repository simulates a production-like SaaS microservices architecture.
 
 `localhost:5601` - Kibana
 
+`localhost:16686` - Jaeger tracing UI
+
 `app.datadoghq.com` - Datadog

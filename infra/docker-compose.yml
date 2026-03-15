@@ -224,6 +224,22 @@ services:
         condition: service_healthy
 
 ############################
+# JAEGER
+############################
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.55
+    container_name: jaeger
+    restart: unless-stopped
+    profiles: ["observability"]
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
+############################
 # PROMETHEUS
 ############################
 
