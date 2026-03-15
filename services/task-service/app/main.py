@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from prometheus_client import make_asgi_app
 
+from .config import settings
 from .logging import setup_logging
 from .routes import health, tasks
 from .kafka import start_kafka, stop_kafka
@@ -10,7 +11,7 @@ from .telemetry import setup_telemetry
 app = FastAPI(title="task-service")
 
 # logging
-setup_logging()
+setup_logging(settings.log_level)
 
 # tracing
 setup_telemetry(app)

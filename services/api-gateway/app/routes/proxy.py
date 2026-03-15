@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Request
+import structlog
+
+import httpx
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
 from ..client import client
@@ -7,17 +10,35 @@ from ..config import settings
 
 router = APIRouter()
 
+logger = structlog.get_logger()
+
 
 async def _proxy(request: Request, url: str) -> Response:
     body = await request.body()
 
     headers = {k: v for k, v in request.headers.items() if k.lower() != "host"}
 
-    resp = await client.request(
-        request.method,
-        url,
-        content=body,
-        headers=headers,
+    try:
+        resp = await client.request(
+            request.method,
+            url,
+            content=body,
+            headers=headers,
+        )
+    except httpx.TimeoutException:
+        logger.error("proxy_timeout", method=request.method, url=url)
+        raise HTTPException(status_code=504, detail="Upstream timeout")
+    except httpx.RequestError as exc:
+        logger.error("proxy_connection_error", method=request.method, url=url, error=str(exc))
+        raise HTTPException(status_code=502, detail="Upstream unavailable")
+
+    log = logger.warning if resp.status_code >= 400 else logger.info
+    log(
+        "proxy_request",
+        method=request.method,
+        path=str(request.url.path),
+        status=resp.status_code,
+        upstream=url,
     )
 
     return Response(

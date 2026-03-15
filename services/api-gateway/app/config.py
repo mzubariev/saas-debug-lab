@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     task_service_url: str
     gateway_timeout: float = 5.0
     otlp_endpoint: str = "http://jaeger:4317"
+    log_level: str = "INFO"
 
     model_config = SettingsConfigDict(
         env_file=".env",
