@@ -161,6 +161,8 @@ services:
     container_name: notification-worker
     restart: unless-stopped
     profiles: ["core"]
+    env_file:
+      - ../workers/notification-worker/.env
     depends_on:
       redis:
         condition: service_healthy
@@ -172,6 +174,8 @@ services:
     container_name: analytics-worker
     restart: unless-stopped
     profiles: ["core"]
+    env_file:
+      - ../workers/analytics-worker/.env
     depends_on:
       kafka:
         condition: service_healthy
