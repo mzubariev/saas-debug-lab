@@ -5,6 +5,7 @@ import structlog
 from aiokafka import AIOKafkaConsumer
 
 from .config import settings
+from .logging import setup_logging
 
 
 logger = structlog.get_logger()
@@ -52,6 +53,7 @@ async def consume() -> None:
 
 
 def run() -> None:
+    setup_logging(settings.log_level, settings.service_name)
     asyncio.run(consume())
 
 
