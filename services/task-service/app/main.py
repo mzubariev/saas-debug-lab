@@ -11,7 +11,7 @@ from .telemetry import setup_telemetry
 app = FastAPI(title="task-service")
 
 # logging
-setup_logging(settings.log_level)
+setup_logging(settings.log_level, settings.service_name)
 
 # tracing
 setup_telemetry(app)

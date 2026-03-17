@@ -9,7 +9,7 @@ from .routes import proxy
 
 app = FastAPI(title="api-gateway")
 
-setup_logging(settings.log_level)
+setup_logging(settings.log_level, settings.service_name)
 setup_telemetry(app)
 
 app.include_router(proxy.router)

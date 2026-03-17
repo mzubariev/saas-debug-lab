@@ -268,6 +268,23 @@ services:
       - grafana_data:/var/lib/grafana
 
 ############################
+# FLUENT BIT
+############################
+
+  fluent-bit:
+    image: fluent/fluent-bit:3.0
+    container_name: fluent-bit
+    restart: unless-stopped
+    profiles: ["observability"]
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../observability/fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ../observability/fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf:ro
+    depends_on:
+      - elasticsearch
+
+############################
 # ELASTICSEARCH
 ############################
 
