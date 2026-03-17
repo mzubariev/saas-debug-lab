@@ -120,7 +120,7 @@ services:
       task-service:
         condition: service_healthy
       auth-service:
-        condition: service_started
+        condition: service_healthy
 
 ############################
 # SERVICES
@@ -140,6 +140,12 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   task-service:
     build: ../services/task-service
@@ -155,6 +161,12 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
 ############################
 # WORKERS
@@ -255,7 +267,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ../observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
 
 ############################
 # GRAFANA
@@ -270,6 +282,7 @@ services:
       - "3001:3000"
     volumes:
       - grafana_data:/var/lib/grafana
+      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
 
 ############################
 # FLUENT BIT
