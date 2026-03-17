@@ -4,6 +4,8 @@ uvicorn[standard]
 httpx
 pydantic-settings
 
+PyJWT
+
 prometheus-client
 
 opentelemetry-api

@@ -1,11 +1,12 @@
 import structlog
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 
 from ..client import client
 from ..config import settings
+from ..dependencies import verify_token
 
 
 router = APIRouter()
@@ -48,11 +49,18 @@ async def _proxy(request: Request, url: str) -> Response:
     )
 
 
+# Auth routes — no token required (this is where you obtain a token).
+@router.api_route("/auth/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
+async def proxy_auth(path: str, request: Request):
+    return await _proxy(request, f"{settings.auth_service_url}/auth/{path}")
+
+
+# Task routes — valid JWT required.
 @router.api_route("/tasks", methods=["GET", "POST", "PUT", "DELETE"])
-async def proxy_tasks_root(request: Request):
+async def proxy_tasks_root(request: Request, _: dict = Depends(verify_token)):
     return await _proxy(request, f"{settings.task_service_url}/tasks")
 
 
 @router.api_route("/tasks/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
-async def proxy_tasks(path: str, request: Request):
+async def proxy_tasks(path: str, request: Request, _: dict = Depends(verify_token)):
     return await _proxy(request, f"{settings.task_service_url}/tasks/{path}")
