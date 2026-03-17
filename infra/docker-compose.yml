@@ -108,7 +108,9 @@ services:
 ############################
 
   api-gateway:
-    build: ../services/api-gateway
+    build:
+      context: ..
+      dockerfile: services/api-gateway/Dockerfile
     container_name: api-gateway
     restart: unless-stopped
     profiles: ["core"]
@@ -127,7 +129,9 @@ services:
 ############################
 
   auth-service:
-    build: ../services/auth-service
+    build:
+      context: ..
+      dockerfile: services/auth-service/Dockerfile
     container_name: auth-service
     restart: unless-stopped
     profiles: ["core"]
@@ -138,8 +142,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      kafka:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -148,7 +150,9 @@ services:
       start_period: 15s
 
   task-service:
-    build: ../services/task-service
+    build:
+      context: ..
+      dockerfile: services/task-service/Dockerfile
     container_name: task-service
     restart: unless-stopped
     profiles: ["core"]
@@ -173,20 +177,22 @@ services:
 ############################
 
   notification-worker:
-    build: ../workers/notification-worker
+    build:
+      context: ..
+      dockerfile: workers/notification-worker/Dockerfile
     container_name: notification-worker
     restart: unless-stopped
     profiles: ["core"]
     env_file:
       - ../workers/notification-worker/.env
     depends_on:
-      redis:
-        condition: service_healthy
       kafka:
         condition: service_healthy
 
   analytics-worker:
-    build: ../workers/analytics-worker
+    build:
+      context: ..
+      dockerfile: workers/analytics-worker/Dockerfile
     container_name: analytics-worker
     restart: unless-stopped
     profiles: ["core"]
@@ -201,7 +207,9 @@ services:
 ############################
 
   react-frontend:
-    build: ../frontends/react-dashboard
+    build:
+      context: ..
+      dockerfile: frontends/react-dashboard/Dockerfile
     container_name: react-frontend
     restart: unless-stopped
     profiles: ["core"]
@@ -213,7 +221,9 @@ services:
       - api-gateway
 
   nextjs-frontend:
-    build: ../frontends/nextjs-dashboard
+    build:
+      context: ..
+      dockerfile: frontends/nextjs-dashboard/Dockerfile
     container_name: nextjs-frontend
     restart: unless-stopped
     profiles: ["core"]

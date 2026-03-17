@@ -15,7 +15,7 @@ from .routes import auth, health
 app = FastAPI(title="auth-service")
 
 setup_logging(settings.log_level, settings.service_name)
-setup_telemetry(app)
+setup_telemetry(app, settings.service_name, settings.otlp_endpoint)
 
 logger = structlog.get_logger()
 

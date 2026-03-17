@@ -5,10 +5,6 @@ httpx
 pydantic-settings
 
 PyJWT
+structlog
 
 prometheus-client
-
-opentelemetry-api
-opentelemetry-sdk
-opentelemetry-instrumentation-fastapi
-opentelemetry-exporter-otlp-proto-grpc

@@ -13,7 +13,7 @@ from .telemetry import setup_telemetry
 app = FastAPI(title="task-service")
 
 setup_logging(settings.log_level, settings.service_name)
-setup_telemetry(app)
+setup_telemetry(app, settings.service_name, settings.otlp_endpoint)
 
 
 @app.on_event("startup")

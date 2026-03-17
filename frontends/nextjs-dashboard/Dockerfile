@@ -2,11 +2,11 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY frontends/nextjs-dashboard/package*.json ./
 
 RUN npm install
 
-COPY . .
+COPY frontends/nextjs-dashboard/ .
 
 RUN npm run build
 

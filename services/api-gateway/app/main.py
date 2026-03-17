@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from prometheus_client import make_asgi_app
+from saas_shared.health import router as health_router
 
 from .config import settings
 from .logging import setup_logging
@@ -10,15 +11,10 @@ from .routes import proxy
 app = FastAPI(title="api-gateway")
 
 setup_logging(settings.log_level, settings.service_name)
-setup_telemetry(app)
+setup_telemetry(app, settings.service_name, settings.otlp_endpoint)
 
+app.include_router(health_router)
 app.include_router(proxy.router)
-
 
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
-
-
-@app.get("/health")
-async def health():
-    return {"status": "ok"}

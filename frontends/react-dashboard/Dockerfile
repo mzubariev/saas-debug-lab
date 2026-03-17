@@ -2,11 +2,11 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY frontends/react-dashboard/package*.json ./
 
 RUN npm install
 
-COPY . .
+COPY frontends/react-dashboard/ .
 
 EXPOSE 5173
 
