@@ -206,11 +206,11 @@ services:
 # FRONTENDS
 ############################
 
-  react-frontend:
+  frontend:
     build:
       context: ..
-      dockerfile: frontends/react-dashboard/Dockerfile
-    container_name: react-frontend
+      dockerfile: frontend/Dockerfile
+    container_name: frontend
     restart: unless-stopped
     profiles: ["core"]
     ports:
@@ -220,19 +220,6 @@ services:
     depends_on:
       - api-gateway
 
-  nextjs-frontend:
-    build:
-      context: ..
-      dockerfile: frontends/nextjs-dashboard/Dockerfile
-    container_name: nextjs-frontend
-    restart: unless-stopped
-    profiles: ["core"]
-    ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-    depends_on:
-      - api-gateway
 
 ############################
 # REDIS INSIGHT
