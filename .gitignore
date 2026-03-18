@@ -4,9 +4,7 @@
 # Editor
 .vscode/
 .cursor/
-docs/AI_RULES.md
-docs/PROJECT_SPEC.md
-docs/DEBUGGING_SCENARIOS.md
+docs/**
 
 # env
 .env
