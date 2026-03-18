@@ -56,11 +56,11 @@ async def proxy_auth(path: str, request: Request):
 
 
 # Task routes — valid JWT required.
-@router.api_route("/tasks", methods=["GET", "POST", "PUT", "DELETE"])
+@router.api_route("/tasks", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def proxy_tasks_root(request: Request, _: dict = Depends(verify_token)):
     return await _proxy(request, f"{settings.task_service_url}/tasks")
 
 
-@router.api_route("/tasks/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
+@router.api_route("/tasks/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def proxy_tasks(path: str, request: Request, _: dict = Depends(verify_token)):
     return await _proxy(request, f"{settings.task_service_url}/tasks/{path}")
