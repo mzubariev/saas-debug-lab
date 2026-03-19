@@ -1,4 +1,5 @@
 import structlog
+import asyncio
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
@@ -34,7 +35,6 @@ async def send_external(payload: WebhookPayload, request: Request):
     Manually trigger an outbound webhook delivery to the configured WEBHOOK_URL.
     Useful for ad-hoc testing without waiting for a Kafka event.
     """
-    import asyncio
 
     asyncio.create_task(
         deliver(
