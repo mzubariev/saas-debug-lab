@@ -8,6 +8,7 @@ from .db import engine, SessionLocal
 from .logging import setup_logging
 from .models.user import Base, User
 from .security import hash_password
+from .cache import start_redis, stop_redis
 from .telemetry import setup_telemetry
 from .routes import auth, health
 
@@ -44,7 +45,14 @@ async def startup() -> None:
 
         await db.commit()
 
+    await start_redis(app, settings.redis_url)
+
     logger.info("startup_complete", service=settings.service_name)
+
+
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    await stop_redis(app)
 
 
 app.include_router(health.router)

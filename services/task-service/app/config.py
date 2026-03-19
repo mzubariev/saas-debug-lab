@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     postgres_user: str
     postgres_password: str
     kafka_bootstrap_servers: str
+    redis_url: str = "redis://redis:6379/0"
     otlp_endpoint: str = "http://jaeger:4317"
     log_level: str = "INFO"
 

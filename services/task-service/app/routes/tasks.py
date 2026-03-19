@@ -10,17 +10,20 @@ from ..dependencies import get_db
 from ..models.task import Task, TaskStatus
 from ..schemas.task import TaskCreate, TaskOut
 from ..kafka import publish_event
+from ..cache import cache_get, cache_set, cache_delete
 
 
 router = APIRouter(prefix="/tasks")
 
 logger = structlog.get_logger()
 
-# Valid state transitions
-_TRANSITIONS: dict[TaskStatus, TaskStatus] = {
-    TaskStatus.created: TaskStatus.in_progress,
-    TaskStatus.in_progress: TaskStatus.completed,
-}
+_CACHE_TTL_LIST = 60      # seconds
+_CACHE_TTL_SINGLE = 120   # seconds
+_LIST_KEY = "tasks:list"
+
+
+def _task_key(task_id: uuid.UUID) -> str:
+    return f"tasks:{task_id}"
 
 
 async def _get_task_or_404(task_id: uuid.UUID, db: AsyncSession) -> Task:
@@ -32,9 +35,21 @@ async def _get_task_or_404(task_id: uuid.UUID, db: AsyncSession) -> Task:
 
 
 @router.get("", response_model=list[TaskOut])
-async def list_tasks(db: AsyncSession = Depends(get_db)):
+async def list_tasks(request: Request, db: AsyncSession = Depends(get_db)):
+    redis = request.app.state.redis
+
+    cached = await cache_get(redis, _LIST_KEY)
+    if cached is not None:
+        logger.debug("cache_hit", key=_LIST_KEY)
+        return cached
+
     result = await db.execute(select(Task).order_by(Task.created_at.desc()))
-    return result.scalars().all()
+    tasks = result.scalars().all()
+
+    serialized = [TaskOut.model_validate(t).model_dump(mode="json") for t in tasks]
+    await cache_set(redis, _LIST_KEY, serialized, ttl=_CACHE_TTL_LIST)
+
+    return tasks
 
 
 @router.post("", response_model=TaskOut, status_code=201)
@@ -55,14 +70,29 @@ async def create_task(
         payload={"id": str(task.id), "title": task.title, "status": task.status.value},
     )
 
+    await cache_delete(request.app.state.redis, _LIST_KEY)
+
     logger.info("task_created", task_id=str(task.id), title=task.title)
 
     return task
 
 
 @router.get("/{task_id}", response_model=TaskOut)
-async def get_task(task_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    return await _get_task_or_404(task_id, db)
+async def get_task(task_id: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db)):
+    redis = request.app.state.redis
+    key = _task_key(task_id)
+
+    cached = await cache_get(redis, key)
+    if cached is not None:
+        logger.debug("cache_hit", key=key)
+        return cached
+
+    task = await _get_task_or_404(task_id, db)
+
+    serialized = TaskOut.model_validate(task).model_dump(mode="json")
+    await cache_set(redis, key, serialized, ttl=_CACHE_TTL_SINGLE)
+
+    return task
 
 
 @router.patch("/{task_id}/start", response_model=TaskOut)
@@ -88,6 +118,8 @@ async def start_task(
         topic="task_updated",
         payload={"id": str(task.id), "title": task.title, "status": task.status.value},
     )
+
+    await cache_delete(request.app.state.redis, _LIST_KEY, _task_key(task_id))
 
     logger.info("task_started", task_id=str(task.id))
 
@@ -117,6 +149,8 @@ async def complete_task(
         topic="task_updated",
         payload={"id": str(task.id), "title": task.title, "status": task.status.value},
     )
+
+    await cache_delete(request.app.state.redis, _LIST_KEY, _task_key(task_id))
 
     logger.info("task_completed", task_id=str(task.id))
 

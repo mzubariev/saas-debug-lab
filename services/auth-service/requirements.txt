@@ -11,6 +11,8 @@ passlib[bcrypt]
 sqlalchemy
 asyncpg
 
+redis[asyncio]
+
 structlog
 
 prometheus-client

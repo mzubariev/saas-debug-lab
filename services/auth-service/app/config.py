@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     postgres_user: str
     postgres_password: str
 
+    redis_url: str = "redis://redis:6379/1"
     otlp_endpoint: str = "http://jaeger:4317"
     log_level: str = "INFO"
 

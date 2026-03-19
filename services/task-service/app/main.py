@@ -7,6 +7,7 @@ from .logging import setup_logging
 from .models.task import Base
 from .routes import health, tasks
 from .kafka import start_kafka, stop_kafka
+from .cache import start_redis, stop_redis
 from .telemetry import setup_telemetry
 
 
@@ -23,12 +24,14 @@ async def startup():
         await conn.run_sync(Base.metadata.create_all)
 
     await start_kafka(app)
+    await start_redis(app, settings.redis_url)
 
 
 @app.on_event("shutdown")
 async def shutdown():
 
     await stop_kafka(app)
+    await stop_redis(app)
 
 
 # routers
