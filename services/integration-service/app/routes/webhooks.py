@@ -15,22 +15,22 @@ class WebhookPayload(BaseModel):
     data: dict = {}
 
 
-@router.post("/webhook/receive", status_code=200)
-async def receive_webhook(payload: WebhookPayload):
+@router.post("/webhooks/inbound", status_code=200)
+async def receive_inbound_webhook(payload: WebhookPayload):
     """
-    Inbound webhook receiver — simulates an external system pushing events in.
+    Inbound webhook receiver — called by webhook-simulator's /trigger-event.
     Logs the received event and returns acknowledgement.
     """
     logger.info(
-        "webhook_received",
+        "inbound_webhook_received",
         event=payload.event,
         data=payload.data,
     )
     return {"status": "received", "event": payload.event}
 
 
-@router.post("/external/send", status_code=202)
-async def send_external(payload: WebhookPayload, request: Request):
+@router.post("/webhooks/send", status_code=202)
+async def send_outbound_webhook(payload: WebhookPayload, request: Request):
     """
     Manually trigger an outbound webhook delivery to the configured WEBHOOK_URL.
     Useful for ad-hoc testing without waiting for a Kafka event.
@@ -44,6 +44,6 @@ async def send_external(payload: WebhookPayload, request: Request):
         )
     )
 
-    logger.info("external_send_triggered", event=payload.event)
+    logger.info("outbound_webhook_triggered", event=payload.event)
 
     return {"status": "accepted", "event": payload.event}

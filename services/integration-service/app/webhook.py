@@ -1,6 +1,5 @@
 import asyncio
 import json
-import random
 
 import httpx
 import structlog
@@ -18,7 +17,7 @@ async def deliver(
     payload: dict,
 ) -> None:
     """
-    Attempt to deliver payload to the configured WEBHOOK_URL.
+    Deliver payload to WEBHOOK_URL (webhook-simulator or any real endpoint).
 
     Retries up to MAX_RETRIES times with exponential backoff.
     On permanent failure, publishes the payload to the webhook_dlq Kafka topic.
@@ -27,12 +26,6 @@ async def deliver(
 
     for attempt in range(1, settings.max_retries + 1):
         try:
-            if settings.simulate_latency_ms > 0:
-                await asyncio.sleep(settings.simulate_latency_ms / 1000)
-
-            if random.random() < settings.simulate_failure_rate:
-                raise httpx.RequestError("simulated_failure")
-
             resp = await client.post(
                 settings.webhook_url,
                 json=payload,

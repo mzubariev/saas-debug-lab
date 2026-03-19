@@ -35,14 +35,15 @@ The system follows a microservices architecture with synchronous and asynchronou
 
 ### Core components:
 
-- **API Gateway (Nginx)** — request routing, rate limiting
-- **auth-service** — authentication, JWT handling
-- **task-service** — core business logic and state management
-- **integration-service** — external APIs and webhooks
-- **workers (Celery/Kafka consumers)** — background processing
-- **Postgres** — primary data store
-- **Redis** — caching and task broker
-- **Kafka** — event streaming
+- **API Gateway** — request routing, JWT validation
+- **auth-service** — authentication, JWT issuance
+- **task-service** — core business logic and state machine
+- **integration-service** — Kafka consumer, outbound webhook delivery, inbound webhook receiver
+- **webhook-simulator** — test double for the external webhook boundary; controllable fail rate, delay, and status per request
+- **workers** — notification-worker, analytics-worker (Kafka consumers)
+- **Postgres** — primary relational data store
+- **Redis** — caching layer (task-service + auth-service)
+- **Kafka** — asynchronous event streaming
 
 ---
 

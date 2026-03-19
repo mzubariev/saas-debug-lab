@@ -123,6 +123,8 @@ services:
         condition: service_healthy
       auth-service:
         condition: service_healthy
+      integration-service:
+        condition: service_healthy
 
 ############################
 # SERVICES
@@ -177,6 +179,28 @@ services:
       start_period: 15s
 
 ############################
+# WEBHOOK SIMULATOR
+############################
+
+  webhook-simulator:
+    build:
+      context: ..
+      dockerfile: services/webhook-simulator/Dockerfile
+    container_name: webhook-simulator
+    restart: unless-stopped
+    profiles: ["core"]
+    env_file:
+      - ../services/webhook-simulator/.env
+    ports:
+      - "8004:8001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+############################
 # INTEGRATION SERVICE
 ############################
 
@@ -193,6 +217,8 @@ services:
       - "8003:8000"
     depends_on:
       kafka:
+        condition: service_healthy
+      webhook-simulator:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

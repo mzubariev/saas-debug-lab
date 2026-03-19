@@ -6,12 +6,9 @@ class Settings(BaseSettings):
     service_name: str = "integration-service"
     kafka_bootstrap_servers: str = "kafka:9092"
 
-    webhook_url: str = "https://webhook.site/91882952-7994-4afc-bce3-01bb1461ce71"
+    webhook_url: str = "http://webhook-simulator:8001/receive-webhook"
     webhook_timeout: int = 10
     max_retries: int = 3
-
-    simulate_latency_ms: int = 0
-    simulate_failure_rate: float = 0.0
 
     otlp_endpoint: str = "http://jaeger:4317"
     log_level: str = "INFO"

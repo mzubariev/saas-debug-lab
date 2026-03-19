@@ -64,3 +64,9 @@ async def proxy_tasks_root(request: Request, _: dict = Depends(verify_token)):
 @router.api_route("/tasks/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def proxy_tasks(path: str, request: Request, _: dict = Depends(verify_token)):
     return await _proxy(request, f"{settings.task_service_url}/tasks/{path}")
+
+
+# Webhook routes — no token required (inbound webhooks arrive from external systems).
+@router.api_route("/webhooks/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def proxy_webhooks(path: str, request: Request):
+    return await _proxy(request, f"{settings.integration_service_url}/webhooks/{path}")
