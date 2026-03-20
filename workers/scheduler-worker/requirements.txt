@@ -6,3 +6,4 @@ kafka-python
 httpx
 structlog
 pydantic-settings
+sentry-sdk[celery]

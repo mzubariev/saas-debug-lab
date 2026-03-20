@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     service_name: str = "scheduler-worker"
     log_level: str = "INFO"
 
+    # Sentry error tracking. Leave empty to disable.
+    sentry_dsn: str = ""
+
     # Celery broker and result backend.
     # Uses Redis DB 2 (DB 0 = task-service cache, DB 1 = auth-service cache).
     celery_broker_url: str = "redis://redis:6379/2"

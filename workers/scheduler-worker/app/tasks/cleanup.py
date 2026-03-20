@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+import sentry_sdk
 import structlog
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
@@ -66,4 +67,11 @@ def cleanup_old_tasks(self) -> dict:
 
     except Exception as exc:
         logger.error("cleanup_failed", error=str(exc))
+        # Set rich context on the current scope so that if all retries are
+        # exhausted and CeleryIntegration captures the final exception, the
+        # Sentry event already carries the cutoff date and retry count.
+        sentry_sdk.set_tag("task", "cleanup_old_tasks")
+        sentry_sdk.set_extra("cutoff_iso", cutoff.isoformat())
+        sentry_sdk.set_extra("older_than_days", settings.cleanup_completed_tasks_days)
+        sentry_sdk.set_extra("retry_attempt", self.request.retries)
         raise self.retry(exc=exc)

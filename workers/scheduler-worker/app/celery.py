@@ -1,10 +1,39 @@
+import sentry_sdk
 from celery import Celery
 from celery.schedules import crontab
 from celery.signals import worker_process_init
+from sentry_sdk.integrations.celery import CeleryIntegration
 from saas_shared.logging import setup_logging
 
 from .config import settings
 
+
+def _setup_sentry() -> None:
+    """Initialise Sentry with the CeleryIntegration. No-op when DSN is unset.
+
+    CeleryIntegration automatically:
+    - Wraps every task execution in a Sentry transaction (visible in Performance).
+    - Captures exceptions that propagate out of a task (including those raised
+      after max_retries is exceeded).
+    - Tags each event with the task name, task id, and queue.
+
+    This function is called twice:
+    1. At module import time — covers the Beat scheduler process.
+    2. In worker_process_init — re-initialises the SDK in every forked Celery
+       worker process so file descriptors are not shared across fork().
+    """
+    if not settings.sentry_dsn:
+        return
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        integrations=[CeleryIntegration()],
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+    )
+    sentry_sdk.set_tag("service", settings.service_name)
+
+
+_setup_sentry()
 
 celery_app = Celery(
     settings.service_name,
@@ -38,5 +67,6 @@ celery_app.conf.update(
 
 @worker_process_init.connect
 def init_worker_process(**kwargs) -> None:
-    """Configure structlog in each forked worker process."""
+    """Configure structlog and re-initialise Sentry in each forked worker process."""
     setup_logging(settings.log_level, settings.service_name)
+    _setup_sentry()

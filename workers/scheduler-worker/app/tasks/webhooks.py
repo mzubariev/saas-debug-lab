@@ -1,6 +1,7 @@
 import json
 
 import httpx
+import sentry_sdk
 import structlog
 from kafka import KafkaConsumer
 from kafka.errors import NoBrokersAvailable
@@ -41,6 +42,12 @@ def retry_failed_webhooks() -> dict:
         )
     except NoBrokersAvailable as exc:
         logger.error("dlq_consumer_unavailable", error=str(exc))
+        # Kafka being unreachable is a hard infrastructure failure — report it.
+        with sentry_sdk.push_scope() as scope:
+            scope.set_tag("task", "retry_failed_webhooks")
+            scope.set_tag("error_type", "kafka_unavailable")
+            scope.set_extra("kafka_servers", settings.kafka_bootstrap_servers)
+            sentry_sdk.capture_exception(exc)
         return {"retried": 0, "failed": 0, "error": str(exc)}
 
     retried = 0
@@ -71,6 +78,21 @@ def retry_failed_webhooks() -> dict:
                     task_id=payload.get("id"),
                     error=str(exc),
                     topic_offset=msg.offset,
+                )
+                # Record as a breadcrumb on the current Celery task transaction
+                # rather than a standalone error — individual DLQ retries failing
+                # is expected behaviour.  The breadcrumb appears in the Sentry
+                # issue if the task itself eventually raises.
+                sentry_sdk.add_breadcrumb(
+                    category="dlq",
+                    message="DLQ webhook retry failed",
+                    level="warning",
+                    data={
+                        "task_id": payload.get("id"),
+                        "error": str(exc),
+                        "topic_offset": msg.offset,
+                        "webhook_url": settings.webhook_url,
+                    },
                 )
                 failed += 1
 
