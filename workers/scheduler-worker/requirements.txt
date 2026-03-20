@@ -1,0 +1,8 @@
+celery[redis]
+flower
+sqlalchemy
+psycopg2-binary
+kafka-python
+httpx
+structlog
+pydantic-settings

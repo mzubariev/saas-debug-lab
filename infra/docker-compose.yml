@@ -269,6 +269,40 @@ services:
 # WORKERS
 ############################
 
+  scheduler-worker:
+    build:
+      context: ..
+      dockerfile: workers/scheduler-worker/Dockerfile
+    container_name: scheduler-worker
+    restart: unless-stopped
+    profiles: ["core"]
+    # Runs Celery worker with embedded beat scheduler (single-instance lab setup).
+    command: ["celery", "-A", "app.celery:celery_app", "worker", "--beat", "--loglevel=info"]
+    env_file:
+      - ../workers/scheduler-worker/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  flower:
+    build:
+      context: ..
+      dockerfile: workers/scheduler-worker/Dockerfile
+    container_name: flower
+    restart: unless-stopped
+    profiles: ["core"]
+    command: ["celery", "-A", "app.celery:celery_app", "flower", "--port=5555"]
+    env_file:
+      - ../workers/scheduler-worker/.env
+    ports:
+      - "5555:5555"   # Flower UI — http://localhost:5555
+    depends_on:
+      - scheduler-worker
+
   notification-worker:
     build:
       context: ..
