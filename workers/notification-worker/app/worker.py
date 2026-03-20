@@ -1,6 +1,9 @@
 import asyncio
 import json
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
+import aiosmtplib
 import structlog
 from aiokafka import AIOKafkaConsumer
 
@@ -14,17 +17,89 @@ TOPIC = "task_created"
 GROUP_ID = "notification-worker"
 
 
-async def handle_event(event: dict) -> None:
+def _build_message(event: dict) -> MIMEMultipart:
+    task_id = event.get("id", "unknown")
+    title = event.get("title", "Untitled")
+    status = event.get("status", "created")
 
-    logger.info(
-        "notification_sent",
-        task_id=event.get("id"),
-        title=event.get("title"),
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"[SaaS Debug Lab] Task created: {title}"
+    msg["From"] = settings.email_from
+    msg["To"] = settings.email_to
+
+    plain = (
+        f"A new task has been created.\n\n"
+        f"Title:  {title}\n"
+        f"ID:     {task_id}\n"
+        f"Status: {status}\n"
     )
+    html = (
+        "<html><body>"
+        "<h2>New Task Created</h2>"
+        "<table>"
+        f"<tr><td><b>Title</b></td><td>{title}</td></tr>"
+        f"<tr><td><b>ID</b></td><td>{task_id}</td></tr>"
+        f"<tr><td><b>Status</b></td><td>{status}</td></tr>"
+        "</table>"
+        "</body></html>"
+    )
+
+    msg.attach(MIMEText(plain, "plain"))
+    msg.attach(MIMEText(html, "html"))
+    return msg
+
+
+async def _send_email(msg: MIMEMultipart) -> None:
+    """Deliver the message via SMTP. Raises on any transport error."""
+    smtp_kwargs: dict = {
+        "hostname": settings.smtp_host,
+        "port": settings.smtp_port,
+        "use_tls": settings.smtp_use_tls,
+        "start_tls": settings.smtp_use_starttls,
+    }
+
+    if settings.smtp_username and settings.smtp_password:
+        smtp_kwargs["username"] = settings.smtp_username
+        smtp_kwargs["password"] = settings.smtp_password
+
+    await aiosmtplib.send(msg, **smtp_kwargs)
+
+
+async def handle_event(event: dict) -> None:
+    task_id = event.get("id")
+    title = event.get("title")
+    msg = _build_message(event)
+
+    try:
+        await _send_email(msg)
+        logger.info(
+            "notification_sent",
+            task_id=task_id,
+            title=title,
+            to=settings.email_to,
+            smtp_host=settings.smtp_host,
+            smtp_port=settings.smtp_port,
+        )
+    except aiosmtplib.SMTPException as exc:
+        logger.error(
+            "smtp_delivery_failed",
+            task_id=task_id,
+            title=title,
+            to=settings.email_to,
+            error=str(exc),
+        )
+    except OSError as exc:
+        # Covers connection-refused, DNS failure, TCP reset — real infra failures.
+        logger.error(
+            "smtp_connection_failed",
+            task_id=task_id,
+            smtp_host=settings.smtp_host,
+            smtp_port=settings.smtp_port,
+            error=str(exc),
+        )
 
 
 async def consume() -> None:
-
     consumer = AIOKafkaConsumer(
         TOPIC,
         bootstrap_servers=settings.kafka_bootstrap_servers,

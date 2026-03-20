@@ -228,6 +228,44 @@ services:
       start_period: 15s
 
 ############################
+# MAILHOG (local SMTP catcher)
+############################
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    restart: unless-stopped
+    profiles: ["core"]
+    ports:
+      - "8025:8025"   # Web UI — view captured emails at http://localhost:8025
+    # Port 1025 is intentionally NOT exposed to the host; traffic goes through Toxiproxy.
+
+############################
+# TOXIPROXY (chaos proxy — sits between notification-worker and MailHog)
+############################
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:latest
+    container_name: toxiproxy
+    restart: unless-stopped
+    profiles: ["core"]
+    command: ["-config", "/etc/toxiproxy.json", "-host", "0.0.0.0"]
+    volumes:
+      - ./toxiproxy/toxiproxy.json:/etc/toxiproxy.json:ro
+    ports:
+      - "8474:8474"   # Management API — inject/remove toxics here
+      - "11025:11025" # mailhog-smtp proxy (notification-worker → this → mailhog:1025)
+    depends_on:
+      mailhog:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "toxiproxy-cli", "list"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+############################
 # WORKERS
 ############################
 
@@ -241,13 +279,20 @@ services:
     env_file:
       - ../workers/notification-worker/.env
     environment:
-      # Override these at runtime to inject chaos:
-      #   NOTIFICATION_FAIL_RATE=0.3  → 30% of notifications fail
-      #   NOTIFICATION_DELAY_MAX_MS=2000  → up to 2s artificial latency
-      NOTIFICATION_FAIL_RATE: ${NOTIFICATION_FAIL_RATE:-0.0}
-      NOTIFICATION_DELAY_MAX_MS: ${NOTIFICATION_DELAY_MAX_MS:-0}
+      # SMTP routes through Toxiproxy by default so network-level chaos can be injected
+      # without touching this service. To use a real provider instead:
+      #   SMTP_HOST=smtp.gmail.com SMTP_PORT=587 SMTP_USE_STARTTLS=true
+      #   SMTP_USERNAME=you@gmail.com SMTP_PASSWORD=app-password
+      SMTP_HOST: ${SMTP_HOST:-toxiproxy}
+      SMTP_PORT: ${SMTP_PORT:-11025}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
+      SMTP_USE_STARTTLS: ${SMTP_USE_STARTTLS:-false}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
     depends_on:
       kafka:
+        condition: service_healthy
+      toxiproxy:
         condition: service_healthy
 
 

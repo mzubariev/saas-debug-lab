@@ -1,0 +1,8 @@
+[
+  {
+    "name": "mailhog-smtp",
+    "listen": "0.0.0.0:11025",
+    "upstream": "mailhog:1025",
+    "enabled": true
+  }
+]

@@ -1,6 +1,5 @@
 pydantic-settings
-
 aiokafka
-
+aiosmtplib
 structlog
 tenacity
