@@ -240,22 +240,16 @@ services:
     profiles: ["core"]
     env_file:
       - ../workers/notification-worker/.env
+    environment:
+      # Override these at runtime to inject chaos:
+      #   NOTIFICATION_FAIL_RATE=0.3  → 30% of notifications fail
+      #   NOTIFICATION_DELAY_MAX_MS=2000  → up to 2s artificial latency
+      NOTIFICATION_FAIL_RATE: ${NOTIFICATION_FAIL_RATE:-0.0}
+      NOTIFICATION_DELAY_MAX_MS: ${NOTIFICATION_DELAY_MAX_MS:-0}
     depends_on:
       kafka:
         condition: service_healthy
 
-  analytics-worker:
-    build:
-      context: ..
-      dockerfile: workers/analytics-worker/Dockerfile
-    container_name: analytics-worker
-    restart: unless-stopped
-    profiles: ["core"]
-    env_file:
-      - ../workers/analytics-worker/.env
-    depends_on:
-      kafka:
-        condition: service_healthy
 
 ############################
 # FRONTENDS
