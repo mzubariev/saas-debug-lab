@@ -116,8 +116,8 @@ services:
     profiles: ["core"]
     env_file:
       - ../services/api-gateway/.env
-    ports:
-      - "8000:8000"
+    # Port 8000 is intentionally NOT exposed to the host.
+    # All external traffic must enter through Nginx on :80.
     depends_on:
       task-service:
         condition: service_healthy
@@ -125,6 +125,35 @@ services:
         condition: service_healthy
       integration-service:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+############################
+# NGINX (reverse proxy + rate limiter)
+############################
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: nginx
+    restart: unless-stopped
+    profiles: ["core"]
+    ports:
+      - "80:80"     # Sole host-facing entry point — replaces direct :8000 exposure
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
 ############################
 # SERVICES
@@ -344,9 +373,9 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=http://localhost
     depends_on:
-      - api-gateway
+      - nginx
 
 
 ############################
