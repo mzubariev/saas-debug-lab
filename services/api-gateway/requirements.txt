@@ -9,4 +9,6 @@ structlog
 
 sentry-sdk[fastapi]
 
+ddtrace
+
 prometheus-client

@@ -7,3 +7,4 @@ httpx
 structlog
 pydantic-settings
 sentry-sdk[celery]
+ddtrace

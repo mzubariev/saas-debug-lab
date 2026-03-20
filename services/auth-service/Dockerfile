@@ -15,4 +15,4 @@ COPY services/auth-service/app        ./app
 COPY services/auth-service/alembic    ./alembic
 COPY services/auth-service/alembic.ini .
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

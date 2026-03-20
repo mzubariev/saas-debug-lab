@@ -4,3 +4,4 @@ aiosmtplib
 structlog
 tenacity
 sentry-sdk
+ddtrace

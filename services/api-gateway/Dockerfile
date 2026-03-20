@@ -10,4 +10,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY services/api-gateway/app ./app
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# ddtrace-run patches all supported libraries (FastAPI, httpx, redis, …) before
+# the application imports them — zero code changes needed for APM auto-instrumentation.
+CMD ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
