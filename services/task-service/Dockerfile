@@ -11,6 +11,8 @@ RUN pip install --no-cache-dir "/shared[services]"
 COPY services/task-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY services/task-service/app ./app
+COPY services/task-service/app        ./app
+COPY services/task-service/alembic    ./alembic
+COPY services/task-service/alembic.ini .
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

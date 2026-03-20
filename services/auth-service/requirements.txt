@@ -10,6 +10,7 @@ passlib[bcrypt]
 
 sqlalchemy
 asyncpg
+alembic
 
 redis[asyncio]
 

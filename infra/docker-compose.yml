@@ -156,6 +156,41 @@ services:
       start_period: 5s
 
 ############################
+# DB MIGRATIONS (one-shot init containers)
+############################
+
+  # Runs `alembic upgrade head` for auth-service, then exits.
+  # auth-service waits for this to complete successfully before starting.
+  auth-migrate:
+    build:
+      context: ..
+      dockerfile: services/auth-service/Dockerfile
+    container_name: auth-migrate
+    profiles: ["core"]
+    command: ["alembic", "upgrade", "head"]
+    env_file:
+      - ../services/auth-service/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # Runs `alembic upgrade head` for task-service, then exits.
+  task-migrate:
+    build:
+      context: ..
+      dockerfile: services/task-service/Dockerfile
+    container_name: task-migrate
+    profiles: ["core"]
+    command: ["alembic", "upgrade", "head"]
+    env_file:
+      - ../services/task-service/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+############################
 # SERVICES
 ############################
 
@@ -175,6 +210,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      auth-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -200,6 +237,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      task-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s

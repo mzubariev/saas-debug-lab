@@ -4,9 +4,9 @@ from prometheus_client import make_asgi_app
 from sqlalchemy import select
 
 from .config import settings
-from .db import engine, SessionLocal
+from .db import SessionLocal
 from .logging import setup_logging
-from .models.user import Base, User
+from .models.user import User
 from .security import hash_password
 from .cache import start_redis, stop_redis
 from .telemetry import setup_telemetry
@@ -21,6 +21,7 @@ setup_telemetry(app, settings.service_name, settings.otlp_endpoint)
 logger = structlog.get_logger()
 
 # Default users seeded on every fresh database.
+# Schema is created by Alembic (auth-migrate init container) before startup.
 _DEFAULT_USERS: list[tuple[str, str, str]] = [
     ("admin", "admin123", "admin"),
     ("user",  "user123",  "user"),
@@ -29,10 +30,7 @@ _DEFAULT_USERS: list[tuple[str, str, str]] = [
 
 @app.on_event("startup")
 async def startup() -> None:
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
+    # Seed default users if they don't exist yet (idempotent).
     async with SessionLocal() as db:
         for username, password, role in _DEFAULT_USERS:
             result = await db.execute(select(User).where(User.username == username))
@@ -42,7 +40,6 @@ async def startup() -> None:
                     hashed_password=hash_password(password),
                     role=role,
                 ))
-
         await db.commit()
 
     await start_redis(app, settings.redis_url)
