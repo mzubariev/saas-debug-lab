@@ -3,3 +3,4 @@ aiokafka
 aiosmtplib
 structlog
 tenacity
+sentry-sdk

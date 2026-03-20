@@ -16,4 +16,6 @@ redis[asyncio]
 
 structlog
 
+sentry-sdk[fastapi]
+
 prometheus-client

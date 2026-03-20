@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     otlp_endpoint: str = "http://jaeger:4317"
     log_level: str = "INFO"
+    sentry_dsn: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",

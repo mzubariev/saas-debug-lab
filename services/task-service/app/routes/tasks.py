@@ -1,5 +1,6 @@
 import uuid
 
+import sentry_sdk
 import structlog
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/tasks")
 
 logger = structlog.get_logger()
 
-_CACHE_TTL_LIST = 60      # seconds
+_CACHE_TTL_LIST   = 60    # seconds
 _CACHE_TTL_SINGLE = 120   # seconds
 _LIST_KEY = "tasks:list"
 
@@ -64,6 +65,11 @@ async def create_task(
     await db.commit()
     await db.refresh(task)
 
+    # Tag the Sentry scope so any exception raised after this point carries
+    # the task ID — useful for correlating errors with specific records.
+    sentry_sdk.set_tag("task_id", str(task.id))
+    sentry_sdk.set_extra("task_title", task.title)
+
     await publish_event(
         request.app.state.kafka,
         topic="task_created",
@@ -79,6 +85,8 @@ async def create_task(
 
 @router.get("/{task_id}", response_model=TaskOut)
 async def get_task(task_id: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db)):
+    sentry_sdk.set_tag("task_id", str(task_id))
+
     redis = request.app.state.redis
     key = _task_key(task_id)
 
@@ -101,9 +109,19 @@ async def start_task(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    sentry_sdk.set_tag("task_id", str(task_id))
+
     task = await _get_task_or_404(task_id, db)
 
     if task.status != TaskStatus.created:
+        # Capture a breadcrumb so the state at the time of rejection is visible
+        # in Sentry without turning a normal 409 into a full error event.
+        sentry_sdk.add_breadcrumb(
+            category="task_lifecycle",
+            message=f"Invalid transition: start() called on task in state '{task.status.value}'",
+            level="warning",
+            data={"task_id": str(task_id), "current_status": task.status.value},
+        )
         raise HTTPException(
             status_code=409,
             detail=f"Cannot start task in status '{task.status.value}'. Expected 'created'.",
@@ -132,9 +150,17 @@ async def complete_task(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    sentry_sdk.set_tag("task_id", str(task_id))
+
     task = await _get_task_or_404(task_id, db)
 
     if task.status != TaskStatus.in_progress:
+        sentry_sdk.add_breadcrumb(
+            category="task_lifecycle",
+            message=f"Invalid transition: complete() called on task in state '{task.status.value}'",
+            level="warning",
+            data={"task_id": str(task_id), "current_status": task.status.value},
+        )
         raise HTTPException(
             status_code=409,
             detail=f"Cannot complete task in status '{task.status.value}'. Expected 'in_progress'.",

@@ -7,4 +7,6 @@ pydantic-settings
 PyJWT
 structlog
 
+sentry-sdk[fastapi]
+
 prometheus-client

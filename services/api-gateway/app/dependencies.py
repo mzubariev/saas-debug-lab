@@ -1,4 +1,5 @@
 import jwt
+import sentry_sdk
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -16,7 +17,7 @@ async def verify_token(
         raise HTTPException(status_code=401, detail="Missing authorization header")
 
     try:
-        return jwt.decode(
+        payload = jwt.decode(
             credentials.credentials,
             settings.jwt_secret,
             algorithms=["HS256"],
@@ -25,3 +26,12 @@ async def verify_token(
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError as exc:
         raise HTTPException(status_code=401, detail=f"Invalid token: {exc}")
+
+    # Attach the authenticated user to every Sentry event for this request.
+    # This enriches error reports with "who was logged in when it broke".
+    sentry_sdk.set_user({
+        "username": payload.get("sub"),
+        "role":     payload.get("role"),
+    })
+
+    return payload

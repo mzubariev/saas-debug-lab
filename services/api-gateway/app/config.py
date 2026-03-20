@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     gateway_timeout: float = 5.0
     otlp_endpoint: str = "http://jaeger:4317"
     log_level: str = "INFO"
+    sentry_dsn: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",

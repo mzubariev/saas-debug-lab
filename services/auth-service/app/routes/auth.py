@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 import jwt
+import sentry_sdk
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -64,7 +65,14 @@ async def login(
         user = result.scalar_one_or_none()
 
         if user is None:
-            logger.warning("login_failed", username=form.username)
+            logger.warning("login_failed", username=form.username, reason="user_not_found")
+            # Record the failed attempt as a Sentry breadcrumb so it appears
+            # in the trail for any subsequent exception in the same request.
+            sentry_sdk.add_breadcrumb(
+                category="auth",
+                message=f"Login failed: unknown user '{form.username}'",
+                level="warning",
+            )
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         await cache_set(
@@ -79,10 +87,18 @@ async def login(
         username = user.username
 
     if not verify_password(form.password, hashed_password):
-        logger.warning("login_failed", username=form.username)
+        logger.warning("login_failed", username=form.username, reason="wrong_password")
+        sentry_sdk.add_breadcrumb(
+            category="auth",
+            message=f"Login failed: wrong password for '{form.username}'",
+            level="warning",
+        )
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = _create_token(username, role)
+
+    # Tell Sentry which user is authenticated for the rest of this request.
+    sentry_sdk.set_user({"username": username, "role": role})
 
     logger.info("login_success", username=username, role=role)
 
@@ -93,5 +109,8 @@ async def login(
 async def get_me(token: str = Depends(oauth2_scheme)):
 
     payload = _decode_token(token)
+
+    # Propagate user identity to any Sentry event raised downstream.
+    sentry_sdk.set_user({"username": payload["sub"], "role": payload.get("role", "user")})
 
     return UserInfo(username=payload["sub"], role=payload.get("role", "user"))

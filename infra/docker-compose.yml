@@ -116,6 +116,10 @@ services:
     profiles: ["core"]
     env_file:
       - ../services/api-gateway/.env
+    environment:
+      # Forward host SENTRY_DSN so a single env var enables Sentry in all containers.
+      # Leave unset (or empty) to disable Sentry — the SDK is a no-op with no DSN.
+      SENTRY_DSN: ${SENTRY_DSN:-}
     # Port 8000 is intentionally NOT exposed to the host.
     # All external traffic must enter through Nginx on :80.
     depends_on:
@@ -203,6 +207,8 @@ services:
     profiles: ["core"]
     env_file:
       - ../services/auth-service/.env
+    environment:
+      SENTRY_DSN: ${SENTRY_DSN:-}
     ports:
       - "8002:8000"
     depends_on:
@@ -228,6 +234,8 @@ services:
     profiles: ["core"]
     env_file:
       - ../services/task-service/.env
+    environment:
+      SENTRY_DSN: ${SENTRY_DSN:-}
     ports:
       - "8001:8000"
     depends_on:
@@ -281,6 +289,8 @@ services:
     profiles: ["core"]
     env_file:
       - ../services/integration-service/.env
+    environment:
+      SENTRY_DSN: ${SENTRY_DSN:-}
     ports:
       - "8003:8000"
     depends_on:
@@ -381,6 +391,7 @@ services:
     env_file:
       - ../workers/notification-worker/.env
     environment:
+      SENTRY_DSN: ${SENTRY_DSN:-}
       # SMTP routes through Toxiproxy by default so network-level chaos can be injected
       # without touching this service. To use a real provider instead:
       #   SMTP_HOST=smtp.gmail.com SMTP_PORT=587 SMTP_USE_STARTTLS=true

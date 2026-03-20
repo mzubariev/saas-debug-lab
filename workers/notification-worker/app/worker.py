@@ -4,6 +4,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 import aiosmtplib
+import sentry_sdk
 import structlog
 from aiokafka import AIOKafkaConsumer
 
@@ -13,19 +14,39 @@ from .logging import setup_logging
 
 logger = structlog.get_logger()
 
-TOPIC = "task_created"
+TOPIC    = "task_created"
 GROUP_ID = "notification-worker"
+
+
+def _setup_sentry() -> None:
+    """Initialise Sentry error tracking. No-op when SENTRY_DSN is not set.
+
+    The worker has no ASGI layer, so we use the plain SDK without FastAPI /
+    Starlette integrations.  Exceptions are captured explicitly with
+    sentry_sdk.capture_exception() at each failure point so that every SMTP
+    or connection error appears as a separate Sentry issue, enriched with the
+    task_id and email recipient that caused it.
+    """
+    if not settings.sentry_dsn:
+        return
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+    )
+    sentry_sdk.set_tag("service", settings.service_name)
+    sentry_sdk.set_tag("worker", "notification-worker")
 
 
 def _build_message(event: dict) -> MIMEMultipart:
     task_id = event.get("id", "unknown")
-    title = event.get("title", "Untitled")
-    status = event.get("status", "created")
+    title   = event.get("title", "Untitled")
+    status  = event.get("status", "created")
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"[SaaS Debug Lab] Task created: {title}"
-    msg["From"] = settings.email_from
-    msg["To"] = settings.email_to
+    msg["From"]    = settings.email_from
+    msg["To"]      = settings.email_to
 
     plain = (
         f"A new task has been created.\n\n"
@@ -52,9 +73,9 @@ def _build_message(event: dict) -> MIMEMultipart:
 async def _send_email(msg: MIMEMultipart) -> None:
     """Deliver the message via SMTP. Raises on any transport error."""
     smtp_kwargs: dict = {
-        "hostname": settings.smtp_host,
-        "port": settings.smtp_port,
-        "use_tls": settings.smtp_use_tls,
+        "hostname":  settings.smtp_host,
+        "port":      settings.smtp_port,
+        "use_tls":   settings.smtp_use_tls,
         "start_tls": settings.smtp_use_starttls,
     }
 
@@ -67,8 +88,8 @@ async def _send_email(msg: MIMEMultipart) -> None:
 
 async def handle_event(event: dict) -> None:
     task_id = event.get("id")
-    title = event.get("title")
-    msg = _build_message(event)
+    title   = event.get("title")
+    msg     = _build_message(event)
 
     try:
         await _send_email(msg)
@@ -80,6 +101,7 @@ async def handle_event(event: dict) -> None:
             smtp_host=settings.smtp_host,
             smtp_port=settings.smtp_port,
         )
+
     except aiosmtplib.SMTPException as exc:
         logger.error(
             "smtp_delivery_failed",
@@ -88,8 +110,19 @@ async def handle_event(event: dict) -> None:
             to=settings.email_to,
             error=str(exc),
         )
+        # Use push_scope so extra context is isolated to this single capture
+        # and does not bleed into events from other Kafka messages.
+        with sentry_sdk.push_scope() as scope:
+            scope.set_tag("task_id",    task_id or "unknown")
+            scope.set_tag("error_type", "smtp_protocol")
+            scope.set_extra("task_title",  title)
+            scope.set_extra("smtp_host",   settings.smtp_host)
+            scope.set_extra("smtp_port",   settings.smtp_port)
+            scope.set_extra("recipient",   settings.email_to)
+            sentry_sdk.capture_exception(exc)
+
     except OSError as exc:
-        # Covers connection-refused, DNS failure, TCP reset — real infra failures.
+        # Connection-refused, DNS failure, TCP reset, Toxiproxy chaos.
         logger.error(
             "smtp_connection_failed",
             task_id=task_id,
@@ -97,6 +130,14 @@ async def handle_event(event: dict) -> None:
             smtp_port=settings.smtp_port,
             error=str(exc),
         )
+        with sentry_sdk.push_scope() as scope:
+            scope.set_tag("task_id",    task_id or "unknown")
+            scope.set_tag("error_type", "smtp_connection")
+            scope.set_extra("task_title",  title)
+            scope.set_extra("smtp_host",   settings.smtp_host)
+            scope.set_extra("smtp_port",   settings.smtp_port)
+            scope.set_extra("recipient",   settings.email_to)
+            sentry_sdk.capture_exception(exc)
 
 
 async def consume() -> None:
@@ -123,12 +164,20 @@ async def consume() -> None:
                     topic=msg.topic,
                     offset=msg.offset,
                 )
+                # Capture unexpected exceptions (JSON decode errors, etc.)
+                # that are not already handled inside handle_event().
+                with sentry_sdk.push_scope() as scope:
+                    scope.set_tag("error_type", "event_processing")
+                    scope.set_extra("kafka_topic",  msg.topic)
+                    scope.set_extra("kafka_offset", msg.offset)
+                    sentry_sdk.capture_exception(exc)
     finally:
         await consumer.stop()
 
 
 def run() -> None:
     setup_logging(settings.log_level, settings.service_name)
+    _setup_sentry()
     asyncio.run(consume())
 
 
