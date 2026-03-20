@@ -424,6 +424,10 @@ services:
       - "5173:5173"
     environment:
       - VITE_API_URL=http://localhost
+      # Forward the host-level SENTRY_DSN so the browser SDK can report to the
+      # same Sentry project as the backend.  Leave unset to disable Sentry.
+      - VITE_SENTRY_DSN=${SENTRY_DSN:-}
+      - VITE_SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-1.0}
     depends_on:
       - nginx
 

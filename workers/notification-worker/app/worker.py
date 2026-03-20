@@ -154,23 +154,46 @@ async def consume() -> None:
 
     try:
         async for msg in consumer:
-            try:
-                event = json.loads(msg.value.decode("utf-8"))
-                await handle_event(event)
-            except Exception as exc:
-                logger.error(
-                    "event_processing_failed",
-                    error=str(exc),
-                    topic=msg.topic,
-                    offset=msg.offset,
-                )
-                # Capture unexpected exceptions (JSON decode errors, etc.)
-                # that are not already handled inside handle_event().
-                with sentry_sdk.push_scope() as scope:
-                    scope.set_tag("error_type", "event_processing")
-                    scope.set_extra("kafka_topic",  msg.topic)
-                    scope.set_extra("kafka_offset", msg.offset)
-                    sentry_sdk.capture_exception(exc)
+            # Extract Sentry trace context that was stamped onto the Kafka
+            # message by task-service/kafka.py at publish time.  Calling
+            # continue_trace() creates a new transaction that is linked to the
+            # same trace_id as the originating browser request, so the full
+            # Browser → Gateway → task-service → notification-worker chain
+            # appears as a single distributed trace in Sentry.
+            incoming_trace_headers = {
+                k.lower(): v.decode("utf-8", errors="replace")
+                for k, v in (msg.headers or [])
+                if k.lower() in ("sentry-trace", "baggage")
+            }
+            transaction = sentry_sdk.continue_trace(
+                incoming_trace_headers,
+                op="queue.process",
+                name=f"consume {msg.topic}",
+            )
+
+            with sentry_sdk.start_transaction(transaction) as tx:
+                tx.set_data("messaging.system", "kafka")
+                tx.set_data("messaging.destination", msg.topic)
+                tx.set_data("messaging.kafka.offset", msg.offset)
+
+                try:
+                    event = json.loads(msg.value.decode("utf-8"))
+                    tx.set_data("task.id", event.get("id"))
+                    await handle_event(event)
+                except Exception as exc:
+                    logger.error(
+                        "event_processing_failed",
+                        error=str(exc),
+                        topic=msg.topic,
+                        offset=msg.offset,
+                    )
+                    # Capture unexpected exceptions (JSON decode errors, etc.)
+                    # that are not already handled inside handle_event().
+                    with sentry_sdk.push_scope() as scope:
+                        scope.set_tag("error_type", "event_processing")
+                        scope.set_extra("kafka_topic",  msg.topic)
+                        scope.set_extra("kafka_offset", msg.offset)
+                        sentry_sdk.capture_exception(exc)
     finally:
         await consumer.stop()
 

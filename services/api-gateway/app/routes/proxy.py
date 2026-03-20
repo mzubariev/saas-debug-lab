@@ -14,10 +14,23 @@ router = APIRouter()
 logger = structlog.get_logger()
 
 
+# Headers that must NOT be forwarded verbatim to upstream services.
+# - "host": must match the upstream hostname, not the client's original Host.
+# - "sentry-trace" / "baggage": the HttpxIntegration re-injects these on every
+#   outbound call using the *gateway's own* active span as the parent, so that
+#   downstream services see the correct parent-child relationship in Sentry.
+#   Forwarding the browser's raw values would create duplicate / mismatched spans.
+_EXCLUDED_PROXY_HEADERS = frozenset({"host", "sentry-trace", "baggage"})
+
+
 async def _proxy(request: Request, url: str) -> Response:
     body = await request.body()
 
-    headers = {k: v for k, v in request.headers.items() if k.lower() != "host"}
+    headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower() not in _EXCLUDED_PROXY_HEADERS
+    }
 
     try:
         resp = await client.request(

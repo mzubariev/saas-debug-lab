@@ -1,5 +1,6 @@
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.httpx import HttpxIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 
 from fastapi import FastAPI
@@ -22,6 +23,9 @@ def _setup_sentry() -> None:
         integrations=[
             StarletteIntegration(transaction_style="endpoint"),
             FastApiIntegration(transaction_style="endpoint"),
+            # Propagates the active Sentry span context on outbound httpx calls
+            # (webhook delivery to webhook-simulator / customer endpoints).
+            HttpxIntegration(),
         ],
         traces_sample_rate=0.1,
         send_default_pii=False,
