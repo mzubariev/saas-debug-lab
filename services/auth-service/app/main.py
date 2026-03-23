@@ -5,16 +5,16 @@ from sentry_sdk.integrations.starlette import StarletteIntegration
 import structlog
 from fastapi import FastAPI
 from prometheus_client import make_asgi_app
-from sqlalchemy import select
 
-from .config import settings
-from .db import SessionLocal
-from .logging import setup_logging
+from .core.config import settings
+from .core.logging import setup_logging
+from .core.telemetry import setup_telemetry
+from .infrastructure.db.session import SessionLocal
+from .infrastructure.cache.client import start_redis, stop_redis
 from .models.user import User
+from .repositories.user_repository import UserRepository
 from .security import hash_password
-from .cache import start_redis, stop_redis
-from .telemetry import setup_telemetry
-from .routes import auth, health
+from .api.routes import auth, health
 
 
 def _setup_sentry() -> None:
@@ -46,22 +46,23 @@ logger = structlog.get_logger()
 # Schema is created by Alembic (auth-migrate init container) before startup.
 _DEFAULT_USERS: list[tuple[str, str, str]] = [
     ("admin", "admin123", "admin"),
-    ("user",  "user123",  "user"),
+    ("user", "user123", "user"),
 ]
 
 
 @app.on_event("startup")
 async def startup() -> None:
-    # Seed default users if they don't exist yet (idempotent).
     async with SessionLocal() as db:
+        repo = UserRepository(db)
         for username, password, role in _DEFAULT_USERS:
-            result = await db.execute(select(User).where(User.username == username))
-            if result.scalar_one_or_none() is None:
-                db.add(User(
-                    username=username,
-                    hashed_password=hash_password(password),
-                    role=role,
-                ))
+            if await repo.get_by_username(username) is None:
+                repo.add(
+                    User(
+                        username=username,
+                        hashed_password=hash_password(password),
+                        role=role,
+                    )
+                )
         await db.commit()
 
     await start_redis(app, settings.redis_url)
