@@ -411,7 +411,7 @@ services:
     profiles: ["core"]
     # ddtrace-run is prepended here (no Dockerfile CMD to modify).
     # It auto-instruments Celery tasks, Redis, SQLAlchemy, and kafka-python.
-    command: ["ddtrace-run", "celery", "-A", "app.celery:celery_app", "worker", "--beat", "--loglevel=info"]
+    command: ["ddtrace-run", "celery", "-A", "app.core.celery:celery_app", "worker", "--beat", "--loglevel=info"]
     env_file:
       - ../workers/scheduler-worker/.env
     environment:
@@ -439,7 +439,7 @@ services:
     container_name: flower
     restart: unless-stopped
     profiles: ["core"]
-    command: ["ddtrace-run", "celery", "-A", "app.celery:celery_app", "flower", "--port=5555"]
+    command: ["ddtrace-run", "celery", "-A", "app.core.celery:celery_app", "flower", "--port=5555"]
     env_file:
       - ../workers/scheduler-worker/.env
     environment:

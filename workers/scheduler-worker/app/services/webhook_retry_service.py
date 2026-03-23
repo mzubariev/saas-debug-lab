@@ -1,53 +1,56 @@
-import json
+import time
 
 import httpx
 import sentry_sdk
 import structlog
-from kafka import KafkaConsumer
 from kafka.errors import NoBrokersAvailable
+from saas_shared.kafka_envelope import parse_envelope_message
 
-from ..celery import celery_app
-from ..config import settings
-
+from ..core.config import settings
+from ..infrastructure.http.client import post_json_sync
+from ..infrastructure.kafka.consumer import create_webhook_dlq_consumer
 
 logger = structlog.get_logger()
 
-_DLQ_TOPIC = "webhook_dlq"
-_GROUP_ID = "scheduler-worker"
 
-
-@celery_app.task(name="app.tasks.webhooks.retry_failed_webhooks")
-def retry_failed_webhooks() -> dict:
+def process_dlq() -> dict:
     """
     Drain all currently available messages from the webhook_dlq Kafka topic
     and re-attempt delivery to WEBHOOK_URL.
 
-    Uses a short-lived consumer with a 5-second drain timeout so the task
+    Uses a short-lived consumer with a 5-second drain timeout so the job
     always terminates within a predictable window. Messages are committed
     regardless of retry outcome — the DLQ is a best-effort second chance,
     not an infinite retry loop. Persistent failures are logged as warnings
     and visible in Flower / Kibana.
     """
+    t0 = time.perf_counter()
+    logger.info("webhook_dlq_retry_job_started")
+
     try:
-        consumer = KafkaConsumer(
-            _DLQ_TOPIC,
+        consumer = create_webhook_dlq_consumer(
             bootstrap_servers=settings.kafka_bootstrap_servers,
-            group_id=_GROUP_ID,
-            auto_offset_reset="earliest",
-            # Stop iterating after 5 s with no new messages so the task
-            # finishes deterministically even when the topic is empty.
-            consumer_timeout_ms=5000,
-            enable_auto_commit=True,
-            value_deserializer=lambda b: json.loads(b.decode("utf-8")),
         )
     except NoBrokersAvailable as exc:
-        logger.error("dlq_consumer_unavailable", error=str(exc))
-        # Kafka being unreachable is a hard infrastructure failure — report it.
+        duration = time.perf_counter() - t0
+        logger.error(
+            "dlq_consumer_unavailable",
+            error=str(exc),
+            duration_seconds=round(duration, 3),
+        )
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("task", "retry_failed_webhooks")
             scope.set_tag("error_type", "kafka_unavailable")
             scope.set_extra("kafka_servers", settings.kafka_bootstrap_servers)
             sentry_sdk.capture_exception(exc)
+        logger.info(
+            "webhook_dlq_retry_job_finished",
+            retried=0,
+            failed=0,
+            messages_processed=0,
+            duration_seconds=round(duration, 3),
+            error=str(exc),
+        )
         return {"retried": 0, "failed": 0, "error": str(exc)}
 
     retried = 0
@@ -55,18 +58,22 @@ def retry_failed_webhooks() -> dict:
 
     try:
         for msg in consumer:
-            payload: dict = msg.value
+            _event_type, payload = parse_envelope_message(msg.value)
             # Strip the "error" key appended by webhook-dispatcher before retrying.
             clean_payload = {k: v for k, v in payload.items() if k != "error"}
 
             try:
-                with httpx.Client(timeout=settings.webhook_timeout) as client:
-                    resp = client.post(settings.webhook_url, json=clean_payload)
-                    resp.raise_for_status()
+                resp = post_json_sync(
+                    settings.webhook_url,
+                    clean_payload,
+                    timeout=settings.webhook_timeout,
+                )
+                resp.raise_for_status()
 
                 logger.info(
                     "dlq_webhook_retried",
                     task_id=payload.get("id"),
+                    event_type=_event_type,
                     status_code=resp.status_code,
                     topic_offset=msg.offset,
                 )
@@ -76,13 +83,10 @@ def retry_failed_webhooks() -> dict:
                 logger.warning(
                     "dlq_webhook_retry_failed",
                     task_id=payload.get("id"),
+                    event_type=_event_type,
                     error=str(exc),
                     topic_offset=msg.offset,
                 )
-                # Record as a breadcrumb on the current Celery task transaction
-                # rather than a standalone error — individual DLQ retries failing
-                # is expected behaviour.  The breadcrumb appears in the Sentry
-                # issue if the task itself eventually raises.
                 sentry_sdk.add_breadcrumb(
                     category="dlq",
                     message="DLQ webhook retry failed",
@@ -99,5 +103,13 @@ def retry_failed_webhooks() -> dict:
     finally:
         consumer.close()
 
-    logger.info("dlq_retry_cycle_complete", retried=retried, failed=failed)
+    duration = time.perf_counter() - t0
+    processed = retried + failed
+    logger.info(
+        "webhook_dlq_retry_job_finished",
+        retried=retried,
+        failed=failed,
+        messages_processed=processed,
+        duration_seconds=round(duration, 3),
+    )
     return {"retried": retried, "failed": failed}

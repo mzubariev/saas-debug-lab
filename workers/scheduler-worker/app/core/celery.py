@@ -40,8 +40,8 @@ celery_app = Celery(
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
     include=[
-        "app.tasks.webhooks",
-        "app.tasks.cleanup",
+        "app.tasks.webhook_tasks",
+        "app.tasks.cleanup_tasks",
     ],
 )
 
@@ -54,11 +54,11 @@ celery_app.conf.update(
     # Beat schedule — embedded in the worker process (single instance lab).
     beat_schedule={
         "retry-failed-webhooks-every-60s": {
-            "task": "app.tasks.webhooks.retry_failed_webhooks",
+            "task": "app.tasks.webhook_tasks.retry_failed_webhooks",
             "schedule": 60.0,
         },
         "cleanup-old-tasks-daily": {
-            "task": "app.tasks.cleanup.cleanup_old_tasks",
+            "task": "app.tasks.cleanup_tasks.cleanup_old_tasks",
             "schedule": crontab(hour=2, minute=0),
         },
     },
