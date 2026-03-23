@@ -50,15 +50,40 @@ DATABASE_URL=postgresql://admin:admin@localhost:5432/saas python scripts/seed_de
 All scripts are run from the repository root. Every script accepts a `BASE_URL`
 environment variable (default: `http://localhost`).
 
+**Requests** carry `X-Request-ID` (see `requestId()` in `lib/helpers.js`) and k6 **tags**
+`scenario` + `endpoint` on every call for dashboards and thresholds like
+`http_req_duration{endpoint:create_task}`.
+
+### Makefile (repo root)
+
+```bash
+make load-baseline      # baseline.js
+make load-chaos         # chaos_mode.js
+make load-spike         # spike_traffic.js
+make load-retry-storm   # retry_storm.js
+make load-concurrency   # concurrency.js
+make load-slow-clients  # slow_clients.js
+```
+
+### k6 CLI
+
 ```bash
 # Run from the repo root
 k6 run load-tests/scripts/spike_traffic.js
 k6 run load-tests/scripts/concurrency.js
 k6 run load-tests/scripts/retry_storm.js
 k6 run load-tests/scripts/slow_clients.js
+k6 run load-tests/scripts/baseline.js
+k6 run load-tests/scripts/chaos_mode.js
+
+# Long-running soak (overrides default duration in baseline.js)
+k6 run --duration 12h load-tests/scripts/baseline.js
 
 # Override base URL (e.g. remote host or inside Docker)
 k6 run -e BASE_URL=http://my-server load-tests/scripts/concurrency.js
+
+# Verbose VU/iteration logs (chaos_mode.js and any script you extend)
+k6 run -e DEBUG_VU=1 load-tests/scripts/chaos_mode.js
 
 # Stream live metrics to stdout while the test runs
 k6 run --http-debug=full load-tests/scripts/spike_traffic.js 2>&1 | head -200
@@ -67,6 +92,29 @@ k6 run --http-debug=full load-tests/scripts/spike_traffic.js 2>&1 | head -200
 ---
 
 ## Scenario Reference
+
+### 0. `baseline.js` — Steady soak
+
+**Run**
+```bash
+make load-baseline
+# or long soak:
+k6 run --duration 12h load-tests/scripts/baseline.js
+```
+
+**Thresholds** — `http_req_duration` by `endpoint:create_task` / `get_tasks`, `http_req_failed < 5%`.
+
+---
+
+### 0b. `chaos_mode.js` — Retries + jitter
+
+Creates a task; on non-201, waits 0–2s and retries once. Tags: `scenario=chaos_mode`, `endpoint=create_task`.
+
+```bash
+make load-chaos
+```
+
+---
 
 ### 1. `spike_traffic.js` — Sudden traffic spike
 
@@ -271,6 +319,7 @@ k6 run -e BASE_URL=http://localhost:18000 load-tests/scripts/slow_clients.js
 | `WEBHOOK_SIM_URL` | `http://localhost:8004` | Direct access to webhook-simulator |
 | `VUS` | `20` | VU count override for `concurrency.js` |
 | `FAIL_RATE` | `0.9` | Failure rate passed to `retry_storm.js` simulator baseline |
+| `DEBUG_VU` | unset | Set to `1` to print `VU` / `ITER` in `chaos_mode.js` |
 
 ---
 
@@ -328,10 +377,14 @@ rate(nginx_http_requests_total{status="429"}[30s])
 load-tests/
 ├── README.md                  ← this file
 ├── lib/
-│   └── helpers.js             ← shared login, request wrappers, random data
+│   └── helpers.js             ← login, requestId, reqTags, auth/anon headers, HTTP wrappers
 └── scripts/
+    ├── baseline.js            ← steady / long soak (12h via --duration)
+    ├── chaos_mode.js          ← retry-once + random sleep; chaos training
     ├── spike_traffic.js       ← sudden spike, Nginx rate limit, cache warm-up
     ├── concurrency.js         ← steady-state mixed workload, full lifecycle
     ├── retry_storm.js         ← webhook failures, DLQ, Celery retries
     └── slow_clients.js        ← connection pool exhaustion, proxy timeouts
 ```
+
+Repo root `Makefile` exposes `make load-*` targets for the scripts above.
