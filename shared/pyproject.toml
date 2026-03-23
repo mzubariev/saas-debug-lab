@@ -14,9 +14,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Install for FastAPI services that need tracing and a /health router.
+# Install for FastAPI services that need tracing, /health router, and async Redis helpers.
 services = [
     "fastapi",
+    "redis[asyncio]",
     "opentelemetry-api",
     "opentelemetry-sdk",
     "opentelemetry-instrumentation-fastapi",
