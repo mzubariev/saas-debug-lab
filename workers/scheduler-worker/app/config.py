@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     kafka_bootstrap_servers: str = "kafka:9092"
 
     # Webhook delivery target — used by retry_failed_webhooks.
-    # Should match integration-service's WEBHOOK_URL so retried events
+    # Should match webhook-dispatcher’s WEBHOOK_URL so retried events
     # reach the same endpoint as the original delivery attempts.
     webhook_url: str = "http://webhook-simulator:8001/receive-webhook"
     webhook_timeout: int = 10

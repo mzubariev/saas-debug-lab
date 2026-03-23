@@ -2,9 +2,9 @@
  * retry_storm.js — Webhook failure cascade and DLQ retry behaviour
  *
  * PURPOSE
- *   Flood the integration-service outbound webhook pipeline while the
+ *   Flood the webhook-dispatcher outbound delivery pipeline while the
  *   webhook-simulator is configured to fail at a high rate. This exercises:
- *     - integration-service exponential back-off (1 s → 2 s → 4 s)
+ *     - webhook-dispatcher exponential back-off (1 s → 2 s → 4 s)
  *     - Dead-letter queue (webhook_dlq Kafka topic) filling under pressure
  *     - Celery scheduler-worker's retry_failed_webhooks job draining the DLQ
  *     - Notification worker receiving task_created events and sending emails
@@ -16,20 +16,19 @@
  *     WEBHOOK_SIMULATOR_DEFAULT_FAIL_RATE=0.9 \
  *     docker compose -f infra/docker-compose.yml up -d webhook-simulator
  *
- *   Option B — use Toxiproxy to cut the connection between integration-service
- *              and webhook-simulator without restarting any container:
+ *   Option B — use Toxiproxy (or similar) to inject network faults; for SMTP
+ *              chaos the lab uses the mailhog-smtp proxy — not the webhook path.
  *     curl -s -X POST http://localhost:8474/proxies/mailhog-smtp/toxics \
  *       -H 'Content-Type: application/json' \
  *       -d '{"name":"latency","type":"latency","attributes":{"latency":500,"jitter":200}}'
  *
  * TWO TRAFFIC STREAMS (run concurrently via k6 scenarios)
  *
- *   organic  — Creates tasks via POST /tasks → task-service emits task_created
- *              Kafka event → integration-service picks it up and tries to deliver
- *              a webhook → fails → retry → DLQ.
+ *   organic  — Creates tasks via POST /tasks → task_created → webhook-dispatcher
+ *              delivers → fails → retry → DLQ.
  *
- *   direct   — Calls POST /webhooks/send directly, bypassing Kafka. Lets us
- *              saturate the webhook pipeline independently of task creation.
+ *   direct   — POST /webhooks/send → integration-service publishes webhook_dispatch
+ *              → webhook-dispatcher delivers (saturates delivery without task CRUD).
  *
  * RUN
  *   k6 run load-tests/scripts/retry_storm.js
@@ -39,10 +38,10 @@
  * WATCH
  *   DLQ depth      : http://localhost:8080  Kafka UI → topic webhook_dlq
  *   Retry jobs     : http://localhost:5555  Flower → retry_failed_webhooks task
- *   Integration log: docker logs integration-service --follow
- *                    look for: webhook_delivery_failed, webhook_dlq_published
+ *   Dispatcher log : docker logs webhook-dispatcher --follow
+ *                    look for: webhook_attempt_failed, webhook_failed_permanently
  *   Email delivery : http://localhost:8025  MailHog (if Toxiproxy not fully blocking)
- *   Traces         : http://localhost:16686 Jaeger → filter service=integration-service
+ *   Traces         : http://localhost:16686 Jaeger → integration-service (HTTP) if enabled
  */
 
 import http from 'k6/http'
@@ -54,7 +53,7 @@ import {
 } from '../lib/helpers.js'
 
 // ─── Custom metrics ────────────────────────────────────────────────────────
-const webhookAccepted  = new Counter('webhook_accepted_202')   // integration-service 202
+const webhookAccepted  = new Counter('webhook_accepted_202')   // HTTP 202 from integration-service (queued)
 const webhookFailed    = new Counter('webhook_endpoint_errors')// 4xx/5xx on /webhooks/send
 const taskCreated      = new Counter('tasks_created_for_events')
 const simFailures      = new Counter('simulator_direct_failures')
@@ -117,7 +116,7 @@ export function setup() {
 // ─── Scenario: organic task events ────────────────────────────────────────
 //
 // Creates tasks so task-service emits task_created Kafka events.
-// integration-service consumes those and attempts webhook delivery.
+// webhook-dispatcher consumes those and attempts webhook delivery.
 // With webhook-simulator at high fail_rate, most attempts fail → DLQ.
 //
 export function organicFlow(data) {
@@ -138,7 +137,7 @@ export function organicFlow(data) {
 // ─── Scenario: direct webhook flood ────────────────────────────────────────
 //
 // POSTs directly to /webhooks/send, bypassing task creation.
-// integration-service immediately attempts delivery → fails → retries → DLQ.
+// webhook-dispatcher delivers → fails → retries → DLQ.
 // Lets you saturate the webhook pipeline independently of the task event stream.
 //
 export function directFlow(data) {
@@ -165,7 +164,7 @@ export function directFlow(data) {
 //
 // Calls the webhook-simulator /receive-webhook endpoint DIRECTLY at the
 // configured FAIL_RATE. This gives a baseline measurement of the simulator's
-// raw failure behaviour independent of integration-service retry logic.
+// raw failure behaviour independent of dispatcher retry logic.
 // Compare this rate to the DLQ depth you see in Kafka UI.
 //
 export function simulatorBaseline(data) {

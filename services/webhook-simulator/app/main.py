@@ -57,7 +57,7 @@ async def receive_webhook(
     status: int | None = Query(default=None),
 ) -> dict[str, Any]:
     """
-    Acts as the external system receiving outbound webhooks from integration-service.
+    Acts as the external system receiving outbound webhooks from webhook-dispatcher.
     Supports per-request fail_rate, delay, and status overrides for chaos testing.
     """
     effective_fail_rate = fail_rate if fail_rate is not None else settings.default_fail_rate
@@ -93,7 +93,7 @@ async def trigger_event(
     delay: float = Query(default=1.0, ge=0.0),
 ) -> dict[str, Any]:
     """
-    Simulates an external system sending a webhook event inbound to integration-service.
+    Simulates an external system sending a webhook event inbound to integration-service (via api-gateway or direct URL).
     Retries on failure with exponential backoff.
     """
     asyncio.create_task(

@@ -115,7 +115,7 @@ k6 run load-tests/scripts/spike_traffic.js
 - Full task lifecycle: `created → in_progress → completed`
 - Redis cache-hit ratio stabilising during the 5-minute window
 - Postgres connection pool stability under sustained writes
-- Kafka consumer lag (integration-service keeping up with task events)
+- Kafka consumer lag (webhook-dispatcher keeping up with task events)
 
 **Traffic mix** (per VU iteration)
 
@@ -142,7 +142,7 @@ k6 run -e VUS=30 load-tests/scripts/concurrency.js
 | k6 output | `cache_hint_likely rate` (proxy for Redis hit ratio) should rise above 70% within ~2 min |
 | k6 output | `lifecycle_completed` vs `lifecycle_failed` — failures indicate state machine or DB issues |
 | Redis Insight `localhost:5540` | `tasks:list` key TTL resets on every create; watch hit/miss counters |
-| Kafka UI `localhost:8080` | Consumer group `integration-service` lag should stay < 100 messages |
+| Kafka UI `localhost:8080` | Consumer group `webhook-dispatcher` lag should stay < 100 messages |
 | Prometheus `localhost:9090` | `http_requests_total{service="task-service"}` rate, `http_request_duration_seconds` histogram |
 
 **Expected thresholds** — test PASSES if:
@@ -156,7 +156,7 @@ k6 run -e VUS=30 load-tests/scripts/concurrency.js
 ### 3. `retry_storm.js` — Webhook failure cascade
 
 **What it tests**
-- integration-service exponential back-off (1 s → 2 s → 4 s) on delivery failure
+- webhook-dispatcher exponential back-off (1 s → 2 s → 4 s) on delivery failure
 - Dead-letter queue (`webhook_dlq` Kafka topic) filling under sustained failures
 - Celery `retry_failed_webhooks` job draining the DLQ (runs every 60 s)
 - Notification-worker receiving `task_created` events while the webhook storm runs
@@ -197,9 +197,9 @@ k6 run -e FAIL_RATE=0.9 load-tests/scripts/retry_storm.js
 |---|---|
 | Kafka UI `localhost:8080` | `webhook_dlq` topic depth growing during test, draining in 60-s windows (Celery retries) |
 | Flower `localhost:5555` | `retry_failed_webhooks` task execution count and last-run time |
-| integration-service logs | `webhook_delivery_failed`, `webhook_retry`, `webhook_dlq_published` log events |
-| k6 output | `webhook_accepted_202` (integration-service accepted delivery) vs `simulator_fail_rate` (~0.9) |
-| Jaeger `localhost:16686` | Filter service=integration-service; look for retry spans with back-off gaps |
+| webhook-dispatcher logs | `webhook_attempt_failed`, `webhook_failed_permanently`, DLQ-related structlog events |
+| k6 output | `webhook_accepted_202` (integration-service accepted **queued** request) vs `simulator_fail_rate` (~0.9) |
+| Jaeger `localhost:16686` | Traces: integration-service (HTTP) vs webhook-dispatcher (no HTTP server in lab — stdout logs) |
 
 **Clean up after** (remove Toxiproxy toxic):
 ```bash

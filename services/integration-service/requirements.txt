@@ -4,8 +4,6 @@ uvicorn[standard]
 pydantic
 pydantic-settings
 
-httpx
-
 aiokafka
 
 structlog

@@ -38,7 +38,8 @@ The system follows a microservices architecture with synchronous and asynchronou
 - **API Gateway** — request routing, JWT validation
 - **auth-service** — authentication, JWT issuance
 - **task-service** — core business logic and state machine
-- **integration-service** — Kafka consumer, outbound webhook delivery, inbound webhook receiver
+- **integration-service** — Inbound webhook HTTP API; publishes to Kafka (`webhook_inbound`, `webhook_dispatch`)
+- **webhook-dispatcher** — Kafka consumer; outbound webhook delivery, retries, DLQ
 - **webhook-simulator** — test double for the external webhook boundary; controllable fail rate, delay, and status per request
 - **workers** — notification-worker, analytics-worker (Kafka consumers)
 - **Postgres** — primary relational data store

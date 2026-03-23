@@ -1,10 +1,12 @@
 import asyncio
 import json
+from typing import Any
 
 import httpx
 import structlog
+from aiokafka import AIOKafkaProducer
 
-from .config import settings
+from ..core.config import settings
 
 logger = structlog.get_logger()
 
@@ -13,7 +15,7 @@ _BACKOFF_BASE = 1.0  # seconds
 
 async def deliver(
     client: httpx.AsyncClient,
-    producer,
+    producer: AIOKafkaProducer,
     payload: dict,
 ) -> None:
     """
@@ -65,9 +67,33 @@ async def deliver(
     await _produce(producer, "webhook_dlq", {**payload, "error": last_error})
 
 
-async def _produce(producer, topic: str, payload: dict) -> None:
+async def _produce(producer: AIOKafkaProducer, topic: str, payload: dict) -> None:
     try:
         value = json.dumps(payload, default=str).encode("utf-8")
         await producer.send_and_wait(topic, value)
     except Exception as exc:
         logger.error("kafka_produce_failed", topic=topic, error=str(exc))
+
+
+async def process_consumed_message(
+    msg: Any,
+    http_client: httpx.AsyncClient,
+    producer: AIOKafkaProducer,
+) -> None:
+    """Decode one Kafka record, log, deliver (retry/DLQ inside deliver)."""
+    try:
+        event = json.loads(msg.value.decode("utf-8"))
+        logger.info(
+            "event_received",
+            topic=msg.topic,
+            task_id=event.get("id"),
+            status=event.get("status"),
+        )
+        await deliver(http_client, producer, event)
+    except Exception as exc:
+        logger.error(
+            "event_processing_failed",
+            topic=msg.topic,
+            offset=msg.offset,
+            error=str(exc),
+        )

@@ -1,17 +1,16 @@
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.httpx import HttpxIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 
 from fastapi import FastAPI
 from prometheus_client import make_asgi_app
 from saas_shared.health import router as health_router
 
-from .config import settings
-from .logging import setup_logging
-from .telemetry import setup_telemetry
-from .kafka import start_kafka, stop_kafka
-from .routes.webhooks import router as webhooks_router
+from .core.config import settings
+from .core.logging import setup_logging
+from .core.telemetry import setup_telemetry
+from .infrastructure.messaging.producer import start_kafka_producer, stop_kafka_producer
+from .api.routes.webhooks import router as webhooks_router
 
 
 def _setup_sentry() -> None:
@@ -23,9 +22,6 @@ def _setup_sentry() -> None:
         integrations=[
             StarletteIntegration(transaction_style="endpoint"),
             FastApiIntegration(transaction_style="endpoint"),
-            # Propagates the active Sentry span context on outbound httpx calls
-            # (webhook delivery to webhook-simulator / customer endpoints).
-            HttpxIntegration(),
         ],
         traces_sample_rate=0.1,
         send_default_pii=False,
@@ -43,12 +39,12 @@ setup_telemetry(app, settings.service_name, settings.otlp_endpoint)
 
 @app.on_event("startup")
 async def startup() -> None:
-    await start_kafka(app)
+    await start_kafka_producer(app)
 
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
-    await stop_kafka(app)
+    await stop_kafka_producer(app)
 
 
 app.include_router(health_router)

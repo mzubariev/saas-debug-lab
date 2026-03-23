@@ -1,0 +1,10 @@
+pydantic-settings
+
+httpx
+aiokafka
+
+structlog
+
+sentry-sdk
+
+ddtrace

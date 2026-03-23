@@ -56,7 +56,7 @@ def retry_failed_webhooks() -> dict:
     try:
         for msg in consumer:
             payload: dict = msg.value
-            # Strip the "error" key appended by integration-service before retrying.
+            # Strip the "error" key appended by webhook-dispatcher before retrying.
             clean_payload = {k: v for k, v in payload.items() if k != "error"}
 
             try:
