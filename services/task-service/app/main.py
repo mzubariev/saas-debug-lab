@@ -5,12 +5,12 @@ from sentry_sdk.integrations.starlette import StarletteIntegration
 from fastapi import FastAPI
 from prometheus_client import make_asgi_app
 
-from .config import settings
-from .logging import setup_logging
-from .routes import health, tasks
-from .kafka import start_kafka, stop_kafka
-from .cache import start_redis, stop_redis
-from .telemetry import setup_telemetry
+from .core.config import settings
+from .core.logging import setup_logging
+from .core.telemetry import setup_telemetry
+from .api.routes import health, tasks
+from .infrastructure.messaging.producer import start_kafka, stop_kafka
+from .infrastructure.cache.client import start_redis, stop_redis
 
 
 def _setup_sentry() -> None:
