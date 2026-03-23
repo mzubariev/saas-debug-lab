@@ -4,10 +4,9 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 
-from ..client import client
-from ..config import settings
-from ..dependencies import verify_token
-
+from ...core.config import settings
+from ...dependencies import verify_token
+from ...infrastructure.http.client import client
 
 router = APIRouter()
 

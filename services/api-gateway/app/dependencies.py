@@ -3,7 +3,7 @@ import sentry_sdk
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from .config import settings
+from .core.config import settings
 
 
 _bearer = HTTPBearer(auto_error=False)

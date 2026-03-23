@@ -8,10 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import make_asgi_app
 from saas_shared.health import router as health_router
 
-from .config import settings
-from .logging import setup_logging
-from .telemetry import setup_telemetry
-from .routes import proxy
+from .api.routes import proxy
+from .core.config import settings
+from .core.logging import setup_logging
+from .core.telemetry import setup_telemetry
 
 
 def _setup_sentry() -> None:

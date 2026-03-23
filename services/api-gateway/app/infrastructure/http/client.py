@@ -1,6 +1,6 @@
 import httpx
 
-from .config import settings
+from ...core.config import settings
 
 
 client = httpx.AsyncClient(
