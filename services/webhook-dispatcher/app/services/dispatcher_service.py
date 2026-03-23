@@ -5,10 +5,17 @@ from typing import Any
 import httpx
 import structlog
 from aiokafka import AIOKafkaProducer
+from saas_shared.kafka_envelope import encode_envelope_bytes, parse_envelope_message
 
 from ..core.config import settings
 
 logger = structlog.get_logger()
+
+_TOPIC_EVENT_TYPE: dict[str, str] = {
+    "webhook_sent": "webhook.sent",
+    "webhook_failed": "webhook.failed",
+    "webhook_dlq": "webhook.dlq",
+}
 
 _BACKOFF_BASE = 1.0  # seconds
 
@@ -69,7 +76,8 @@ async def deliver(
 
 async def _produce(producer: AIOKafkaProducer, topic: str, payload: dict) -> None:
     try:
-        value = json.dumps(payload, default=str).encode("utf-8")
+        event_type = _TOPIC_EVENT_TYPE.get(topic, topic.replace("_", "."))
+        value = encode_envelope_bytes(event_type, payload)
         await producer.send_and_wait(topic, value)
     except Exception as exc:
         logger.error("kafka_produce_failed", topic=topic, error=str(exc))
@@ -82,10 +90,12 @@ async def process_consumed_message(
 ) -> None:
     """Decode one Kafka record, log, deliver (retry/DLQ inside deliver)."""
     try:
-        event = json.loads(msg.value.decode("utf-8"))
+        raw = json.loads(msg.value.decode("utf-8"))
+        event_type, event = parse_envelope_message(raw)
         logger.info(
             "event_received",
             topic=msg.topic,
+            event_type=event_type,
             task_id=event.get("id"),
             status=event.get("status"),
         )

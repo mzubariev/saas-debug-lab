@@ -17,6 +17,7 @@ async def receive_inbound(request: Request, *, event: str, data: dict) -> dict:
         producer,
         settings.topic_webhook_inbound,
         {"event": event, "data": data},
+        event_type="webhook.inbound",
     )
     logger.info(
         "inbound_webhook_received",
@@ -36,7 +37,12 @@ def accept_outbound_send(request: Request, *, event: str, data: dict) -> None:
 
 async def _enqueue_outbound(producer, *, event: str, data: dict) -> None:
     payload = {"event": event, **data}
-    await publish_json(producer, settings.topic_webhook_dispatch, payload)
+    await publish_json(
+        producer,
+        settings.topic_webhook_dispatch,
+        payload,
+        event_type="webhook.dispatch",
+    )
     logger.info(
         "outbound_webhook_queued",
         event=event,

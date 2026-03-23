@@ -11,6 +11,7 @@ The system is intentionally designed to:
 - behave like a real production environment
 - fail in realistic ways
 - provide full visibility via logs, metrics, and tracing
+- inject failures intentionally (Chaos Engineering)
 
 ---
 

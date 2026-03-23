@@ -7,6 +7,7 @@ import aiosmtplib
 import sentry_sdk
 import structlog
 from aiokafka import AIOKafkaConsumer
+from saas_shared.kafka_envelope import parse_envelope_message
 
 from .config import settings
 from .logging import setup_logging
@@ -155,7 +156,7 @@ async def consume() -> None:
     try:
         async for msg in consumer:
             # Extract Sentry trace context that was stamped onto the Kafka
-            # message by task-service/kafka.py at publish time.  Calling
+            # message by task-service at publish time.  Calling
             # continue_trace() creates a new transaction that is linked to the
             # same trace_id as the originating browser request, so the full
             # Browser → Gateway → task-service → notification-worker chain
@@ -177,8 +178,10 @@ async def consume() -> None:
                 tx.set_data("messaging.kafka.offset", msg.offset)
 
                 try:
-                    event = json.loads(msg.value.decode("utf-8"))
+                    raw = json.loads(msg.value.decode("utf-8"))
+                    _event_type, event = parse_envelope_message(raw)
                     tx.set_data("task.id", event.get("id"))
+                    tx.set_data("kafka.event_type", _event_type)
                     await handle_event(event)
                 except Exception as exc:
                     logger.error(
