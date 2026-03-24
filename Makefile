@@ -1,7 +1,8 @@
 # SaaS Debug Lab — common tasks (run from repo root)
-# k6 load tests: see load-tests/README.md
+# k6: load-tests/README.md | chaos: chaos/README.md
 
 .PHONY: load-baseline load-chaos load-spike load-retry-storm load-concurrency load-slow-clients
+.PHONY: break-kafka break-redis slow-db kill-worker chaos-scenario chaos-random
 
 load-baseline:
 	k6 run load-tests/scripts/baseline.js
@@ -20,3 +21,24 @@ load-concurrency:
 
 load-slow-clients:
 	k6 run load-tests/scripts/slow_clients.js
+
+# ─── Chaos (Part 2 — primitives / scenarios; see chaos/README.md) ────────────
+
+break-kafka:
+	docker stop kafka
+
+break-redis:
+	docker stop redis
+
+slow-db:
+	bash chaos/primitives/slow_db.sh
+
+kill-worker:
+	docker stop notification-worker
+
+chaos-scenario:
+	@test -n "$(SCENARIO)" || (echo "Usage: make chaos-scenario SCENARIO=kafka_lag" >&2; exit 1)
+	bash chaos/runner.sh $(SCENARIO)
+
+chaos-random:
+	bash chaos/random_scenario.sh

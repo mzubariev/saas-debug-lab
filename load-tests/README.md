@@ -388,3 +388,5 @@ load-tests/
 ```
 
 Repo root `Makefile` exposes `make load-*` targets for the scripts above.
+
+Chaos engineering (pause services, DB sleep, random scenarios) lives in **`chaos/`** — see `chaos/README.md` and `make chaos-random`.

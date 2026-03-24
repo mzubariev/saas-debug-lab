@@ -100,21 +100,19 @@ Each scenario is designed to be:
 
 ---
 
-## Chaos Layer (Planned)
+## Chaos layer
 
-A chaos layer will be implemented to automate failure injection.
+Scripts under **`chaos/`** automate failure injection (see `docs/ROADMAP.md` Part 2, `chaos/README.md`).
 
-### Features:
+### Quick start (from repo root)
 
-- trigger specific failure primitives
-- combine multiple failures
-- simulate cascading incidents
-- random failure generator for training
+```bash
+make chaos-random
+make chaos-scenario SCENARIO=db_slowdown
+./chaos/runner.sh kafka_lag   # requires `docker unpause webhook-dispatcher` after
+```
 
-This enables:
-
-- realistic incident simulation
-- hands-on debugging practice without knowing the root cause
+Prefer **scenarios** over ad-hoc primitives during exercises. Use **`make load-baseline`** / **`make load-spike`** alongside chaos to generate traffic.
 
 ---
 
