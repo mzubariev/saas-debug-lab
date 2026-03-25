@@ -1,5 +1,6 @@
 import structlog
 from fastapi import FastAPI
+from saas_shared.health import router as health_router
 
 from .api.routes.routes import router as api_router
 from .core.config import settings
@@ -16,4 +17,5 @@ structlog.configure(
 )
 
 app = FastAPI(title=settings.service_name)
+app.include_router(health_router)
 app.include_router(api_router)

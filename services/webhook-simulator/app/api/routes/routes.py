@@ -19,11 +19,6 @@ class InboundTrigger(BaseModel):
     data: dict[str, Any] = {}
 
 
-@router.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
 @router.post("/receive-webhook")
 async def receive_webhook(
     payload: dict[str, Any],
