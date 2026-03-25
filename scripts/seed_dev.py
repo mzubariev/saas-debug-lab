@@ -23,7 +23,7 @@ import sys
 import psycopg2
 from passlib.context import CryptContext
 
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_pwd = CryptContext(schemes=["argon2"], deprecated="auto")
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
