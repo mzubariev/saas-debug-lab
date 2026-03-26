@@ -1,5 +1,4 @@
-fastapi
 uvicorn[standard]
 httpx
-structlog
 pydantic-settings
+opentelemetry-instrumentation-httpx

@@ -29,11 +29,11 @@ def _setup_sentry() -> None:
     sentry_sdk.set_tag("service", settings.service_name)
 
 
+setup_logging(service_name=settings.service_name, log_level=settings.log_level)
 _setup_sentry()
 
 app = FastAPI(title="integration-service")
 
-setup_logging(settings.log_level, settings.service_name)
 setup_telemetry(app, settings.service_name, settings.otlp_endpoint)
 
 

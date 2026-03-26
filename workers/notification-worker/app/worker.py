@@ -12,11 +12,10 @@ from saas_shared.kafka_envelope import parse_envelope_message
 from .config import settings
 from .logging import setup_logging
 
-
-logger = structlog.get_logger()
-
 TOPIC    = "task_created"
 GROUP_ID = "notification-worker"
+
+logger = structlog.get_logger()
 
 
 def _setup_sentry() -> None:
@@ -202,7 +201,7 @@ async def consume() -> None:
 
 
 def run() -> None:
-    setup_logging(settings.log_level, settings.service_name)
+    setup_logging(service_name=settings.service_name, log_level=settings.log_level)
     _setup_sentry()
     asyncio.run(consume())
 

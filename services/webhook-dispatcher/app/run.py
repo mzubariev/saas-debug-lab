@@ -10,8 +10,6 @@ from .core.logging import setup_logging
 from .infrastructure.http_client import create_http_client
 from .infrastructure.messaging.producer import close_producer, create_producer
 
-logger = structlog.get_logger()
-
 
 def _setup_sentry() -> None:
     if not settings.sentry_dsn:
@@ -25,10 +23,10 @@ def _setup_sentry() -> None:
     sentry_sdk.set_tag("worker", "webhook-dispatcher")
 
 
-async def _async_main() -> None:
-    setup_logging(settings.log_level, settings.service_name)
-    _setup_sentry()
+logger = structlog.get_logger()
 
+
+async def _async_main() -> None:
     producer = await create_producer()
     http_client = create_http_client()
 
@@ -57,6 +55,8 @@ async def _async_main() -> None:
 
 
 def main() -> None:
+    setup_logging(service_name=settings.service_name, log_level=settings.log_level)
+    _setup_sentry()
     asyncio.run(_async_main())
 
 

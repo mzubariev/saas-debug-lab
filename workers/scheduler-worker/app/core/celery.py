@@ -17,8 +17,8 @@ def _setup_sentry() -> None:
       after max_retries is exceeded).
     - Tags each event with the task name, task id, and queue.
 
-    This function is called twice:
-    1. At module import time — covers the Beat scheduler process.
+    This function is called:
+    1. After setup_logging at import — covers the Beat scheduler / parent process.
     2. In worker_process_init — re-initialises the SDK in every forked Celery
        worker process so file descriptors are not shared across fork().
     """
@@ -33,6 +33,7 @@ def _setup_sentry() -> None:
     sentry_sdk.set_tag("service", settings.service_name)
 
 
+setup_logging(service_name=settings.service_name, log_level=settings.log_level)
 _setup_sentry()
 
 celery_app = Celery(
@@ -68,5 +69,5 @@ celery_app.conf.update(
 @worker_process_init.connect
 def init_worker_process(**kwargs) -> None:
     """Configure structlog and re-initialise Sentry in each forked worker process."""
-    setup_logging(settings.log_level, settings.service_name)
+    setup_logging(service_name=settings.service_name, log_level=settings.log_level)
     _setup_sentry()
