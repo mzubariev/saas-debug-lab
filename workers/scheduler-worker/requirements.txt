@@ -5,6 +5,7 @@ psycopg2-binary
 kafka-python
 httpx
 structlog
+opentelemetry-api
 pydantic-settings
 sentry-sdk[celery]
 ddtrace

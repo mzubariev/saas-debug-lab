@@ -6,6 +6,10 @@ import httpx
 import structlog
 from aiokafka import AIOKafkaProducer
 from saas_shared.kafka_envelope import encode_envelope_bytes, parse_envelope_message
+from saas_shared.kafka_trace import (
+    attach_kafka_message_trace,
+    current_trace_id_for_kafka_envelope,
+)
 
 from ..core.config import settings
 
@@ -77,7 +81,11 @@ async def deliver(
 async def _produce(producer: AIOKafkaProducer, topic: str, payload: dict) -> None:
     try:
         event_type = _TOPIC_EVENT_TYPE.get(topic, topic.replace("_", "."))
-        value = encode_envelope_bytes(event_type, payload)
+        value = encode_envelope_bytes(
+            event_type,
+            payload,
+            trace_id=current_trace_id_for_kafka_envelope(),
+        )
         await producer.send_and_wait(topic, value)
     except Exception as exc:
         logger.error("kafka_produce_failed", topic=topic, error=str(exc))
@@ -91,15 +99,16 @@ async def process_consumed_message(
     """Decode one Kafka record, log, deliver (retry/DLQ inside deliver)."""
     try:
         raw = json.loads(msg.value.decode("utf-8"))
-        event_type, event = parse_envelope_message(raw)
-        logger.info(
-            "event_received",
-            topic=msg.topic,
-            event_type=event_type,
-            task_id=event.get("id"),
-            status=event.get("status"),
-        )
-        await deliver(http_client, producer, event)
+        event_type, event, envelope_trace_id = parse_envelope_message(raw)
+        with attach_kafka_message_trace(envelope_trace_id):
+            logger.info(
+                "event_received",
+                topic=msg.topic,
+                event_type=event_type,
+                task_id=event.get("id"),
+                status=event.get("status"),
+            )
+            await deliver(http_client, producer, event)
     except Exception as exc:
         logger.error(
             "event_processing_failed",

@@ -5,6 +5,7 @@ import sentry_sdk
 import structlog
 from kafka.errors import NoBrokersAvailable
 from saas_shared.kafka_envelope import parse_envelope_message
+from saas_shared.kafka_trace import attach_kafka_message_trace
 
 from ..core.config import settings
 from ..infrastructure.http.client import post_json_sync
@@ -58,47 +59,48 @@ def process_dlq() -> dict:
 
     try:
         for msg in consumer:
-            _event_type, payload = parse_envelope_message(msg.value)
-            # Strip the "error" key appended by webhook-dispatcher before retrying.
-            clean_payload = {k: v for k, v in payload.items() if k != "error"}
+            _event_type, payload, envelope_trace_id = parse_envelope_message(msg.value)
+            with attach_kafka_message_trace(envelope_trace_id):
+                # Strip the "error" key appended by webhook-dispatcher before retrying.
+                clean_payload = {k: v for k, v in payload.items() if k != "error"}
 
-            try:
-                resp = post_json_sync(
-                    settings.webhook_url,
-                    clean_payload,
-                    timeout=settings.webhook_timeout,
-                )
-                resp.raise_for_status()
+                try:
+                    resp = post_json_sync(
+                        settings.webhook_url,
+                        clean_payload,
+                        timeout=settings.webhook_timeout,
+                    )
+                    resp.raise_for_status()
 
-                logger.info(
-                    "dlq_webhook_retried",
-                    task_id=payload.get("id"),
-                    event_type=_event_type,
-                    status_code=resp.status_code,
-                    topic_offset=msg.offset,
-                )
-                retried += 1
+                    logger.info(
+                        "dlq_webhook_retried",
+                        task_id=payload.get("id"),
+                        event_type=_event_type,
+                        status_code=resp.status_code,
+                        topic_offset=msg.offset,
+                    )
+                    retried += 1
 
-            except (httpx.RequestError, httpx.HTTPStatusError) as exc:
-                logger.warning(
-                    "dlq_webhook_retry_failed",
-                    task_id=payload.get("id"),
-                    event_type=_event_type,
-                    error=str(exc),
-                    topic_offset=msg.offset,
-                )
-                sentry_sdk.add_breadcrumb(
-                    category="dlq",
-                    message="DLQ webhook retry failed",
-                    level="warning",
-                    data={
-                        "task_id": payload.get("id"),
-                        "error": str(exc),
-                        "topic_offset": msg.offset,
-                        "webhook_url": settings.webhook_url,
-                    },
-                )
-                failed += 1
+                except (httpx.RequestError, httpx.HTTPStatusError) as exc:
+                    logger.warning(
+                        "dlq_webhook_retry_failed",
+                        task_id=payload.get("id"),
+                        event_type=_event_type,
+                        error=str(exc),
+                        topic_offset=msg.offset,
+                    )
+                    sentry_sdk.add_breadcrumb(
+                        category="dlq",
+                        message="DLQ webhook retry failed",
+                        level="warning",
+                        data={
+                            "task_id": payload.get("id"),
+                            "error": str(exc),
+                            "topic_offset": msg.offset,
+                            "webhook_url": settings.webhook_url,
+                        },
+                    )
+                    failed += 1
 
     finally:
         consumer.close()

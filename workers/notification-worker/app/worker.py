@@ -8,6 +8,7 @@ import sentry_sdk
 import structlog
 from aiokafka import AIOKafkaConsumer
 from saas_shared.kafka_envelope import parse_envelope_message
+from saas_shared.kafka_trace import attach_kafka_message_trace
 
 from .config import settings
 from .logging import setup_logging
@@ -178,10 +179,11 @@ async def consume() -> None:
 
                 try:
                     raw = json.loads(msg.value.decode("utf-8"))
-                    _event_type, event = parse_envelope_message(raw)
-                    tx.set_data("task.id", event.get("id"))
-                    tx.set_data("kafka.event_type", _event_type)
-                    await handle_event(event)
+                    _event_type, event, envelope_trace_id = parse_envelope_message(raw)
+                    with attach_kafka_message_trace(envelope_trace_id):
+                        tx.set_data("task.id", event.get("id"))
+                        tx.set_data("kafka.event_type", _event_type)
+                        await handle_event(event)
                 except Exception as exc:
                     logger.error(
                         "event_processing_failed",

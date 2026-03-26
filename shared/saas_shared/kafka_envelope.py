@@ -5,7 +5,7 @@ Schema::
     {
         "event_type": "task.created | task.updated | webhook.failed | …",
         "version": "v1",
-        "trace_id": "<string>",
+        "trace_id": "<32-char hex, W3C trace id; new messages use uuid4().hex>",
         "timestamp": "<iso8601>",
         "payload": { ... }
     }
@@ -34,7 +34,7 @@ def build_envelope(
     return {
         "event_type": event_type,
         "version": ENVELOPE_VERSION,
-        "trace_id": trace_id or str(uuid.uuid4()),
+        "trace_id": trace_id or uuid.uuid4().hex,
         "timestamp": timestamp or datetime.now(timezone.utc).isoformat(),
         "payload": payload,
     }
@@ -61,11 +61,14 @@ def _is_v1_envelope(data: dict[str, Any]) -> bool:
     )
 
 
-def parse_envelope_message(data: Any) -> tuple[str, dict[str, Any]]:
-    """Parse a decoded Kafka JSON value into ``(event_type, business_payload)``.
+def parse_envelope_message(data: Any) -> tuple[str, dict[str, Any], str | None]:
+    """Parse a decoded Kafka JSON value into ``(event_type, business_payload, envelope_trace_id)``.
+
+    ``envelope_trace_id`` is the top-level v1 ``trace_id`` field when present; use it with
+    :func:`saas_shared.kafka_trace.attach_kafka_message_trace` on consumers.
 
     Accepts a ``dict`` (already parsed), or ``bytes``/``str`` JSON.
-    Non-dict / invalid JSON → ``("unknown", {})``.
+    Non-dict / invalid JSON → ``("unknown", {}, None)``.
     """
     parsed: Any
     if isinstance(data, dict):
@@ -74,19 +77,21 @@ def parse_envelope_message(data: Any) -> tuple[str, dict[str, Any]]:
         try:
             parsed = json.loads(data.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError):
-            return "unknown", {}
+            return "unknown", {}, None
     elif isinstance(data, str):
         try:
             parsed = json.loads(data)
         except json.JSONDecodeError:
-            return "unknown", {}
+            return "unknown", {}, None
     else:
-        return "unknown", {}
+        return "unknown", {}, None
 
     if not isinstance(parsed, dict):
-        return "unknown", {}
+        return "unknown", {}, None
 
     if _is_v1_envelope(parsed):
-        return str(parsed["event_type"]), dict(parsed["payload"])
+        raw_tid = parsed.get("trace_id")
+        tid = str(raw_tid) if raw_tid is not None else None
+        return str(parsed["event_type"]), dict(parsed["payload"]), tid
 
-    return "unknown", parsed
+    return "unknown", parsed, None

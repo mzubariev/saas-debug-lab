@@ -5,6 +5,8 @@ aiokafka
 
 structlog
 
+opentelemetry-api
+
 sentry-sdk
 
 ddtrace
