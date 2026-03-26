@@ -6,7 +6,6 @@ pydantic-settings
 
 sqlalchemy
 asyncpg
-alembic
 
 aiokafka
 

@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 # Minimal core: only structlog for logging (used by all services AND workers).
 dependencies = [
     "structlog",
+    "sqlalchemy>=2.0",
 ]
 
 [project.optional-dependencies]

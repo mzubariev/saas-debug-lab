@@ -10,12 +10,9 @@ Idempotent: users and tasks are inserted with ON CONFLICT DO NOTHING.
 Fixed UUIDs are used for tasks so re-runs don't duplicate rows.
 
 Usage:
-  # Against the Docker Postgres (port forwarded to localhost):
+  # After `docker compose --profile core up` and the `migrations` job has finished,
+  # against Postgres on localhost (port published by compose):
   DATABASE_URL=postgresql://admin:admin@localhost:5432/saas python scripts/seed_dev.py
-
-  # Or run inside the network via docker-compose exec:
-  docker compose -f infra/docker-compose.yml run --rm auth-migrate \
-      python /scripts/seed_dev.py
 """
 import os
 import sys

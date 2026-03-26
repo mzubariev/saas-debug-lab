@@ -31,7 +31,7 @@ def _setup_sentry() -> None:
 
 _setup_sentry()
 
-# Schema is created by Alembic (task-migrate init container) before startup.
+# Schema is created by the shared `migrations` one-shot container before startup.
 
 app = FastAPI(title="task-service")
 

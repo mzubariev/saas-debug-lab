@@ -10,7 +10,6 @@ passlib[argon2]
 
 sqlalchemy
 asyncpg
-alembic
 
 redis[asyncio]
 

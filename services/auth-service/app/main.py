@@ -43,7 +43,7 @@ setup_telemetry(app, settings.service_name, settings.otlp_endpoint)
 logger = structlog.get_logger()
 
 # Default users seeded on every fresh database.
-# Schema is created by Alembic (auth-migrate init container) before startup.
+# Schema is created by the shared `migrations` one-shot container before startup.
 _DEFAULT_USERS: list[tuple[str, str, str]] = [
     ("admin", "admin123", "admin"),
     ("user", "user123", "user"),

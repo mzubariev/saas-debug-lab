@@ -2,16 +2,18 @@
 
 ## Overview
 
-SaaS Debug Lab is a production-like microservices system designed to simulate real-world distributed system failures and practice incident investigation.
+**SaaS Debug Lab** is a production-like microservices system designed to simulate real-world distributed system failures and enable hands-on incident investigation.
 
-The platform models a simplified SaaS / FinTech backend with asynchronous processing, external integrations, and observability tooling.
+The platform models a simplified SaaS backend, incorporating synchronous and asynchronous workflows, external service integrations, and a full observability stack (logs, metrics, and tracing).
 
-The system is intentionally designed to:
+The system is intentionally engineered to:
 
 - behave like a real production environment
+- introduce controlled failures (chaos engineering)
 - fail in realistic ways
-- provide full visibility via logs, metrics, and tracing
-- inject failures intentionally (chaos engineering)
+- provide deep visibility into system behavior
+
+From a product perspective, the application itself is intentionally simple: a task management board where users can log in, create tasks, and manage their workflow by moving tasks between states such as **“In Progress”** and **“Completed”** via drag-and-drop.
 
 ---
 
@@ -32,15 +34,17 @@ cd saas-debug-lab
 cp infra/.env.example infra/.env
 ```
 
-Edit **`infra/.env`** and set at least:
+Edit `**infra/.env**` and set at least:
 
-| Variable | Purpose |
-|----------|---------|
-| `POSTGRES_USER` | Database user (lab examples often use `admin`) |
-| `POSTGRES_PASSWORD` | Database password (lab examples often use `admin`) |
-| `POSTGRES_DB` | Database name (lab examples often use `saas`) |
 
-Keep these values consistent with the **`DATABASE_URL`** you use for seeding (step 5). Optional: `DD_*` and `SENTRY_DSN` if you use Datadog or Sentry profiles.
+| Variable            | Purpose                                      |
+| ------------------- | -------------------------------------------- |
+| `POSTGRES_USER`     | Database user (lab examples use `admin`)     |
+| `POSTGRES_PASSWORD` | Database password (lab examples use `admin`) |
+| `POSTGRES_DB`       | Database name (lab examples use `saas`)      |
+
+
+Keep these values consistent with the `**DATABASE_URL**` you use for seeding (step 5). Optional: `DD_*` and `SENTRY_DSN` if you use Datadog or Sentry profiles.
 
 ### 3. Start the stack
 
@@ -51,7 +55,9 @@ cd infra
 docker compose --profile core up -d
 ```
 
-This starts Nginx, api-gateway, auth-service, task-service, integration-service, webhook-dispatcher, webhook-simulator, workers (notification-worker, **scheduler-worker**), Flower, Kafka, Redis, Postgres, frontend, Kafka UI, MailHog, Toxiproxy, and one-off **Alembic migrate** jobs (`auth-migrate`, `task-migrate`) before the app services become healthy.
+This starts Nginx, api-gateway, auth-service, task-service, integration-service, webhook-dispatcher, webhook-simulator, workers (notification-worker, **scheduler-worker**), Flower, Kafka, Redis, Postgres, frontend, Kafka UI, MailHog, Toxiproxy, and a one-shot **`migrations`** container (`alembic upgrade head` for `users` + `tasks`) before auth-service and task-service start.
+
+**Database:** set `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` in **`infra/.env`** — the same file is used by the Postgres service and the `migrations` job.
 
 **Optional — full observability** (Jaeger, Prometheus, Grafana, Elasticsearch, Kibana, Fluent Bit, Redis Insight):
 
@@ -106,7 +112,7 @@ This creates users (`admin` / `user`) and sample tasks. See `scripts/seed_dev.py
 
 ### 6. Frontend (optional)
 
-The SPA is served at **`http://localhost:5173`** when the `frontend` container is up.
+The SPA is served at `**http://localhost:5173**` when the `frontend` container is up.
 
 ```bash
 cp frontend/.env.example frontend/.env
@@ -121,16 +127,18 @@ cd infra && docker compose --profile core up -d --build frontend
 
 ### 7. Quick verification
 
-| Check | URL / command |
-|-------|----------------|
-| Kanban / UI | `http://localhost:5173` — log in with `admin` / `admin123` |
-| Kafka UI | `http://localhost:8080` |
-| Flower (Celery) | `http://localhost:5555` |
-| MailHog | `http://localhost:8025` |
-| Jaeger (if observability profile) | `http://localhost:16686` |
-| Prometheus | `http://localhost:9090` |
-| Grafana | `http://localhost:3000` |
-| Kibana | `http://localhost:5601` |
+
+| Check                             | URL / command                                              |
+| --------------------------------- | ---------------------------------------------------------- |
+| Kanban / UI                       | `http://localhost:5173` — log in with `admin` / `admin123` |
+| Kafka UI                          | `http://localhost:8080`                                    |
+| Flower (Celery)                   | `http://localhost:5555`                                    |
+| MailHog                           | `http://localhost:8025`                                    |
+| Jaeger (if observability profile) | `http://localhost:16686`                                   |
+| Prometheus                        | `http://localhost:9090`                                    |
+| Grafana                           | `http://localhost:3000`                                    |
+| Kibana                            | `http://localhost:5601`                                    |
+
 
 ### 8. Load tests (k6)
 
@@ -141,7 +149,7 @@ make load-baseline
 # or: k6 run load-tests/scripts/concurrency.js
 ```
 
-See **`load-tests/README.md`** for scenarios, env vars (`BASE_URL`, `FAIL_RATE`, …), and long runs (e.g. `k6 run --duration 12h load-tests/scripts/baseline.js`).
+See `**load-tests/README.md**` for scenarios, env vars (`BASE_URL`, `FAIL_RATE`, …), and long runs (e.g. `k6 run --duration 12h load-tests/scripts/baseline.js`).
 
 ### 9. Chaos scripts
 
@@ -152,7 +160,7 @@ make chaos-random
 make chaos-scenario SCENARIO=webhook_failure
 ```
 
-See **`chaos/README.md`**. After `kafka_lag`, run `docker unpause webhook-dispatcher` if the dispatcher was paused.
+See `**chaos/README.md**`. After `kafka_lag`, run `docker unpause webhook-dispatcher` if the dispatcher was paused.
 
 ### 10. Stop the stack
 
@@ -188,7 +196,7 @@ The system follows a microservices architecture with synchronous and asynchronou
 
 - **Nginx** — external entry (port 80); rate limits and reverse proxy to api-gateway
 - **api-gateway** — routing, JWT validation for `/tasks/*`
-- **auth-service** — authentication, JWT issuance, user store in Postgres
+- **auth-service** — authentication, JWT issuance, user store in Postgres, Redis cache-aside
 - **task-service** — task CRUD, state machine, Redis cache-aside, Kafka producer (`task_created`, `task_updated`)
 - **integration-service** — `/webhooks/inbound`, `/webhooks/send`; Kafka producer only
 - **webhook-dispatcher** — consumes Kafka, delivers outbound webhooks, retries, DLQ
@@ -197,29 +205,29 @@ The system follows a microservices architecture with synchronous and asynchronou
 - **scheduler-worker** — Celery + Beat: DLQ replay, old-task cleanup; **Flower** on port 5555
 - **Postgres**, **Redis**, **Kafka** — data, cache, events
 
-For ports, envelopes, and request diagrams, see **`docs/SERVICE_MAP.md`** and **`docs/ARCHITECTURE.md`**.
+For ports, envelopes, and request diagrams, see `**docs/SERVICE_MAP.md`** and `**docs/ARCHITECTURE.md`**.
 
 ---
 
 ## Observability stack
 
-- **Logging** — structured JSON (structlog); optional **Fluent Bit → Elasticsearch → Kibana**
-- **Metrics** — **Prometheus** scrapes api-gateway, auth-service, task-service; **Grafana** optional
-- **Tracing** — **Jaeger** + OpenTelemetry in services (optional profile)
+- **Logging** — structured JSON (structlog); **Fluent Bit → Elasticsearch → Kibana**
+- **Metrics** — **Prometheus** scrapes api-gateway, auth-service, task-service; **Grafana**
+- **Tracing** — **Jaeger** + OpenTelemetry in services
 
 ---
 
 ## Failure simulation
 
 - **Concepts:** `docs/FAILURE_PRIMITIVES.md`, `docs/SCENARIO_MAPPING.md`
-- **Automation:** **`chaos/`** primitives and scenarios (`chaos/README.md`, `Makefile` targets `chaos-*`, `break-*`, `slow-db`)
+- **Automation:** `**chaos/`** primitives and scenarios (`chaos/README.md`, `Makefile` targets `chaos-*`, `break-*`, `slow-db`)
 - **Load + chaos:** run `make load-spike` or other `load-*` targets while executing scenarios
 
 ---
 
 ## Debugging scenarios
 
-The repo includes guided exercises and playbooks under **`docs/`** (e.g. debugging scenarios, incident entry points, troubleshooting). See **`docs/FILE_STRUCTURE.md`** for the full doc index.
+The repo includes guided exercises and playbooks under `**docs/`** (e.g. debugging scenarios, incident entry points, troubleshooting). See `**docs/FILE_STRUCTURE.md`** for the full doc index.
 
 ---
 
@@ -263,3 +271,4 @@ The focus is debuggability, not product completeness.
 - Reproducibility — incidents must be repeatable
 - Realism over complexity — simulate real issues, not edge-case noise
 - Modularity — failures and services are loosely coupled
+
