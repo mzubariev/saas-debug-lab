@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     default_delay: float = 0.0
     default_status: int = 200
     log_level: str = "INFO"
+    sentry_dsn: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

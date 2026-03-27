@@ -3,3 +3,5 @@ httpx
 pydantic-settings
 opentelemetry-instrumentation-httpx
 prometheus-client
+sentry-sdk[fastapi]
+ddtrace
