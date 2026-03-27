@@ -20,6 +20,7 @@ import {
   type Task,
   type TaskStatus,
 } from "../lib/apiClient"
+import { runWithSpan } from "../telemetry"
 
 // ─── Types ────────────────────────────────────────────────────────────────
 type TransitionAction = "start" | "complete"
@@ -108,9 +109,18 @@ export default function BoardPage(): React.JSX.Element {
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: targetCol } : t))
 
     try {
-      const updated = action === "start"
-        ? await startTask(task.id)
-        : await completeTask(task.id)
+      const updated = await runWithSpan(
+        "tasks.move",
+        async () =>
+          action === "start"
+            ? startTask(task.id)
+            : completeTask(task.id),
+        {
+          "task.transition": action,
+          "task.status.from": task.status,
+          "task.status.to": targetCol,
+        }
+      )
 
       setTasks(prev => prev.map(t => t.id === updated.id ? updated : t))
     } catch (err) {

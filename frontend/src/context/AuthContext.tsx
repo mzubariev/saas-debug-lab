@@ -14,6 +14,7 @@ import {
   setToken,
   type UserInfo,
 } from "../lib/apiClient"
+import { runWithSpan } from "../telemetry"
 
 // ─── Context shape ────────────────────────────────────────────────────────
 interface AuthContextType {
@@ -53,11 +54,13 @@ export function AuthProvider({ children }: AuthProviderProps): React.JSX.Element
 
   const login = useCallback(
     async (username: string, password: string): Promise<void> => {
-      const { access_token } = await apiLogin(username, password)
-      setToken(access_token)
-      const me = await getMe()
-      setUser(me)
-      navigate("/", { replace: true })
+      await runWithSpan("user.login", async () => {
+        const { access_token } = await apiLogin(username, password)
+        setToken(access_token)
+        const me = await getMe()
+        setUser(me)
+        navigate("/", { replace: true })
+      })
     },
     [navigate]
   )

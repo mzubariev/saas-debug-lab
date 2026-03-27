@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react"
 import { createTask, UnauthorizedError, type Task } from "../lib/apiClient"
+import { runWithSpan } from "../telemetry"
 
 interface CreateTaskModalProps {
   onCreated: (task: Task) => void
@@ -35,7 +36,9 @@ export default function CreateTaskModal({
     setError("")
     setLoading(true)
     try {
-      const task = await createTask(trimmed)
+      const task = await runWithSpan("tasks.create", async _span =>
+        createTask(trimmed)
+      )
       onCreated(task)
     } catch (err) {
       if (err instanceof UnauthorizedError) {
