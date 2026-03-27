@@ -29,7 +29,7 @@ import sys
 import uuid
 from itertools import cycle
 
-import psycopg2
+import psycopg
 from passlib.context import CryptContext
 
 _pwd = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -96,63 +96,62 @@ def run() -> None:
     )
 
     try:
-        conn = psycopg2.connect(DATABASE_URL)
-    except psycopg2.OperationalError as exc:
+        conn = psycopg.connect(DATABASE_URL)
+    except psycopg.OperationalError as exc:
         print(f"ERROR: could not connect — {exc}", file=sys.stderr)
         sys.exit(1)
 
     conn.autocommit = False
-    cur = conn.cursor()
 
-    # ── Users ──────────────────────────────────────────────────────────────
-    print("\nSeeding users …")
-    for username, password, role in _USERS:
-        cur.execute(
-            """
-            INSERT INTO users (username, hashed_password, role)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (username) DO NOTHING
-            """,
-            (username, _pwd.hash(password), role),
-        )
-        print(f"  {username} ({role})")
+    with conn.cursor() as cur:
 
-    # ── Tasks: truncate + bulk insert ──────────────────────────────────────
-    print("\nTruncating tasks table …")
-    cur.execute("TRUNCATE TABLE tasks RESTART IDENTITY CASCADE")
+        # ── Users ──────────────────────────────────────────────────────────
+        print("\nSeeding users …")
+        for username, password, role in _USERS:
+            cur.execute(
+                """
+                INSERT INTO users (username, hashed_password, role)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (username) DO NOTHING
+                """,
+                (username, _pwd.hash(password), role),
+            )
+            print(f"  {username} ({role})")
 
-    print(f"Inserting {total} tasks …")
+        # ── Tasks ──────────────────────────────────────────────────────────
+        print("\nTruncating tasks table …")
+        cur.execute("TRUNCATE TABLE tasks RESTART IDENTITY CASCADE")
 
-    # Build the full list: (uuid, title, status)
-    rows: list[tuple[str, str, str]] = []
-    for status, count in [
-        ("created",     SEED_CREATED),
-        ("in_progress", SEED_IN_PROGRESS),
-        ("completed",   SEED_COMPLETED),
-    ]:
-        for _ in range(count):
-            rows.append((str(uuid.uuid4()), _gen_title(), status))
+        print(f"Inserting {total} tasks …")
 
-    random.shuffle(rows)
+        rows: list[tuple[str, str, str]] = []
+        for status, count in [
+            ("created", SEED_CREATED),
+            ("in_progress", SEED_IN_PROGRESS),
+            ("completed", SEED_COMPLETED),
+        ]:
+            for _ in range(count):
+                rows.append((str(uuid.uuid4()), _gen_title(), status))
 
-    # Batch insert in chunks of 500 for efficiency
-    chunk_size = 500
-    inserted = 0
-    for i in range(0, len(rows), chunk_size):
-        chunk = rows[i : i + chunk_size]
-        args_str = ",".join(
-            cur.mogrify("(%s::uuid, %s, %s::taskstatus)", r).decode() for r in chunk
-        )
-        cur.execute(f"INSERT INTO tasks (id, title, status) VALUES {args_str}")
-        inserted += len(chunk)
-        print(f"  … {inserted}/{total}", end="\r", flush=True)
+        random.shuffle(rows)
+
+        with cur.copy(
+            "COPY tasks (id, title, status) FROM STDIN"
+        ) as copy:
+            for i, row in enumerate(rows, 1):
+                copy.write_row(row)
+                if i % 500 == 0:
+                    print(f"  … {i}/{total}", end="\r", flush=True)
 
     conn.commit()
-    cur.close()
     conn.close()
 
-    print(f"\nDone. Inserted {total} tasks ({SEED_CREATED} created, "
-          f"{SEED_IN_PROGRESS} in_progress, {SEED_COMPLETED} completed).")
+    print(
+        f"\nDone. Inserted {total} tasks "
+        f"({SEED_CREATED} created, "
+        f"{SEED_IN_PROGRESS} in_progress, "
+        f"{SEED_COMPLETED} completed)."
+    )
 
 
 if __name__ == "__main__":

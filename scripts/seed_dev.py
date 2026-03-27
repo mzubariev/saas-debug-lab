@@ -17,7 +17,7 @@ Usage:
 import os
 import sys
 
-import psycopg2
+import psycopg
 from passlib.context import CryptContext
 
 _pwd = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -54,8 +54,8 @@ TASKS = [
 def run() -> None:
     print(f"Connecting to {DATABASE_URL} …")
     try:
-        conn = psycopg2.connect(DATABASE_URL)
-    except psycopg2.OperationalError as exc:
+        conn = psycopg.connect(DATABASE_URL)
+    except psycopg.OperationalError as exc:
         print(f"ERROR: could not connect — {exc}", file=sys.stderr)
         sys.exit(1)
 
