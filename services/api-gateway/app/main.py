@@ -1,10 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import make_asgi_app
-from saas_shared.health import router as health_router
 from saas_shared.sentry_setup import setup_sentry_fastapi
 
-from .api.routes import proxy
+from .api.routes import proxy, health
 from .core.config import settings
 from .core.logging import setup_logging
 from .core.telemetry import setup_telemetry
@@ -42,7 +41,7 @@ setup_telemetry(
     settings.otlp_datadog_endpoint,
 )
 
-app.include_router(health_router)
+app.include_router(health.router)
 app.include_router(proxy.router)
 
 metrics_app = make_asgi_app()

@@ -1,13 +1,13 @@
 from fastapi import FastAPI
 from prometheus_client import make_asgi_app
-from saas_shared.health import router as health_router
 from saas_shared.sentry_setup import setup_sentry_fastapi
 
 from .core.config import settings
 from .core.logging import setup_logging
 from .core.telemetry import setup_telemetry
 from .infrastructure.messaging.producer import start_kafka_producer, stop_kafka_producer
-from .api.routes.webhooks import router as webhooks_router
+from .api.routes import health, webhooks
+
 
 
 setup_logging(service_name=settings.service_name, log_level=settings.log_level)
@@ -33,8 +33,8 @@ async def shutdown() -> None:
     await stop_kafka_producer(app)
 
 
-app.include_router(health_router)
-app.include_router(webhooks_router)
+app.include_router(health.router)
+app.include_router(webhooks.router)
 
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
