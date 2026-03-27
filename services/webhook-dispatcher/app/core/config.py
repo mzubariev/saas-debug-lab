@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     sentry_dsn: str = ""
 
+    otlp_endpoint: str = "http://jaeger:4317"
+    otlp_datadog_endpoint: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

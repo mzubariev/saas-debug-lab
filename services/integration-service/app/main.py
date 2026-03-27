@@ -34,7 +34,12 @@ _setup_sentry()
 
 app = FastAPI(title="integration-service")
 
-setup_telemetry(app, settings.service_name, settings.otlp_endpoint)
+setup_telemetry(
+    app,
+    settings.service_name,
+    settings.otlp_endpoint,
+    settings.otlp_datadog_endpoint,
+)
 
 
 @app.on_event("startup")

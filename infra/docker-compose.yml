@@ -125,6 +125,8 @@ services:
       DD_AGENT_HOST: datadog-agent
       DD_LOGS_INJECTION: "true"
       DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-true}
+      # Optional OpenTelemetry OTLP gRPC → Datadog Agent (enable agent OTLP receiver).
+      OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
     labels:
       com.datadoghq.ad.logs: '[{"source":"python","service":"api-gateway"}]'
     # Port 8000 is intentionally NOT exposed to the host.
@@ -208,6 +210,7 @@ services:
       DD_AGENT_HOST: datadog-agent
       DD_LOGS_INJECTION: "true"
       DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-true}
+      OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
     labels:
       com.datadoghq.ad.logs: '[{"source":"python","service":"auth-service"}]'
     ports:
@@ -243,6 +246,7 @@ services:
       DD_AGENT_HOST: datadog-agent
       DD_LOGS_INJECTION: "true"
       DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-true}
+      OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
     labels:
       com.datadoghq.ad.logs: '[{"source":"python","service":"task-service"}]'
     ports:
@@ -276,6 +280,8 @@ services:
     profiles: ["core"]
     env_file:
       - ../services/webhook-simulator/.env
+    environment:
+      OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
     ports:
       - "8004:8001"
     healthcheck:
@@ -306,6 +312,7 @@ services:
       DD_AGENT_HOST: datadog-agent
       DD_LOGS_INJECTION: "true"
       DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-true}
+      OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
     labels:
       com.datadoghq.ad.logs: '[{"source":"python","service":"integration-service"}]'
     ports:
@@ -338,6 +345,7 @@ services:
       DD_AGENT_HOST: datadog-agent
       DD_LOGS_INJECTION: "true"
       DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-true}
+      OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
     labels:
       com.datadoghq.ad.logs: '[{"source":"python","service":"webhook-dispatcher"}]'
     depends_on:
@@ -402,6 +410,7 @@ services:
       DD_AGENT_HOST: datadog-agent
       DD_LOGS_INJECTION: "true"
       DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-true}
+      OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
     labels:
       com.datadoghq.ad.logs: '[{"source":"python","service":"scheduler-worker"}]'
     depends_on:
@@ -457,6 +466,7 @@ services:
       DD_AGENT_HOST: datadog-agent
       DD_LOGS_INJECTION: "true"
       DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-true}
+      OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
       # ── SMTP (via Toxiproxy) ──────────────────────────────────────────────
       # SMTP routes through Toxiproxy by default so network-level chaos can be injected
       # without touching this service. To use a real provider instead:
@@ -639,7 +649,11 @@ services:
 
       # ── Shared tags ───────────────────────────────────────────────────────
       DD_ENV: ${DD_ENV:-dev}
+
+      # OpenTelemetry OTLP ingest → same traces as APM (set OTLP_DATADOG_ENDPOINT on apps).
+      DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_GRPC_ENDPOINT: "0.0.0.0:4317"
     ports:
+      # OTLP gRPC 4317 is available inside the compose network only (avoids host clash with Jaeger :4317).
       - "8126:8126"       # APM traces  (TCP)
       - "8125:8125/udp"   # DogStatsD   (UDP)
     volumes:

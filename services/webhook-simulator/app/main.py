@@ -11,7 +11,12 @@ setup_logging(service_name=settings.service_name, log_level=settings.log_level)
 
 app = FastAPI(title=settings.service_name)
 
-setup_telemetry(app, settings.service_name, settings.otlp_endpoint)
+setup_telemetry(
+    app,
+    settings.service_name,
+    settings.otlp_endpoint,
+    settings.otlp_datadog_endpoint,
+)
 HTTPXClientInstrumentor().instrument()
 
 app.include_router(health_router)

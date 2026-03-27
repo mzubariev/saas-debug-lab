@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     jwt_secret: str = "dev-secret-change-in-production"
     gateway_timeout: float = 5.0
     otlp_endpoint: str = "http://jaeger:4317"
+    # Optional second OTLP gRPC target (Datadog Agent OTLP). See infra/.env.example.
+    otlp_datadog_endpoint: str = ""
     log_level: str = "INFO"
     sentry_dsn: str = ""
 

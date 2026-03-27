@@ -2,7 +2,6 @@ pydantic-settings
 aiokafka
 aiosmtplib
 structlog
-opentelemetry-api
 tenacity
 sentry-sdk
 ddtrace

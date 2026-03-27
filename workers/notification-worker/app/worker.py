@@ -7,8 +7,10 @@ import aiosmtplib
 import sentry_sdk
 import structlog
 from aiokafka import AIOKafkaConsumer
+from opentelemetry import trace
 from saas_shared.kafka_envelope import parse_envelope_message
 from saas_shared.kafka_trace import attach_kafka_message_trace
+from saas_shared.telemetry import setup_worker_telemetry
 
 from .config import settings
 from .logging import setup_logging
@@ -181,9 +183,18 @@ async def consume() -> None:
                     raw = json.loads(msg.value.decode("utf-8"))
                     _event_type, event, envelope_trace_id = parse_envelope_message(raw)
                     with attach_kafka_message_trace(envelope_trace_id):
-                        tx.set_data("task.id", event.get("id"))
-                        tx.set_data("kafka.event_type", _event_type)
-                        await handle_event(event)
+                        with _tracer.start_as_current_span(
+                            "kafka.consume",
+                            attributes={
+                                "messaging.system": "kafka",
+                                "messaging.destination.name": msg.topic,
+                                "messaging.kafka.partition": msg.partition,
+                                "messaging.kafka.offset": msg.offset,
+                            },
+                        ):
+                            tx.set_data("task.id", event.get("id"))
+                            tx.set_data("kafka.event_type", _event_type)
+                            await handle_event(event)
                 except Exception as exc:
                     logger.error(
                         "event_processing_failed",
@@ -205,6 +216,11 @@ async def consume() -> None:
 def run() -> None:
     setup_logging(service_name=settings.service_name, log_level=settings.log_level)
     _setup_sentry()
+    setup_worker_telemetry(
+        settings.service_name,
+        settings.otlp_endpoint,
+        settings.otlp_datadog_endpoint,
+    )
     asyncio.run(consume())
 
 

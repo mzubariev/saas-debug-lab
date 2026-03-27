@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     kafka_bootstrap_servers: str
     log_level: str = "INFO"
 
+    otlp_endpoint: str = "http://jaeger:4317"
+    otlp_datadog_endpoint: str = ""
+
     # SMTP delivery settings.
     # Default: Toxiproxy → MailHog (no auth, catches all mail locally).
     # Swap to a real provider (e.g. smtp.gmail.com:587 with STARTTLS) to deliver

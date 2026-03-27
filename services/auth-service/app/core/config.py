@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://redis:6379/1"
     otlp_endpoint: str = "http://jaeger:4317"
+    otlp_datadog_endpoint: str = ""
     log_level: str = "INFO"
     sentry_dsn: str = ""
 

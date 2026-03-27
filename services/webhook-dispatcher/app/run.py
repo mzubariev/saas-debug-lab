@@ -3,6 +3,8 @@ import asyncio
 import sentry_sdk
 import structlog
 from aiokafka import AIOKafkaConsumer
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from saas_shared.telemetry import setup_worker_telemetry
 
 from .consumer import run_consumer_loop
 from .core.config import CONSUME_TOPICS, settings
@@ -57,6 +59,12 @@ async def _async_main() -> None:
 def main() -> None:
     setup_logging(service_name=settings.service_name, log_level=settings.log_level)
     _setup_sentry()
+    setup_worker_telemetry(
+        settings.service_name,
+        settings.otlp_endpoint,
+        settings.otlp_datadog_endpoint,
+    )
+    HTTPXClientInstrumentor().instrument()
     asyncio.run(_async_main())
 
 

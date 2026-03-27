@@ -6,6 +6,7 @@ kafka-python
 httpx
 structlog
 opentelemetry-api
+opentelemetry-instrumentation-celery
 pydantic-settings
 sentry-sdk[celery]
 ddtrace

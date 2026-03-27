@@ -2,8 +2,10 @@ import sentry_sdk
 from celery import Celery
 from celery.schedules import crontab
 from celery.signals import worker_process_init
+from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from sentry_sdk.integrations.celery import CeleryIntegration
 from saas_shared.logging import setup_logging
+from saas_shared.telemetry import setup_worker_telemetry
 
 from .config import settings
 
@@ -68,6 +70,11 @@ celery_app.conf.update(
 
 @worker_process_init.connect
 def init_worker_process(**kwargs) -> None:
-    """Configure structlog and re-initialise Sentry in each forked worker process."""
+    """Configure structlog, OpenTelemetry, and Sentry in each forked worker process."""
     setup_logging(service_name=settings.service_name, log_level=settings.log_level)
+    setup_worker_telemetry(
+        settings.service_name,
+        settings.otlp_endpoint,
+        settings.otlp_datadog_endpoint,
+    )
     _setup_sentry()

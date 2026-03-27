@@ -5,6 +5,7 @@ from typing import Any
 import httpx
 import structlog
 from aiokafka import AIOKafkaProducer
+from opentelemetry import trace
 from saas_shared.kafka_envelope import encode_envelope_bytes, parse_envelope_message
 from saas_shared.kafka_trace import (
     attach_kafka_message_trace,
@@ -14,6 +15,7 @@ from saas_shared.kafka_trace import (
 from ..core.config import settings
 
 logger = structlog.get_logger()
+_tracer = trace.get_tracer(__name__)
 
 _TOPIC_EVENT_TYPE: dict[str, str] = {
     "webhook_sent": "webhook.sent",
@@ -101,14 +103,23 @@ async def process_consumed_message(
         raw = json.loads(msg.value.decode("utf-8"))
         event_type, event, envelope_trace_id = parse_envelope_message(raw)
         with attach_kafka_message_trace(envelope_trace_id):
-            logger.info(
-                "event_received",
-                topic=msg.topic,
-                event_type=event_type,
-                task_id=event.get("id"),
-                status=event.get("status"),
-            )
-            await deliver(http_client, producer, event)
+            with _tracer.start_as_current_span(
+                "kafka.consume",
+                attributes={
+                    "messaging.system": "kafka",
+                    "messaging.destination.name": msg.topic,
+                    "messaging.kafka.partition": msg.partition,
+                    "messaging.kafka.offset": msg.offset,
+                },
+            ):
+                logger.info(
+                    "event_received",
+                    topic=msg.topic,
+                    event_type=event_type,
+                    task_id=event.get("id"),
+                    status=event.get("status"),
+                )
+                await deliver(http_client, producer, event)
     except Exception as exc:
         logger.error(
             "event_processing_failed",
