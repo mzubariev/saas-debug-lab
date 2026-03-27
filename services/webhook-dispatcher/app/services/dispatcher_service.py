@@ -13,6 +13,12 @@ from saas_shared.kafka_trace import (
 )
 
 from ..core.config import settings
+from ..metrics import (
+    kafka_messages_consumed_total,
+    webhook_failures_total,
+    webhook_requests_total,
+    webhook_retries_total,
+)
 
 logger = structlog.get_logger()
 _tracer = trace.get_tracer(__name__)
@@ -40,6 +46,8 @@ async def deliver(
     last_error: str = ""
 
     for attempt in range(1, settings.max_retries + 1):
+        if attempt > 1:
+            webhook_retries_total.inc()
         try:
             resp = await client.post(
                 settings.webhook_url,
@@ -54,6 +62,7 @@ async def deliver(
                 status_code=resp.status_code,
                 attempt=attempt,
             )
+            webhook_requests_total.inc()
             await _produce(producer, "webhook_sent", payload)
             return
 
@@ -76,6 +85,7 @@ async def deliver(
         task_id=payload.get("id"),
         error=last_error,
     )
+    webhook_failures_total.inc()
     await _produce(producer, "webhook_failed", {**payload, "error": last_error})
     await _produce(producer, "webhook_dlq", {**payload, "error": last_error})
 
@@ -101,6 +111,7 @@ async def process_consumed_message(
     """Decode one Kafka record, log, deliver (retry/DLQ inside deliver)."""
     try:
         raw = json.loads(msg.value.decode("utf-8"))
+        kafka_messages_consumed_total.labels(topic=msg.topic).inc()
         event_type, event, envelope_trace_id = parse_envelope_message(raw)
         with attach_kafka_message_trace(envelope_trace_id):
             with _tracer.start_as_current_span(

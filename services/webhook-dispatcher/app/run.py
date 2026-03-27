@@ -4,6 +4,7 @@ import sentry_sdk
 import structlog
 from aiokafka import AIOKafkaConsumer
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from prometheus_client import start_http_server
 from saas_shared.telemetry import setup_worker_telemetry
 
 from .consumer import run_consumer_loop
@@ -65,6 +66,7 @@ def main() -> None:
         settings.otlp_datadog_endpoint,
     )
     HTTPXClientInstrumentor().instrument()
+    start_http_server(settings.metrics_port)
     asyncio.run(_async_main())
 
 

@@ -10,15 +10,22 @@ from aiokafka import AIOKafkaConsumer
 from opentelemetry import trace
 from saas_shared.kafka_envelope import parse_envelope_message
 from saas_shared.kafka_trace import attach_kafka_message_trace
+from prometheus_client import start_http_server
 from saas_shared.telemetry import setup_worker_telemetry
 
 from .config import settings
 from .logging import setup_logging
+from .metrics import (
+    emails_failed_total,
+    emails_sent_total,
+    kafka_messages_consumed_total,
+)
 
 TOPIC    = "task_created"
 GROUP_ID = "notification-worker"
 
 logger = structlog.get_logger()
+_tracer = trace.get_tracer(__name__)
 
 
 def _setup_sentry() -> None:
@@ -96,6 +103,7 @@ async def handle_event(event: dict) -> None:
 
     try:
         await _send_email(msg)
+        emails_sent_total.inc()
         logger.info(
             "notification_sent",
             task_id=task_id,
@@ -106,6 +114,7 @@ async def handle_event(event: dict) -> None:
         )
 
     except aiosmtplib.SMTPException as exc:
+        emails_failed_total.inc()
         logger.error(
             "smtp_delivery_failed",
             task_id=task_id,
@@ -125,6 +134,7 @@ async def handle_event(event: dict) -> None:
             sentry_sdk.capture_exception(exc)
 
     except OSError as exc:
+        emails_failed_total.inc()
         # Connection-refused, DNS failure, TCP reset, Toxiproxy chaos.
         logger.error(
             "smtp_connection_failed",
@@ -181,6 +191,7 @@ async def consume() -> None:
 
                 try:
                     raw = json.loads(msg.value.decode("utf-8"))
+                    kafka_messages_consumed_total.labels(topic=msg.topic).inc()
                     _event_type, event, envelope_trace_id = parse_envelope_message(raw)
                     with attach_kafka_message_trace(envelope_trace_id):
                         with _tracer.start_as_current_span(
@@ -221,6 +232,7 @@ def run() -> None:
         settings.otlp_endpoint,
         settings.otlp_datadog_endpoint,
     )
+    start_http_server(settings.metrics_port)
     asyncio.run(consume())
 
 

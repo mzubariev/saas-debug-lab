@@ -3,5 +3,6 @@ aiokafka
 aiosmtplib
 structlog
 tenacity
+prometheus-client
 sentry-sdk
 ddtrace

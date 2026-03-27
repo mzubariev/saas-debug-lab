@@ -346,6 +346,7 @@ services:
       DD_LOGS_INJECTION: "true"
       DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-false}
       OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
+      METRICS_PORT: "9100"
     labels:
       com.datadoghq.ad.logs: '[{"source":"python","service":"webhook-dispatcher"}]'
     depends_on:
@@ -411,6 +412,7 @@ services:
       DD_LOGS_INJECTION: "true"
       DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-false}
       OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
+      METRICS_PORT: "9100"
     labels:
       com.datadoghq.ad.logs: '[{"source":"python","service":"scheduler-worker"}]'
     depends_on:

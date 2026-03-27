@@ -1,8 +1,9 @@
 import sentry_sdk
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import worker_process_init
+from celery.signals import task_failure, task_success, worker_process_init
 from opentelemetry.instrumentation.celery import CeleryInstrumentor
+from prometheus_client import start_http_server
 from sentry_sdk.integrations.celery import CeleryIntegration
 from saas_shared.logging import setup_logging
 from saas_shared.telemetry import setup_worker_telemetry
@@ -38,6 +39,8 @@ def _setup_sentry() -> None:
 setup_logging(service_name=settings.service_name, log_level=settings.log_level)
 _setup_sentry()
 
+CeleryInstrumentor().instrument()
+
 celery_app = Celery(
     settings.service_name,
     broker=settings.celery_broker_url,
@@ -47,6 +50,27 @@ celery_app = Celery(
         "app.tasks.cleanup_tasks",
     ],
 )
+
+
+def _task_name(sender) -> str:
+    if sender is None:
+        return "unknown"
+    return getattr(sender, "name", None) or getattr(sender, "__name__", "unknown")
+
+
+@task_success.connect
+def _on_celery_task_success(sender=None, **kwargs) -> None:
+    from ..metrics import celery_tasks_total
+
+    celery_tasks_total.labels(task_name=_task_name(sender)).inc()
+
+
+@task_failure.connect
+def _on_celery_task_failure(sender=None, **kwargs) -> None:
+    from ..metrics import celery_failures_total
+
+    celery_failures_total.labels(task_name=_task_name(sender)).inc()
+
 
 celery_app.conf.update(
     timezone="UTC",
@@ -78,3 +102,4 @@ def init_worker_process(**kwargs) -> None:
         settings.otlp_datadog_endpoint,
     )
     _setup_sentry()
+    start_http_server(settings.metrics_port)

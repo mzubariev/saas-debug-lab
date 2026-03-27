@@ -10,3 +10,4 @@ opentelemetry-api
 sentry-sdk
 
 ddtrace
+prometheus-client

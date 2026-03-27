@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from prometheus_client import make_asgi_app
 from saas_shared.health import router as health_router
 
 from .api.routes.routes import router as api_router
@@ -21,3 +22,6 @@ HTTPXClientInstrumentor().instrument()
 
 app.include_router(health_router)
 app.include_router(api_router)
+
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)

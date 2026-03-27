@@ -2,3 +2,4 @@ uvicorn[standard]
 httpx
 pydantic-settings
 opentelemetry-instrumentation-httpx
+prometheus-client

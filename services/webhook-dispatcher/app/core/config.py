@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     otlp_endpoint: str = "http://jaeger:4317"
     otlp_datadog_endpoint: str = ""
 
+    metrics_port: int = 9100
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

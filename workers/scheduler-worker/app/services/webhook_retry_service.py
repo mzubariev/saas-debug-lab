@@ -11,8 +11,10 @@ from saas_shared.kafka_trace import attach_kafka_message_trace
 from ..core.config import settings
 from ..infrastructure.http.client import post_json_sync
 from ..infrastructure.kafka.consumer import create_webhook_dlq_consumer
+from ..metrics import dlq_processed_total, kafka_messages_consumed_total
 
 logger = structlog.get_logger()
+_tracer = trace.get_tracer(__name__)
 
 
 def process_dlq() -> dict:
@@ -60,6 +62,8 @@ def process_dlq() -> dict:
 
     try:
         for msg in consumer:
+            kafka_messages_consumed_total.labels(topic=msg.topic).inc()
+            dlq_processed_total.inc()
             _event_type, payload, envelope_trace_id = parse_envelope_message(msg.value)
             with attach_kafka_message_trace(envelope_trace_id):
                 with _tracer.start_as_current_span(

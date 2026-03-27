@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     otlp_endpoint: str = "http://jaeger:4317"
     otlp_datadog_endpoint: str = ""
 
+    metrics_port: int = 9100
+
     # Sentry error tracking. Leave empty to disable.
     sentry_dsn: str = ""
 

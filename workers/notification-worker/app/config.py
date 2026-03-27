@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     otlp_endpoint: str = "http://jaeger:4317"
     otlp_datadog_endpoint: str = ""
 
+    metrics_port: int = 9100
+
     # SMTP delivery settings.
     # Default: Toxiproxy → MailHog (no auth, catches all mail locally).
     # Swap to a real provider (e.g. smtp.gmail.com:587 with STARTTLS) to deliver
