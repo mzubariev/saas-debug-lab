@@ -124,7 +124,7 @@ services:
       DD_VERSION: ${DD_VERSION:-1.0.0}
       DD_AGENT_HOST: datadog-agent
       DD_LOGS_INJECTION: "true"
-      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-true}
+      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-false}
       # Optional OpenTelemetry OTLP gRPC → Datadog Agent (enable agent OTLP receiver).
       OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
     labels:
@@ -209,7 +209,7 @@ services:
       DD_VERSION: ${DD_VERSION:-1.0.0}
       DD_AGENT_HOST: datadog-agent
       DD_LOGS_INJECTION: "true"
-      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-true}
+      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-false}
       OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
     labels:
       com.datadoghq.ad.logs: '[{"source":"python","service":"auth-service"}]'
@@ -245,7 +245,7 @@ services:
       DD_VERSION: ${DD_VERSION:-1.0.0}
       DD_AGENT_HOST: datadog-agent
       DD_LOGS_INJECTION: "true"
-      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-true}
+      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-false}
       OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
     labels:
       com.datadoghq.ad.logs: '[{"source":"python","service":"task-service"}]'
@@ -311,7 +311,7 @@ services:
       DD_VERSION: ${DD_VERSION:-1.0.0}
       DD_AGENT_HOST: datadog-agent
       DD_LOGS_INJECTION: "true"
-      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-true}
+      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-false}
       OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
     labels:
       com.datadoghq.ad.logs: '[{"source":"python","service":"integration-service"}]'
@@ -344,7 +344,7 @@ services:
       DD_VERSION: ${DD_VERSION:-1.0.0}
       DD_AGENT_HOST: datadog-agent
       DD_LOGS_INJECTION: "true"
-      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-true}
+      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-false}
       OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
     labels:
       com.datadoghq.ad.logs: '[{"source":"python","service":"webhook-dispatcher"}]'
@@ -409,7 +409,7 @@ services:
       DD_VERSION: ${DD_VERSION:-1.0.0}
       DD_AGENT_HOST: datadog-agent
       DD_LOGS_INJECTION: "true"
-      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-true}
+      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-false}
       OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
     labels:
       com.datadoghq.ad.logs: '[{"source":"python","service":"scheduler-worker"}]'
@@ -440,7 +440,7 @@ services:
       DD_VERSION: ${DD_VERSION:-1.0.0}
       DD_AGENT_HOST: datadog-agent
       DD_LOGS_INJECTION: "true"
-      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-true}
+      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-false}
     labels:
       com.datadoghq.ad.logs: '[{"source":"python","service":"flower"}]'
     ports:
@@ -465,7 +465,7 @@ services:
       DD_VERSION: ${DD_VERSION:-1.0.0}
       DD_AGENT_HOST: datadog-agent
       DD_LOGS_INJECTION: "true"
-      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-true}
+      DD_TRACE_ENABLED: ${DD_TRACE_ENABLED:-false}
       OTLP_DATADOG_ENDPOINT: ${OTLP_DATADOG_ENDPOINT:-}
       # ── SMTP (via Toxiproxy) ──────────────────────────────────────────────
       # SMTP routes through Toxiproxy by default so network-level chaos can be injected
