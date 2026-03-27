@@ -11,6 +11,7 @@ from opentelemetry import trace
 from saas_shared.kafka_envelope import parse_envelope_message
 from saas_shared.kafka_trace import attach_kafka_message_trace
 from prometheus_client import start_http_server
+from saas_shared.sentry_setup import setup_sentry_worker
 from saas_shared.telemetry import setup_worker_telemetry
 
 from .config import settings
@@ -26,26 +27,6 @@ GROUP_ID = "notification-worker"
 
 logger = structlog.get_logger()
 _tracer = trace.get_tracer(__name__)
-
-
-def _setup_sentry() -> None:
-    """Initialise Sentry error tracking. No-op when SENTRY_DSN is not set.
-
-    The worker has no ASGI layer, so we use the plain SDK without FastAPI /
-    Starlette integrations.  Exceptions are captured explicitly with
-    sentry_sdk.capture_exception() at each failure point so that every SMTP
-    or connection error appears as a separate Sentry issue, enriched with the
-    task_id and email recipient that caused it.
-    """
-    if not settings.sentry_dsn:
-        return
-    sentry_sdk.init(
-        dsn=settings.sentry_dsn,
-        traces_sample_rate=0.1,
-        send_default_pii=False,
-    )
-    sentry_sdk.set_tag("service", settings.service_name)
-    sentry_sdk.set_tag("worker", "notification-worker")
 
 
 def _build_message(event: dict) -> MIMEMultipart:
@@ -226,7 +207,11 @@ async def consume() -> None:
 
 def run() -> None:
     setup_logging(service_name=settings.service_name, log_level=settings.log_level)
-    _setup_sentry()
+    setup_sentry_worker(
+        service_name=settings.service_name,
+        dsn=settings.sentry_dsn,
+        worker_name="notification-worker",
+    )
     setup_worker_telemetry(
         settings.service_name,
         settings.otlp_endpoint,

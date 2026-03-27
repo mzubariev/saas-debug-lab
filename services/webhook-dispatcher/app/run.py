@@ -1,10 +1,10 @@
 import asyncio
 
-import sentry_sdk
 import structlog
 from aiokafka import AIOKafkaConsumer
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from prometheus_client import start_http_server
+from saas_shared.sentry_setup import setup_sentry_worker
 from saas_shared.telemetry import setup_worker_telemetry
 
 from .consumer import run_consumer_loop
@@ -12,18 +12,6 @@ from .core.config import CONSUME_TOPICS, settings
 from .core.logging import setup_logging
 from .infrastructure.http_client import create_http_client
 from .infrastructure.messaging.producer import close_producer, create_producer
-
-
-def _setup_sentry() -> None:
-    if not settings.sentry_dsn:
-        return
-    sentry_sdk.init(
-        dsn=settings.sentry_dsn,
-        traces_sample_rate=0.1,
-        send_default_pii=False,
-    )
-    sentry_sdk.set_tag("service", settings.service_name)
-    sentry_sdk.set_tag("worker", "webhook-dispatcher")
 
 
 logger = structlog.get_logger()
@@ -59,7 +47,11 @@ async def _async_main() -> None:
 
 def main() -> None:
     setup_logging(service_name=settings.service_name, log_level=settings.log_level)
-    _setup_sentry()
+    setup_sentry_worker(
+        service_name=settings.service_name,
+        dsn=settings.sentry_dsn,
+        worker_name="webhook-dispatcher",
+    )
     setup_worker_telemetry(
         settings.service_name,
         settings.otlp_endpoint,
