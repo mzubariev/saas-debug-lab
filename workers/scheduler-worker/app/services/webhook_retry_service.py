@@ -65,7 +65,7 @@ def process_dlq() -> dict:
             kafka_messages_consumed_total.labels(topic=msg.topic).inc()
             dlq_processed_total.inc()
             _event_type, payload, envelope_trace_id = parse_envelope_message(msg.value)
-            with attach_kafka_message_trace(envelope_trace_id):
+            with attach_kafka_message_trace(envelope_trace_id, getattr(msg, "headers", None)):
                 with _tracer.start_as_current_span(
                     "kafka.consume",
                     attributes={

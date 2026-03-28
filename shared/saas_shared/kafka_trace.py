@@ -1,9 +1,9 @@
 """Kafka envelope ``trace_id`` ↔ runtime context for logs and OpenTelemetry.
 
-* **Producers** call :func:`current_trace_id_for_kafka_envelope` when encoding v1 envelopes.
-* **Consumers** wrap handling in :func:`attach_kafka_message_trace` so structlog JSON includes
-  ``trace_id`` and OTEL ``get_current_span()`` carries the propagated trace (when
-  ``opentelemetry-api`` is installed).
+* **Producers** call :func:`otel_kafka_headers` (W3C ``traceparent`` / ``tracestate`` / ``baggage``)
+  on each Kafka record **in addition to** the JSON envelope ``trace_id`` field.
+* **Consumers** use :func:`attach_kafka_message_trace` to ``extract`` W3C context from message
+  headers when present, else fall back to the envelope ``trace_id``.
 """
 from __future__ import annotations
 
@@ -54,6 +54,36 @@ def current_trace_id_for_kafka_envelope() -> str | None:
     return None
 
 
+def otel_kafka_headers() -> list[tuple[str, bytes]]:
+    """W3C trace context for Kafka message headers (pairs OTEL Jaeger with envelope ``trace_id``)."""
+    try:
+        from opentelemetry.propagate import inject
+
+        carrier: dict[str, str] = {}
+        inject(carrier)
+        return [(k, v.encode("utf-8")) for k, v in carrier.items()]
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _kafka_headers_to_carrier(headers: object | None) -> dict[str, str]:
+    out: dict[str, str] = {}
+    if not headers:
+        return out
+    for item in headers:
+        if not item or len(item) < 2:
+            continue
+        k, v = item[0], item[1]
+        ks = k.decode("utf-8", errors="replace") if isinstance(k, bytes) else str(k)
+        vs = v.decode("utf-8", errors="replace") if isinstance(v, bytes) else str(v)
+        out[ks.lower()] = vs
+    return out
+
+
+def _carrier_has_w3c_trace(carrier: dict[str, str]) -> bool:
+    return bool(carrier.get("traceparent"))
+
+
 def _otel_attach_remote_trace(trace_id_hex: str) -> object | None:
     """Attach a remote trace as the current OTEL context; returns detach token or ``None``."""
     try:
@@ -83,22 +113,48 @@ def _otel_attach_remote_trace(trace_id_hex: str) -> object | None:
 
 
 @contextmanager
-def attach_kafka_message_trace(envelope_trace_id: str | None) -> Iterator[None]:
-    """Bind envelope ``trace_id`` for structlog and OTEL for the duration of the block."""
+def attach_kafka_message_trace(
+    envelope_trace_id: str | None,
+    kafka_headers: object | None = None,
+) -> Iterator[None]:
+    """Restore W3C context from Kafka headers (preferred) or envelope ``trace_id``."""
+    from opentelemetry import context as otel_context
+    from opentelemetry import trace
+
     normalized = normalize_kafka_trace_id(envelope_trace_id)
-    otel_token = None
+    tokens: list[object] = []
+    bound_trace_log = False
     try:
-        if normalized:
+        carrier = _kafka_headers_to_carrier(kafka_headers)
+        used_extract = False
+        if _carrier_has_w3c_trace(carrier):
+            try:
+                from opentelemetry.propagate import extract
+
+                ctx = extract(carrier)
+                tokens.append(otel_context.attach(ctx))
+                used_extract = True
+                span = trace.get_current_span()
+                sc = span.get_span_context() if span is not None else None
+                if sc is not None and getattr(sc, "is_valid", False):
+                    structlog.contextvars.bind_contextvars(trace_id=format(sc.trace_id, "032x"))
+                    bound_trace_log = True
+            except Exception:  # noqa: BLE001
+                used_extract = False
+
+        if not used_extract and normalized:
             structlog.contextvars.bind_contextvars(trace_id=normalized)
-            otel_token = _otel_attach_remote_trace(normalized)
+            bound_trace_log = True
+            t = _otel_attach_remote_trace(normalized)
+            if t is not None:
+                tokens.append(t)
+
         yield
     finally:
-        if normalized:
+        if bound_trace_log:
             structlog.contextvars.unbind_contextvars("trace_id")
-        if otel_token is not None:
+        for tok in reversed(tokens):
             try:
-                from opentelemetry import context as otel_context
-
-                otel_context.detach(otel_token)
+                otel_context.detach(tok)
             except Exception:  # noqa: BLE001
                 pass

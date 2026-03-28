@@ -18,6 +18,7 @@ from opentelemetry.propagators.composite import CompositePropagator
 from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 _log = logging.getLogger(__name__)
@@ -55,18 +56,63 @@ def setup_tracer_provider(
     endpoints = _nonempty_endpoints(otlp_endpoint, otlp_datadog_endpoint)
     if not endpoints:
         _log.warning("no_otlp_endpoints_configured service=%s", service_name)
-        return
+    else:
+        resource = Resource.create({SERVICE_NAME: service_name})
+        # Lab default: always sample so Jaeger shows full chains.
+        provider = TracerProvider(resource=resource, sampler=ALWAYS_ON)
+        for ep in endpoints:
+            try:
+                exporter = OTLPSpanExporter(endpoint=ep)
+                provider.add_span_processor(BatchSpanProcessor(exporter))
+            except Exception:  # noqa: BLE001
+                _log.exception("otlp_exporter_init_failed endpoint=%s", ep)
 
-    resource = Resource.create({SERVICE_NAME: service_name})
-    provider = TracerProvider(resource=resource)
-    for ep in endpoints:
-        try:
-            exporter = OTLPSpanExporter(endpoint=ep)
-            provider.add_span_processor(BatchSpanProcessor(exporter))
-        except Exception:  # noqa: BLE001
-            _log.exception("otlp_exporter_init_failed endpoint=%s", ep)
+        trace.set_tracer_provider(provider)
 
-    trace.set_tracer_provider(provider)
+    # Always patch httpx/redis so spans export once a provider is configured (or noop).
+    _instrument_client_libraries()
+
+
+def _instrument_client_libraries() -> None:
+    """HTTPX / Redis auto-instrumentation (services only install what they use)."""
+    try:
+        import httpx  # noqa: F401 — dependency of gateway, dispatcher, integration, …
+
+        from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+        HTTPXClientInstrumentor().instrument()
+    except Exception:  # noqa: BLE001
+        _log.debug("otel_httpx_instrumentation_skipped", exc_info=True)
+
+    try:
+        import redis  # noqa: F401
+
+        from opentelemetry.instrumentation.redis import RedisInstrumentor
+
+        RedisInstrumentor().instrument()
+    except Exception:  # noqa: BLE001
+        _log.debug("otel_redis_instrumentation_skipped", exc_info=True)
+
+
+def instrument_sqlalchemy_async_engine(async_engine: object) -> None:
+    """Attach SQLAlchemy 2 async engine to OTEL (spans for DB statements)."""
+    try:
+        from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
+        sync_engine = getattr(async_engine, "sync_engine", async_engine)
+        SQLAlchemyInstrumentor().instrument(engine=sync_engine)
+    except Exception:  # noqa: BLE001
+        _log.exception("otel_sqlalchemy_instrumentation_failed")
+
+
+def instrument_sqlalchemy_sync_engine(engine: object) -> None:
+    """Attach a sync SQLAlchemy engine (e.g. Celery worker DB)."""
+    try:
+        from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
+        SQLAlchemyInstrumentor().instrument(engine=engine)
+    except Exception:  # noqa: BLE001
+        _log.exception("otel_sqlalchemy_sync_instrumentation_failed")
 
 
 def setup_telemetry(

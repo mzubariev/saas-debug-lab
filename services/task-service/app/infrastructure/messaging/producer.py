@@ -4,7 +4,7 @@ import sentry_sdk
 from aiokafka import AIOKafkaProducer
 from fastapi import FastAPI
 from saas_shared.kafka_envelope import encode_envelope_bytes
-from saas_shared.kafka_trace import current_trace_id_for_kafka_envelope
+from saas_shared.kafka_trace import current_trace_id_for_kafka_envelope, otel_kafka_headers
 
 from ...core.config import settings
 
@@ -44,6 +44,13 @@ def _sentry_kafka_headers() -> list[tuple[str, bytes]]:
     return headers
 
 
+def _all_kafka_headers() -> list[tuple[str, bytes]]:
+    merged: list[tuple[str, bytes]] = []
+    merged.extend(otel_kafka_headers())
+    merged.extend(_sentry_kafka_headers())
+    return merged
+
+
 async def publish_event(producer: AIOKafkaProducer, topic: str, payload: dict) -> None:
     event_type = _TOPIC_EVENT_TYPE.get(topic, topic.replace("_", "."))
     value = encode_envelope_bytes(
@@ -51,4 +58,4 @@ async def publish_event(producer: AIOKafkaProducer, topic: str, payload: dict) -
         payload,
         trace_id=current_trace_id_for_kafka_envelope(),
     )
-    await producer.send_and_wait(topic, value, headers=_sentry_kafka_headers())
+    await producer.send_and_wait(topic, value, headers=_all_kafka_headers())

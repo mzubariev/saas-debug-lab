@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from prometheus_client import make_asgi_app
 from saas_shared.sentry_setup import setup_sentry_fastapi
 
@@ -19,7 +18,6 @@ setup_telemetry(
     settings.otlp_endpoint,
     settings.otlp_datadog_endpoint,
 )
-HTTPXClientInstrumentor().instrument()
 
 app.include_router(health.router)
 app.include_router(routes.router)

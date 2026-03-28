@@ -2,11 +2,13 @@ import structlog
 from fastapi import FastAPI
 from prometheus_client import make_asgi_app
 from saas_shared.sentry_setup import setup_sentry_fastapi
+from saas_shared.telemetry import instrument_sqlalchemy_async_engine
 
 from .core.config import settings
 from .core.logging import setup_logging
 from .core.telemetry import setup_telemetry
 from .infrastructure.cache.client import start_redis, stop_redis
+from .infrastructure.db.session import engine
 from .api.routes import auth, health
 
 
@@ -21,6 +23,7 @@ setup_telemetry(
     settings.otlp_endpoint,
     settings.otlp_datadog_endpoint,
 )
+instrument_sqlalchemy_async_engine(engine)
 
 logger = structlog.get_logger()
 

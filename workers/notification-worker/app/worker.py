@@ -148,74 +148,82 @@ async def consume() -> None:
 
     try:
         async for msg in consumer:
-            # Extract Sentry trace context that was stamped onto the Kafka
-            # message by task-service at publish time.  Calling
-            # continue_trace() creates a new transaction that is linked to the
-            # same trace_id as the originating browser request, so the full
-            # Browser → Gateway → task-service → notification-worker chain
-            # appears as a single distributed trace in Sentry.
-            incoming_trace_headers = {
-                k.lower(): v.decode("utf-8", errors="replace")
-                for k, v in (msg.headers or [])
-                if k.lower() in ("sentry-trace", "baggage")
-            }
-            transaction = sentry_sdk.continue_trace(
-                incoming_trace_headers,
-                op="queue.process",
-                name=f"consume {msg.topic}",
-            )
+            try:
+                raw = json.loads(msg.value.decode("utf-8"))
+                kafka_messages_consumed_total.labels(topic=msg.topic).inc()
+                _event_type, event, envelope_trace_id = parse_envelope_message(raw)
+            except Exception as exc:
+                logger.error(
+                    "event_processing_failed",
+                    error=str(exc),
+                    topic=msg.topic,
+                    offset=msg.offset,
+                )
+                with sentry_sdk.push_scope() as scope:
+                    scope.set_tag("error_type", "event_processing")
+                    scope.set_extra("kafka_topic", msg.topic)
+                    scope.set_extra("kafka_offset", msg.offset)
+                    sentry_sdk.capture_exception(exc)
+                continue
 
-            with sentry_sdk.start_transaction(transaction) as tx:
-                tx.set_data("messaging.system", "kafka")
-                tx.set_data("messaging.destination", msg.topic)
-                tx.set_data("messaging.kafka.offset", msg.offset)
+            # OTEL W3C context from Kafka headers first (Jaeger), then Sentry.
+            with attach_kafka_message_trace(envelope_trace_id, msg.headers):
+                incoming_trace_headers = {
+                    k.lower(): v.decode("utf-8", errors="replace")
+                    for k, v in (msg.headers or [])
+                    if k.lower() in ("sentry-trace", "baggage")
+                }
+                transaction = sentry_sdk.continue_trace(
+                    incoming_trace_headers,
+                    op="queue.process",
+                    name=f"consume {msg.topic}",
+                )
 
-                try:
-                    raw = json.loads(msg.value.decode("utf-8"))
-                    kafka_messages_consumed_total.labels(topic=msg.topic).inc()
-                    _event_type, event, envelope_trace_id = parse_envelope_message(raw)
-                    with attach_kafka_message_trace(envelope_trace_id):
-                        with _tracer.start_as_current_span(
-                            "kafka.consume",
-                            attributes={
-                                "messaging.system": "kafka",
-                                "messaging.destination.name": msg.topic,
-                                "messaging.kafka.partition": msg.partition,
-                                "messaging.kafka.offset": msg.offset,
-                            },
-                        ):
-                            tx.set_data("task.id", event.get("id"))
-                            tx.set_data("kafka.event_type", _event_type)
+                with sentry_sdk.start_transaction(transaction) as tx:
+                    tx.set_data("messaging.system", "kafka")
+                    tx.set_data("messaging.destination", msg.topic)
+                    tx.set_data("messaging.kafka.offset", msg.offset)
+
+                    with _tracer.start_as_current_span(
+                        "kafka.consume",
+                        attributes={
+                            "messaging.system": "kafka",
+                            "messaging.destination.name": msg.topic,
+                            "messaging.kafka.partition": msg.partition,
+                            "messaging.kafka.offset": msg.offset,
+                        },
+                    ):
+                        tx.set_data("task.id", event.get("id"))
+                        tx.set_data("kafka.event_type", _event_type)
+                        try:
                             await handle_event(event)
-                except Exception as exc:
-                    logger.error(
-                        "event_processing_failed",
-                        error=str(exc),
-                        topic=msg.topic,
-                        offset=msg.offset,
-                    )
-                    # Capture unexpected exceptions (JSON decode errors, etc.)
-                    # that are not already handled inside handle_event().
-                    with sentry_sdk.push_scope() as scope:
-                        scope.set_tag("error_type", "event_processing")
-                        scope.set_extra("kafka_topic",  msg.topic)
-                        scope.set_extra("kafka_offset", msg.offset)
-                        sentry_sdk.capture_exception(exc)
+                        except Exception as exc:
+                            logger.error(
+                                "event_processing_failed",
+                                error=str(exc),
+                                topic=msg.topic,
+                                offset=msg.offset,
+                            )
+                            with sentry_sdk.push_scope() as scope:
+                                scope.set_tag("error_type", "event_processing")
+                                scope.set_extra("kafka_topic", msg.topic)
+                                scope.set_extra("kafka_offset", msg.offset)
+                                sentry_sdk.capture_exception(exc)
     finally:
         await consumer.stop()
 
 
 def run() -> None:
     setup_logging(service_name=settings.service_name, log_level=settings.log_level)
-    setup_sentry_worker(
-        service_name=settings.service_name,
-        dsn=settings.sentry_dsn,
-        worker_name="notification-worker",
-    )
     setup_worker_telemetry(
         settings.service_name,
         settings.otlp_endpoint,
         settings.otlp_datadog_endpoint,
+    )
+    setup_sentry_worker(
+        service_name=settings.service_name,
+        dsn=settings.sentry_dsn,
+        worker_name="notification-worker",
     )
     start_http_server(settings.metrics_port)
     asyncio.run(consume())

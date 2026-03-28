@@ -2,7 +2,6 @@ import asyncio
 
 import structlog
 from aiokafka import AIOKafkaConsumer
-from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from prometheus_client import start_http_server
 from saas_shared.sentry_setup import setup_sentry_worker
 from saas_shared.telemetry import setup_worker_telemetry
@@ -47,17 +46,16 @@ async def _async_main() -> None:
 
 def main() -> None:
     setup_logging(service_name=settings.service_name, log_level=settings.log_level)
-    setup_sentry_worker(
-        service_name=settings.service_name,
-        dsn=settings.sentry_dsn,
-        worker_name="webhook-dispatcher",
-    )
     setup_worker_telemetry(
         settings.service_name,
         settings.otlp_endpoint,
         settings.otlp_datadog_endpoint,
     )
-    HTTPXClientInstrumentor().instrument()
+    setup_sentry_worker(
+        service_name=settings.service_name,
+        dsn=settings.sentry_dsn,
+        worker_name="webhook-dispatcher",
+    )
     start_http_server(settings.metrics_port)
     asyncio.run(_async_main())
 

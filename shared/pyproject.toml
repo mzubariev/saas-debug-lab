@@ -22,6 +22,9 @@ services = [
     "opentelemetry-api",
     "opentelemetry-sdk",
     "opentelemetry-instrumentation-fastapi",
+    "opentelemetry-instrumentation-httpx",
+    "opentelemetry-instrumentation-sqlalchemy",
+    "opentelemetry-instrumentation-redis",
     "opentelemetry-exporter-otlp-proto-grpc",
 ]
 

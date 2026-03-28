@@ -5,7 +5,7 @@ from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from prometheus_client import start_http_server
 from saas_shared.logging import setup_logging
 from saas_shared.sentry_setup import setup_sentry_celery
-from saas_shared.telemetry import setup_worker_telemetry
+from saas_shared.telemetry import instrument_sqlalchemy_sync_engine, setup_worker_telemetry
 
 from .config import settings
 
@@ -13,6 +13,12 @@ from .config import settings
 setup_logging(service_name=settings.service_name, log_level=settings.log_level)
 # Sentry at import (beat/parent) and again in worker_process_init after fork.
 setup_sentry_celery(service_name=settings.service_name, dsn=settings.sentry_dsn)
+# OTLP + HTTPX/Redis patches before Celery hooks so task spans use a real TracerProvider.
+setup_worker_telemetry(
+    settings.service_name,
+    settings.otlp_endpoint,
+    settings.otlp_datadog_endpoint,
+)
 
 CeleryInstrumentor().instrument()
 
@@ -77,4 +83,7 @@ def init_worker_process(**kwargs) -> None:
         settings.otlp_datadog_endpoint,
     )
     setup_sentry_celery(service_name=settings.service_name, dsn=settings.sentry_dsn)
+    from ..infrastructure.db.session import get_sync_engine
+
+    instrument_sqlalchemy_sync_engine(get_sync_engine(settings.postgres_dsn))
     start_http_server(settings.metrics_port)

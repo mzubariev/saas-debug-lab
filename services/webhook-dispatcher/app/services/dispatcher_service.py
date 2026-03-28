@@ -10,6 +10,7 @@ from saas_shared.kafka_envelope import encode_envelope_bytes, parse_envelope_mes
 from saas_shared.kafka_trace import (
     attach_kafka_message_trace,
     current_trace_id_for_kafka_envelope,
+    otel_kafka_headers,
 )
 
 from ..core.config import settings
@@ -98,7 +99,7 @@ async def _produce(producer: AIOKafkaProducer, topic: str, payload: dict) -> Non
             payload,
             trace_id=current_trace_id_for_kafka_envelope(),
         )
-        await producer.send_and_wait(topic, value)
+        await producer.send_and_wait(topic, value, headers=otel_kafka_headers())
     except Exception as exc:
         logger.error("kafka_produce_failed", topic=topic, error=str(exc))
 
@@ -113,7 +114,7 @@ async def process_consumed_message(
         raw = json.loads(msg.value.decode("utf-8"))
         kafka_messages_consumed_total.labels(topic=msg.topic).inc()
         event_type, event, envelope_trace_id = parse_envelope_message(raw)
-        with attach_kafka_message_trace(envelope_trace_id):
+        with attach_kafka_message_trace(envelope_trace_id, msg.headers):
             with _tracer.start_as_current_span(
                 "kafka.consume",
                 attributes={
