@@ -78,7 +78,7 @@ Wait until containers are healthy (`docker compose ps`).
 All HTTP API traffic from the host goes through **Nginx on port 80**:
 
 - **Base URL:** `http://localhost`
-- **Health (via gateway):** `GET http://localhost/health` (and service-specific `/health` routes behind the gateway as documented in `docs/SERVICE_MAP.md`)
+- **Health (via gateway):** `GET http://localhost/health` (and service-specific `/health` routes behind the gateway as documented in [`docs/SERVICE_MAP.md`](docs/SERVICE_MAP.md))
 
 Default **JWT login** (after seeding, step 5):
 
@@ -117,6 +117,7 @@ The SPA is served at `**http://localhost:5173**` when the `frontend` container i
 ```bash
 cp frontend/.env.example frontend/.env
 # Ensure VITE_API_URL targets Nginx, e.g. http://localhost
+# Optional: VITE_SENTRY_DSN — in Compose, the frontend service maps host SENTRY_DSN into VITE_SENTRY_DSN automatically
 ```
 
 Rebuild or restart frontend if you change `frontend/.env`:
@@ -132,9 +133,10 @@ cd infra && docker compose --profile core up -d --build frontend
 | --------------------------------- | ---------------------------------------------------------- |
 | Kanban / UI                       | `http://localhost:5173` — log in with `admin` / `admin123` |
 | Kafka UI                          | `http://localhost:8080`                                    |
+| Redis Insight                     | `http://localhost:5540`                                    |
 | Flower (Celery)                   | `http://localhost:5555`                                    |
 | MailHog                           | `http://localhost:8025`                                    |
-| Jaeger (if observability profile) | `http://localhost:16686`                                   |
+| Jaeger                            | `http://localhost:16686`                                   |
 | Prometheus                        | `http://localhost:9090`                                    |
 | Grafana                           | `http://localhost:3000`                                    |
 | Kibana                            | `http://localhost:5601`                                    |
@@ -205,21 +207,22 @@ The system follows a microservices architecture with synchronous and asynchronou
 - **scheduler-worker** — Celery + Beat: DLQ replay, old-task cleanup; **Flower** on port 5555
 - **Postgres**, **Redis**, **Kafka** — data, cache, events
 
-For ports, envelopes, and request diagrams, see `**docs/SERVICE_MAP.md`** and `**docs/ARCHITECTURE.md`**.
+For ports, envelopes, and request diagrams, see [`docs/SERVICE_MAP.md`](docs/SERVICE_MAP.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Repository layout: [`docs/FILE_STRUCTURE.md`](docs/FILE_STRUCTURE.md).
 
 ---
 
 ## Observability stack
 
 - **Logging** — structured JSON (structlog); **Fluent Bit → Elasticsearch → Kibana**
-- **Metrics** — **Prometheus** scrapes api-gateway, auth-service, task-service; **Grafana**
-- **Tracing** — **Jaeger** + OpenTelemetry in services
+- **Metrics** — **Prometheus** scrapes FastAPI services (`/metrics`), **webhook-simulator**, and worker Prometheus servers on port **9100** (webhook-dispatcher, notification-worker, scheduler-worker); **Grafana**
+- **Tracing** — **Jaeger** + OpenTelemetry in services and the frontend (`frontend/src/telemetry.ts`)
+- **Errors (optional)** — **Sentry** across FastAPI apps, workers, and the React SPA when `SENTRY_DSN` / `VITE_SENTRY_DSN` are set; shared initialisation lives in `shared/saas_shared/sentry_setup.py`
 
 ---
 
 ## Failure simulation
 
-- **Concepts:** `docs/FAILURE_PRIMITIVES.md`, `docs/SCENARIO_MAPPING.md`
+- **Concepts:** [`docs/FAILURE_PRIMITIVES.md`](docs/FAILURE_PRIMITIVES.md), [`docs/SCENARIO_MAPPING.md`](docs/SCENARIO_MAPPING.md)
 - **Automation:** `**chaos/`** primitives and scenarios (`chaos/README.md`, `Makefile` targets `chaos-*`, `break-*`, `slow-db`)
 - **Load + chaos:** run `make load-spike` or other `load-*` targets while executing scenarios
 
@@ -227,7 +230,7 @@ For ports, envelopes, and request diagrams, see `**docs/SERVICE_MAP.md`** and `*
 
 ## Debugging scenarios
 
-The repo includes guided exercises and playbooks under `**docs/`** (e.g. debugging scenarios, incident entry points, troubleshooting). See `**docs/FILE_STRUCTURE.md`** for the full doc index.
+Guided exercises and playbooks live under `docs/` (numbered filenames — see [`docs/FILE_STRUCTURE.md`](docs/FILE_STRUCTURE.md)). Highlights: [`docs/DEBUGGING_SCENARIOS.md`](docs/DEBUGGING_SCENARIOS.md), [`docs/TROUBLESHOOTING_GUIDE.md`](docs/TROUBLESHOOTING_GUIDE.md), [`docs/INCIDENT_ENTRY_POINTS.md`](docs/INCIDENT_ENTRY_POINTS.md), [`docs/INCIDENT_PLAYBOOKS.md`](docs/INCIDENT_PLAYBOOKS.md), [`docs/SCENARIO_PLAYBOOK_MAPPING.md`](docs/SCENARIO_PLAYBOOK_MAPPING.md).
 
 ---
 
@@ -271,4 +274,5 @@ The focus is debuggability, not product completeness.
 - Reproducibility — incidents must be repeatable
 - Realism over complexity — simulate real issues, not edge-case noise
 - Modularity — failures and services are loosely coupled
+- Shared Python package (`saas_shared`) — Kafka envelopes, logging, Redis cache helpers, health router, telemetry, and Sentry setup stay DRY across services and workers
 
