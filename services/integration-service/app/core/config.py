@@ -11,7 +11,6 @@ class Settings(BaseSettings):
     topic_webhook_dispatch: str = "webhook_dispatch"
 
     otlp_endpoint: str = "http://otel-collector:4317"
-    otlp_datadog_endpoint: str = ""
     log_level: str = "INFO"
     sentry_dsn: str = ""
 

@@ -1,4 +1,4 @@
-"""Semantic Kafka spans for OpenTelemetry (Mode A). Skipped when ``DD_TRACE_ENABLED=true``."""
+"""Semantic Kafka spans for OpenTelemetry. Skipped when Datadog APM compose override is used."""
 from __future__ import annotations
 
 from contextlib import asynccontextmanager, contextmanager

@@ -10,4 +10,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY workers/notification-worker/app ./app
 
-CMD ["ddtrace-run", "python", "-m", "app.worker"]
+CMD ["python", "-m", "app.worker"]

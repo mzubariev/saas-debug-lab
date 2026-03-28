@@ -49,7 +49,6 @@ def main() -> None:
     setup_worker_telemetry(
         settings.service_name,
         settings.otlp_endpoint,
-        settings.otlp_datadog_endpoint,
     )
     setup_sentry_worker(
         service_name=settings.service_name,

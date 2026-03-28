@@ -1,15 +1,16 @@
 """Tracing backend selection — **one** primary tracer per process.
 
-**Mode A — OpenTelemetry → Jaeger (lab default)**  
-Set ``DD_TRACE_ENABLED=false`` (or unset). Applications configure ``otlp_endpoint``
-(e.g. ``http://otel-collector:4317``) and use the OTEL SDK + auto-instrumentation.
+**OpenTelemetry (default)** — base ``docker-compose.yml`` + ``observability`` profile for
+Jaeger and the Collector. Applications use ``otlp_endpoint`` (e.g. ``http://otel-collector:4317``)
+with the OTEL SDK and auto-instrumentation. ``DD_TRACE_ENABLED`` is unset.
 
-**Mode B — Datadog APM**  
-Set ``DD_TRACE_ENABLED=true``. The OTEL SDK export and OTEL auto-instrumentation in
-this repo are **skipped**; ``ddtrace-run`` in Docker CMD owns FastAPI, httpx, Redis,
-SQLAlchemy, Celery, etc. Use the Datadog UI for traces (avoid duplicate spans vs OTLP).
+**Datadog APM** — use ``docker-compose.datadog.yml`` with the ``datadog`` profile. That file
+sets ``DD_TRACE_ENABLED=true`` and ``ddtrace-run`` on service commands. The OTEL SDK export
+and OTEL auto-instrumentation in this repo are **skipped**; use the Datadog UI for traces.
 
-See ``README.md`` / ``infra/.env.example`` for full-stack examples.
+Switch modes **only** via compose files; never enable OTEL export and ddtrace together.
+
+See ``README.md`` (Observability) and ``infra/docker-compose.datadog.yml``.
 """
 from __future__ import annotations
 

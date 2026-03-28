@@ -1,5 +1,5 @@
-# OpenTelemetry Collector — central OTLP ingress; forwards traces to Jaeger.
-# Extend with additional exporters (e.g. Datadog) under `exporters` + `service.pipelines`.
+# OpenTelemetry Collector — central OTLP ingress → Jaeger (`observability` profile).
+# Datadog APM uses `docker-compose.datadog.yml` (ddtrace → agent), not this pipeline.
 #
 # Receives: OTLP gRPC :4317, OTLP HTTP :4318 (browser-friendly with CORS below).
 # Forwards: OTLP gRPC → Jaeger all-in-one (internal :4317).

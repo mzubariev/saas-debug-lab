@@ -1,16 +1,13 @@
-"""OpenTelemetry: W3C propagation, OTLP export to Jaeger.
+"""OpenTelemetry: W3C propagation, OTLP export (Jaeger via Collector in Docker).
 
-**Tracing modes** (``saas_shared.tracing_env``):
+**Default (base ``docker-compose.yml``):** OpenTelemetry only — OTLP to ``otel-collector:4317``,
+FastAPI/httpx/redis/sqlalchemy instrumentors. Use the ``observability`` profile for Jaeger + Collector.
 
-* **Mode A — OTEL → Jaeger:** ``DD_TRACE_ENABLED=false`` (default). OTLP exporters +
-  FastAPI/httpx/redis/sqlalchemy OTEL instrumentors.
-* **Mode B — Datadog APM only:** ``DD_TRACE_ENABLED=true``. OTLP registration and OTEL
-  auto-instrumentation in this module are **skipped**; ``ddtrace-run`` owns tracing.
-  Do **not** enable both full OTEL export and ddtrace in the same process.
+**Datadog APM (``docker-compose.datadog.yml`` override):** Set only via that compose file:
+``DD_TRACE_ENABLED=true`` and ``ddtrace-run`` on process commands. This module skips OTEL SDK
+registration when ``saas_shared.tracing_env.is_datadog_apm_enabled()`` is true.
 
-*Optional OTLP to Datadog Agent* (``otlp_datadog_endpoint``) is only used in Mode A when
-you explicitly want OTLP into the Agent — still keep ``DD_TRACE_ENABLED=false`` to avoid
-duplicate spans from ddtrace.
+Do **not** run OTEL export and ddtrace in the same process.
 """
 from __future__ import annotations
 
@@ -47,22 +44,12 @@ def _install_propagators() -> None:
     )
 
 
-def _nonempty_endpoints(otlp_endpoint: str, otlp_datadog_endpoint: str) -> list[str]:
-    out: list[str] = []
-    for raw in (otlp_endpoint, otlp_datadog_endpoint):
-        ep = (raw or "").strip()
-        if ep:
-            out.append(ep)
-    return out
-
-
 def setup_tracer_provider(
     *,
     service_name: str,
     otlp_endpoint: str,
-    otlp_datadog_endpoint: str = "",
 ) -> None:
-    """Configure global propagators and ``TracerProvider`` with one or two OTLP exporters."""
+    """Configure global propagators and ``TracerProvider`` with an OTLP gRPC exporter."""
     if _datadog_apm_only():
         _log.info(
             "otel_sdk_skipped service=%s reason=DD_TRACE_ENABLED (Datadog APM / ddtrace-run)",
@@ -72,23 +59,19 @@ def setup_tracer_provider(
 
     _install_propagators()
 
-    endpoints = _nonempty_endpoints(otlp_endpoint, otlp_datadog_endpoint)
-    if not endpoints:
-        _log.warning("no_otlp_endpoints_configured service=%s", service_name)
+    ep = (otlp_endpoint or "").strip()
+    if not ep:
+        _log.warning("no_otlp_endpoint_configured service=%s", service_name)
     else:
-        resource = Resource.create({SERVICE_NAME: service_name})
-        # Lab default: always sample so Jaeger shows full chains.
-        provider = TracerProvider(resource=resource, sampler=ALWAYS_ON)
-        for ep in endpoints:
-            try:
-                exporter = OTLPSpanExporter(endpoint=ep)
-                provider.add_span_processor(BatchSpanProcessor(exporter))
-            except Exception:  # noqa: BLE001
-                _log.exception("otlp_exporter_init_failed endpoint=%s", ep)
+        try:
+            resource = Resource.create({SERVICE_NAME: service_name})
+            provider = TracerProvider(resource=resource, sampler=ALWAYS_ON)
+            exporter = OTLPSpanExporter(endpoint=ep)
+            provider.add_span_processor(BatchSpanProcessor(exporter))
+            trace.set_tracer_provider(provider)
+        except Exception:  # noqa: BLE001
+            _log.exception("otlp_exporter_init_failed endpoint=%s", ep)
 
-        trace.set_tracer_provider(provider)
-
-    # Always patch httpx/redis so spans export once a provider is configured (or noop).
     _instrument_client_libraries()
 
 
@@ -142,14 +125,9 @@ def setup_telemetry(
     app,
     service_name: str,
     otlp_endpoint: str,
-    otlp_datadog_endpoint: str = "",
 ) -> None:
     """FastAPI services: OTLP export + ``FastAPIInstrumentor``."""
-    setup_tracer_provider(
-        service_name=service_name,
-        otlp_endpoint=otlp_endpoint,
-        otlp_datadog_endpoint=otlp_datadog_endpoint,
-    )
+    setup_tracer_provider(service_name=service_name, otlp_endpoint=otlp_endpoint)
     if _datadog_apm_only():
         return
     FastAPIInstrumentor.instrument_app(app)
@@ -158,11 +136,6 @@ def setup_telemetry(
 def setup_worker_telemetry(
     service_name: str,
     otlp_endpoint: str,
-    otlp_datadog_endpoint: str = "",
 ) -> None:
     """Workers / asyncio consumers: OTLP only (no ASGI instrumentation)."""
-    setup_tracer_provider(
-        service_name=service_name,
-        otlp_endpoint=otlp_endpoint,
-        otlp_datadog_endpoint=otlp_datadog_endpoint,
-    )
+    setup_tracer_provider(service_name=service_name, otlp_endpoint=otlp_endpoint)

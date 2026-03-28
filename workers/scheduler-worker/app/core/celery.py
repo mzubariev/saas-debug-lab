@@ -17,7 +17,6 @@ setup_sentry_celery(service_name=settings.service_name, dsn=settings.sentry_dsn)
 setup_worker_telemetry(
     settings.service_name,
     settings.otlp_endpoint,
-    settings.otlp_datadog_endpoint,
 )
 
 CeleryInstrumentor().instrument()
@@ -80,7 +79,6 @@ def init_worker_process(**kwargs) -> None:
     setup_worker_telemetry(
         settings.service_name,
         settings.otlp_endpoint,
-        settings.otlp_datadog_endpoint,
     )
     setup_sentry_celery(service_name=settings.service_name, dsn=settings.sentry_dsn)
     from ..infrastructure.db.session import get_sync_engine

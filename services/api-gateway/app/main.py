@@ -38,7 +38,6 @@ setup_telemetry(
     app,
     settings.service_name,
     settings.otlp_endpoint,
-    settings.otlp_datadog_endpoint,
 )
 
 app.include_router(health.router)

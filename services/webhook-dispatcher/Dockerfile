@@ -10,4 +10,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY services/webhook-dispatcher/app ./app
 
-CMD ["ddtrace-run", "python", "-m", "app.run"]
+CMD ["python", "-m", "app.run"]

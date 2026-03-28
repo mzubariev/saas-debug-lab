@@ -44,7 +44,7 @@ Edit `**infra/.env**` and set at least:
 | `POSTGRES_DB`       | Database name (lab examples use `saas`)      |
 
 
-Keep these values consistent with the `**DATABASE_URL**` you use for seeding (step 5). Optional: `DD_*` and `SENTRY_DSN` if you use Datadog or Sentry profiles.
+Keep these values consistent with the `**DATABASE_URL**` you use for seeding (step 5). Optional: `SENTRY_DSN`. For **Datadog APM**, set `DD_API_KEY` (and optionally `DD_SITE`, `DD_ENV`, `DD_VERSION`) when using [`infra/docker-compose.datadog.yml`](infra/docker-compose.datadog.yml) — see **Tracing modes** below.
 
 ### 3. Start the stack
 
@@ -59,17 +59,20 @@ This starts Nginx, api-gateway, auth-service, task-service, integration-service,
 
 **Database:** set `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` in **`infra/.env`** — the same file is used by the Postgres service and the `migrations` job.
 
-**Optional — full observability** (Jaeger, Prometheus, Grafana, Elasticsearch, Kibana, Fluent Bit, Redis Insight):
+**Optional — full observability** (Jaeger, OpenTelemetry Collector, Prometheus, Grafana, Elasticsearch, Kibana, Fluent Bit, Redis Insight):
 
 ```bash
 docker compose --profile core --profile observability up -d
 ```
 
-**Optional — Datadog Agent** (requires `DD_API_KEY` in `infra/.env`):
+**Tracing modes** (pick **one** — do not combine `observability` with the Datadog override):
 
-```bash
-docker compose --profile core --profile datadog up -d
-```
+| Mode | Command (from `infra/`) |
+|------|-------------------------|
+| **OpenTelemetry → Collector → Jaeger** | `docker compose --profile core --profile observability up -d` |
+| **Datadog APM** (`ddtrace-run` only; no Jaeger/Collector) | `docker compose -f docker-compose.yml -f docker-compose.datadog.yml --profile core --profile datadog up -d` |
+
+For Datadog, set `DD_API_KEY` in **`infra/.env`**. Switching modes is done **only** via compose files, never by mixing env vars.
 
 Wait until containers are healthy (`docker compose ps`).
 
@@ -168,10 +171,10 @@ See `**chaos/README.md**`. After `kafka_lag`, run `docker unpause webhook-dispat
 
 ```bash
 cd infra
-docker compose --profile core --profile observability --profile datadog down
+docker compose --profile core --profile observability down
 ```
 
-(Use only the profiles you actually started.)
+If you used the Datadog override, use the same `-f` files and `--profile` flags with `down`. Use only the profiles you actually started.
 
 ---
 
@@ -215,19 +218,15 @@ For ports, envelopes, and request diagrams, see [`docs/SERVICE_MAP.md`](docs/SER
 
 - **Logging** — structured JSON (structlog); **Fluent Bit → Elasticsearch → Kibana**
 - **Metrics** — **Prometheus** scrapes FastAPI services (`/metrics`), **webhook-simulator**, and worker Prometheus servers on port **9100** (webhook-dispatcher, notification-worker, scheduler-worker); **Grafana**
-- **Tracing** — **Jaeger** + OpenTelemetry in services and the frontend (`frontend/src/telemetry.ts`)
+- **Tracing** — **OpenTelemetry** → **Collector** → **Jaeger** (with the `observability` profile) in services and the frontend (`frontend/src/telemetry.ts`). **Datadog APM** is a separate compose path only ([`infra/docker-compose.datadog.yml`](infra/docker-compose.datadog.yml)).
 - **Errors (optional)** — **Sentry** across FastAPI apps, workers, and the React SPA when `SENTRY_DSN` / `VITE_SENTRY_DSN` are set; shared initialisation lives in `shared/saas_shared/sentry_setup.py`
 
 ### Tracing modes (one primary tracer per process)
 
-| Mode | `DD_TRACE_ENABLED` | What runs |
-|------|---------------------|-----------|
-| **A — OTel → Jaeger** (default) | `false` | OTLP export to Jaeger, OTEL auto-instrumentation (FastAPI, httpx, Redis, SQLAlchemy), W3C Kafka headers, semantic Kafka spans (`saas_shared.kafka_messaging`). |
-| **B — Datadog APM** | `true` | OTEL SDK registration in app code is **skipped**; `ddtrace-run` owns tracing. Kafka OTEL injection is off; use Datadog for traces. |
+- **OpenTelemetry + Jaeger** — Base compose + **`observability`** profile. Apps export OTLP to `otel-collector:4317`; OTEL auto-instrumentation (FastAPI, httpx, Redis, SQLAlchemy), W3C Kafka headers, semantic Kafka spans (`saas_shared.kafka_messaging`). `DD_TRACE_ENABLED` is not set.
+- **Datadog APM** — Base compose + **`docker-compose.datadog.yml`** + **`datadog`** profile. `ddtrace-run` on service commands; OTEL SDK registration in app code is **skipped** (`DD_TRACE_ENABLED=true` is set only by that override file). Do **not** start Jaeger or the OTel Collector in this mode.
 
-Set `DD_TRACE_ENABLED` in **`infra/.env`** (passed through to app containers). Do **not** enable full OTLP export and `ddtrace` APM for the same flow in one process — you would see duplicate spans.
-
-**End-to-end check (Mode A):** Log in on the UI → create a task → follow one **`trace_id`** in JSON logs (Kibana) and the same trace in Jaeger: expect spans for nginx ingress (via gateway), HTTP client hops, Postgres (SQLAlchemy), Kafka produce/consume (named + semantic attributes), worker processing, and outbound webhook HTTP.
+**End-to-end check (OpenTelemetry):** Log in on the UI → create a task → follow one **`trace_id`** in JSON logs (Kibana) and the same trace in Jaeger: expect spans for nginx ingress (via gateway), HTTP client hops, Postgres (SQLAlchemy), Kafka produce/consume (named + semantic attributes), worker processing, and outbound webhook HTTP.
 
 ---
 

@@ -4,7 +4,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     service_name: str = "webhook-simulator"
     otlp_endpoint: str = "http://otel-collector:4317"
-    otlp_datadog_endpoint: str = ""
     integration_service_webhook_url: str = "http://integration-service:8000/webhooks/inbound"
     default_fail_rate: float = 0.0
     default_delay: float = 0.0

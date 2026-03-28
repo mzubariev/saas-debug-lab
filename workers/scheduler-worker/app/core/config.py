@@ -8,7 +8,6 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     otlp_endpoint: str = "http://otel-collector:4317"
-    otlp_datadog_endpoint: str = ""
 
     metrics_port: int = 9100
 
