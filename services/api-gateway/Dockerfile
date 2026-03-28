@@ -12,4 +12,4 @@ COPY services/api-gateway/app ./app
 
 # ddtrace-run patches all supported libraries (FastAPI, httpx, redis, …) before
 # the application imports them — zero code changes needed for APM auto-instrumentation.
-CMD ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

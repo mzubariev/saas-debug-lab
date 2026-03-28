@@ -112,6 +112,8 @@ services:
       context: ..
       dockerfile: services/api-gateway/Dockerfile
     container_name: api-gateway
+    volumes:
+      - ../services/api-gateway/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     env_file:
@@ -177,6 +179,8 @@ services:
       context: ..
       dockerfile: migrations/Dockerfile
     container_name: migrations
+    volumes:
+      - ../migrations/alembic:/app/alembic
     profiles: ["core"]
     command: ["alembic", "upgrade", "head"]
     env_file:
@@ -198,6 +202,8 @@ services:
       context: ..
       dockerfile: services/auth-service/Dockerfile
     container_name: auth-service
+    volumes:
+      - ../services/auth-service/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     env_file:
@@ -234,6 +240,8 @@ services:
       context: ..
       dockerfile: services/task-service/Dockerfile
     container_name: task-service
+    volumes:
+      - ../services/task-service/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     env_file:
@@ -276,6 +284,8 @@ services:
       context: ..
       dockerfile: services/webhook-simulator/Dockerfile
     container_name: webhook-simulator
+    volumes:
+      - ../services/webhook-simulator/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     env_file:
@@ -300,6 +310,8 @@ services:
       context: ..
       dockerfile: services/integration-service/Dockerfile
     container_name: integration-service
+    volumes:
+      - ../services/integration-service/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     env_file:
@@ -333,6 +345,8 @@ services:
       context: ..
       dockerfile: services/webhook-dispatcher/Dockerfile
     container_name: webhook-dispatcher
+    volumes:
+      - ../services/webhook-dispatcher/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     env_file:
@@ -396,6 +410,8 @@ services:
       context: ..
       dockerfile: workers/scheduler-worker/Dockerfile
     container_name: scheduler-worker
+    volumes:
+      - ../workers/scheduler-worker/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     # ddtrace-run is prepended here (no Dockerfile CMD to modify).
@@ -430,6 +446,8 @@ services:
       context: ..
       dockerfile: workers/scheduler-worker/Dockerfile
     container_name: flower
+    volumes:
+      - ../workers/scheduler-worker/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     command: ["ddtrace-run", "celery", "-A", "app.core.celery:celery_app", "flower", "--port=5555"]
@@ -455,6 +473,8 @@ services:
       context: ..
       dockerfile: workers/notification-worker/Dockerfile
     container_name: notification-worker
+    volumes:
+      - ../workers/notification-worker/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     env_file:
@@ -495,6 +515,12 @@ services:
       context: ..
       dockerfile: frontend/Dockerfile
     container_name: frontend
+    volumes:
+      - ../frontend/app:/app/app
+      - ../frontend/package*.json:/app/package*.json
+      - ../frontend/vite.config.ts:/app/vite.config.ts
+      - ../frontend/src:/app/src
+      - ../frontend/index.html:/app/index.html
     restart: unless-stopped
     profiles: ["core"]
     ports:
