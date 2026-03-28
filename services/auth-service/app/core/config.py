@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     postgres_password: str
 
     redis_url: str = "redis://redis:6379/1"
-    otlp_endpoint: str = "http://jaeger:4317"
+    otlp_endpoint: str = "http://otel-collector:4317"
     otlp_datadog_endpoint: str = ""
     log_level: str = "INFO"
     sentry_dsn: str = ""

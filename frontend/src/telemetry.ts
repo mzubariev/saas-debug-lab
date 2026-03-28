@@ -1,8 +1,9 @@
 /**
- * OpenTelemetry Web SDK — W3C trace context on fetch/XHR, OTLP HTTP → Jaeger (:4318).
+ * OpenTelemetry Web SDK — W3C trace context on fetch/XHR, OTLP HTTP → Collector (:4318) → Jaeger.
  *
- * In Vite dev, use same-origin `/otel/v1/traces` (proxied) to avoid browser CORS
- * against localhost:4318. Override with `VITE_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`.
+ * Default URL is `http://localhost:4318/v1/traces` (Collector maps host ports; CORS allowed in
+ * `observability/otel-collector/otel-collector-config.yaml`). Override with
+ * `VITE_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`.
  */
 import { trace, SpanStatusCode, type Span, type Attributes } from "@opentelemetry/api"
 import { registerInstrumentations } from "@opentelemetry/instrumentation"
@@ -20,9 +21,6 @@ function resolveOtlpTracesUrl(): string {
     | string
     | undefined
   if (fromEnv) return fromEnv
-  if (import.meta.env.DEV && typeof window !== "undefined") {
-    return `${window.location.origin}/otel/v1/traces`
-  }
   return "http://localhost:4318/v1/traces"
 }
 

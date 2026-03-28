@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     service_name: str = "scheduler-worker"
     log_level: str = "INFO"
 
-    otlp_endpoint: str = "http://jaeger:4317"
+    otlp_endpoint: str = "http://otel-collector:4317"
     otlp_datadog_endpoint: str = ""
 
     metrics_port: int = 9100

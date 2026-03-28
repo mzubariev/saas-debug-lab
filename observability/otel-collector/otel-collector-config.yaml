@@ -1,0 +1,31 @@
+# OpenTelemetry Collector — central OTLP ingress; forwards traces to Jaeger.
+# Extend with additional exporters (e.g. Datadog) under `exporters` + `service.pipelines`.
+#
+# Receives: OTLP gRPC :4317, OTLP HTTP :4318 (browser-friendly with CORS below).
+# Forwards: OTLP gRPC → Jaeger all-in-one (internal :4317).
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - "http://localhost:5173"
+            - "http://127.0.0.1:5173"
+            - "http://localhost"
+            - "http://127.0.0.1"
+
+exporters:
+  otlp:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [otlp]

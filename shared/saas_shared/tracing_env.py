@@ -2,7 +2,7 @@
 
 **Mode A — OpenTelemetry → Jaeger (lab default)**  
 Set ``DD_TRACE_ENABLED=false`` (or unset). Applications configure ``otlp_endpoint``
-(e.g. ``http://jaeger:4317``) and use the OTEL SDK + auto-instrumentation.
+(e.g. ``http://otel-collector:4317``) and use the OTEL SDK + auto-instrumentation.
 
 **Mode B — Datadog APM**  
 Set ``DD_TRACE_ENABLED=true``. The OTEL SDK export and OTEL auto-instrumentation in

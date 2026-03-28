@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     sentry_dsn: str = ""
 
-    otlp_endpoint: str = "http://jaeger:4317"
+    otlp_endpoint: str = "http://otel-collector:4317"
     otlp_datadog_endpoint: str = ""
 
     metrics_port: int = 9100

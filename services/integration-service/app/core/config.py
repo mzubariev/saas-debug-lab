@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     topic_webhook_inbound: str = "webhook_inbound"
     topic_webhook_dispatch: str = "webhook_dispatch"
 
-    otlp_endpoint: str = "http://jaeger:4317"
+    otlp_endpoint: str = "http://otel-collector:4317"
     otlp_datadog_endpoint: str = ""
     log_level: str = "INFO"
     sentry_dsn: str = ""

@@ -561,10 +561,26 @@ services:
     profiles: ["observability"]
     ports:
       - "16686:16686"
-      - "4317:4317"
-      - "4318:4318"
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
+
+############################
+# OPENTELEMETRY COLLECTOR (OTLP → Jaeger; host :4317/:4318)
+############################
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.96.0
+    container_name: otel-collector
+    restart: unless-stopped
+    profiles: ["observability"]
+    depends_on:
+      - jaeger
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ../observability/otel-collector/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
 
 ############################
 # PROMETHEUS
@@ -681,7 +697,7 @@ services:
       # OpenTelemetry OTLP ingest → same traces as APM (set OTLP_DATADOG_ENDPOINT on apps).
       DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_GRPC_ENDPOINT: "0.0.0.0:4317"
     ports:
-      # OTLP gRPC 4317 is available inside the compose network only (avoids host clash with Jaeger :4317).
+      # OTLP gRPC 4317 is available inside the compose network only (avoids host clash with otel-collector :4317).
       - "8126:8126"       # APM traces  (TCP)
       - "8125:8125/udp"   # DogStatsD   (UDP)
     volumes:
