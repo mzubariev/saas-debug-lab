@@ -19,7 +19,10 @@ logger = structlog.get_logger()
 #   outbound call using the *gateway's own* active span as the parent, so that
 #   downstream services see the correct parent-child relationship in Sentry.
 #   Forwarding the browser's raw values would create duplicate / mismatched spans.
-_EXCLUDED_PROXY_HEADERS = frozenset({"host", "sentry-trace", "baggage"})
+# - "traceparent" / "tracestate": do not forward the browser's values. The gateway's
+#   active OTEL span is the correct parent; HTTPXClientInstrumentor injects fresh W3C
+#   headers on each outbound call so upstreams see gateway → service (not browser → service).
+_EXCLUDED_PROXY_HEADERS = frozenset({"host", "sentry-trace", "baggage", "traceparent", "tracestate"})
 
 
 async def _proxy(request: Request, url: str) -> Response:

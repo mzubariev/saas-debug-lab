@@ -7,9 +7,8 @@ import aiosmtplib
 import sentry_sdk
 import structlog
 from aiokafka import AIOKafkaConsumer
-from opentelemetry import trace
 from saas_shared.kafka_envelope import parse_envelope_message
-from saas_shared.kafka_trace import attach_kafka_message_trace
+from saas_shared.kafka_messaging import kafka_consume_span
 from prometheus_client import start_http_server
 from saas_shared.sentry_setup import setup_sentry_worker
 from saas_shared.telemetry import setup_worker_telemetry
@@ -26,7 +25,6 @@ TOPIC    = "task_created"
 GROUP_ID = "notification-worker"
 
 logger = structlog.get_logger()
-_tracer = trace.get_tracer(__name__)
 
 
 def _build_message(event: dict) -> MIMEMultipart:
@@ -166,8 +164,14 @@ async def consume() -> None:
                     sentry_sdk.capture_exception(exc)
                 continue
 
-            # OTEL W3C context from Kafka headers first (Jaeger), then Sentry.
-            with attach_kafka_message_trace(envelope_trace_id, msg.headers):
+            # OTEL consumer span + W3C extract (``kafka_consume_span``), then Sentry.
+            with kafka_consume_span(
+                msg.topic,
+                msg.partition,
+                msg.offset,
+                envelope_trace_id,
+                msg.headers,
+            ):
                 incoming_trace_headers = {
                     k.lower(): v.decode("utf-8", errors="replace")
                     for k, v in (msg.headers or [])
@@ -183,32 +187,22 @@ async def consume() -> None:
                     tx.set_data("messaging.system", "kafka")
                     tx.set_data("messaging.destination", msg.topic)
                     tx.set_data("messaging.kafka.offset", msg.offset)
-
-                    with _tracer.start_as_current_span(
-                        "kafka.consume",
-                        attributes={
-                            "messaging.system": "kafka",
-                            "messaging.destination.name": msg.topic,
-                            "messaging.kafka.partition": msg.partition,
-                            "messaging.kafka.offset": msg.offset,
-                        },
-                    ):
-                        tx.set_data("task.id", event.get("id"))
-                        tx.set_data("kafka.event_type", _event_type)
-                        try:
-                            await handle_event(event)
-                        except Exception as exc:
-                            logger.error(
-                                "event_processing_failed",
-                                error=str(exc),
-                                topic=msg.topic,
-                                offset=msg.offset,
-                            )
-                            with sentry_sdk.push_scope() as scope:
-                                scope.set_tag("error_type", "event_processing")
-                                scope.set_extra("kafka_topic", msg.topic)
-                                scope.set_extra("kafka_offset", msg.offset)
-                                sentry_sdk.capture_exception(exc)
+                    tx.set_data("task.id", event.get("id"))
+                    tx.set_data("kafka.event_type", _event_type)
+                    try:
+                        await handle_event(event)
+                    except Exception as exc:
+                        logger.error(
+                            "event_processing_failed",
+                            error=str(exc),
+                            topic=msg.topic,
+                            offset=msg.offset,
+                        )
+                        with sentry_sdk.push_scope() as scope:
+                            scope.set_tag("error_type", "event_processing")
+                            scope.set_extra("kafka_topic", msg.topic)
+                            scope.set_extra("kafka_offset", msg.offset)
+                            sentry_sdk.capture_exception(exc)
     finally:
         await consumer.stop()
 

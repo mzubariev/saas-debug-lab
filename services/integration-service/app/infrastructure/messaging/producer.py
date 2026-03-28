@@ -2,6 +2,7 @@ import structlog
 from aiokafka import AIOKafkaProducer
 from fastapi import FastAPI
 from saas_shared.kafka_envelope import encode_envelope_bytes
+from saas_shared.kafka_messaging import kafka_publish_span
 from saas_shared.kafka_trace import current_trace_id_for_kafka_envelope, otel_kafka_headers
 
 from ...core.config import settings
@@ -30,5 +31,6 @@ async def publish_json(
     trace_id: str | None = None,
 ) -> None:
     tid = trace_id if trace_id is not None else current_trace_id_for_kafka_envelope()
-    value = encode_envelope_bytes(event_type, payload, trace_id=tid)
-    await producer.send_and_wait(topic, value, headers=otel_kafka_headers())
+    async with kafka_publish_span(topic):
+        value = encode_envelope_bytes(event_type, payload, trace_id=tid)
+        await producer.send_and_wait(topic, value, headers=otel_kafka_headers())

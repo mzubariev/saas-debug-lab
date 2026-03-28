@@ -7,6 +7,7 @@ Every line is a single JSON object with at least:
   - level         — log level (e.g. info, warning)
   - trace_id      — W3C trace id (32 hex) when OTEL has a span, or from ``traceparent`` /
                     :func:`bind_log_traceparent` (never copied from Datadog)
+  - span_id       — 16-hex OTEL span id when the active OTEL span is valid (Kibana ↔ Jaeger correlation)
   - dd.trace_id   — only when ddtrace has an active span (kept separate from ``trace_id``)
 
 No file handlers; ``PrintLoggerFactory`` writes to stdout only.

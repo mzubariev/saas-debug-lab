@@ -218,6 +218,17 @@ For ports, envelopes, and request diagrams, see [`docs/SERVICE_MAP.md`](docs/SER
 - **Tracing** — **Jaeger** + OpenTelemetry in services and the frontend (`frontend/src/telemetry.ts`)
 - **Errors (optional)** — **Sentry** across FastAPI apps, workers, and the React SPA when `SENTRY_DSN` / `VITE_SENTRY_DSN` are set; shared initialisation lives in `shared/saas_shared/sentry_setup.py`
 
+### Tracing modes (one primary tracer per process)
+
+| Mode | `DD_TRACE_ENABLED` | What runs |
+|------|---------------------|-----------|
+| **A — OTel → Jaeger** (default) | `false` | OTLP export to Jaeger, OTEL auto-instrumentation (FastAPI, httpx, Redis, SQLAlchemy), W3C Kafka headers, semantic Kafka spans (`saas_shared.kafka_messaging`). |
+| **B — Datadog APM** | `true` | OTEL SDK registration in app code is **skipped**; `ddtrace-run` owns tracing. Kafka OTEL injection is off; use Datadog for traces. |
+
+Set `DD_TRACE_ENABLED` in **`infra/.env`** (passed through to app containers). Do **not** enable full OTLP export and `ddtrace` APM for the same flow in one process — you would see duplicate spans.
+
+**End-to-end check (Mode A):** Log in on the UI → create a task → follow one **`trace_id`** in JSON logs (Kibana) and the same trace in Jaeger: expect spans for nginx ingress (via gateway), HTTP client hops, Postgres (SQLAlchemy), Kafka produce/consume (named + semantic attributes), worker processing, and outbound webhook HTTP.
+
 ---
 
 ## Failure simulation

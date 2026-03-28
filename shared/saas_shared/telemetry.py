@@ -1,10 +1,16 @@
-"""OpenTelemetry: W3C propagation, OTLP export to Jaeger and optionally Datadog Agent.
+"""OpenTelemetry: W3C propagation, OTLP export to Jaeger.
 
-* **Jaeger** — set ``otlp_endpoint`` (gRPC), e.g. ``http://jaeger:4317``.
-* **Datadog** — either APM via ``ddtrace-run`` (default in this lab) **or** OTLP to the
-  Agent: set ``otlp_datadog_endpoint`` (e.g. ``http://datadog-agent:4317``) after enabling
-  the Agent OTLP receiver. When using OTLP to Datadog, set ``DD_TRACE_ENABLED=false`` to
-  avoid duplicate traces in Datadog.
+**Tracing modes** (``saas_shared.tracing_env``):
+
+* **Mode A — OTEL → Jaeger:** ``DD_TRACE_ENABLED=false`` (default). OTLP exporters +
+  FastAPI/httpx/redis/sqlalchemy OTEL instrumentors.
+* **Mode B — Datadog APM only:** ``DD_TRACE_ENABLED=true``. OTLP registration and OTEL
+  auto-instrumentation in this module are **skipped**; ``ddtrace-run`` owns tracing.
+  Do **not** enable both full OTEL export and ddtrace in the same process.
+
+*Optional OTLP to Datadog Agent* (``otlp_datadog_endpoint``) is only used in Mode A when
+you explicitly want OTLP into the Agent — still keep ``DD_TRACE_ENABLED=false`` to avoid
+duplicate spans from ddtrace.
 """
 from __future__ import annotations
 
@@ -22,6 +28,12 @@ from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 _log = logging.getLogger(__name__)
+
+
+def _datadog_apm_only() -> bool:
+    from saas_shared.tracing_env import is_datadog_apm_enabled
+
+    return is_datadog_apm_enabled()
 
 
 def _install_propagators() -> None:
@@ -51,6 +63,13 @@ def setup_tracer_provider(
     otlp_datadog_endpoint: str = "",
 ) -> None:
     """Configure global propagators and ``TracerProvider`` with one or two OTLP exporters."""
+    if _datadog_apm_only():
+        _log.info(
+            "otel_sdk_skipped service=%s reason=DD_TRACE_ENABLED (Datadog APM / ddtrace-run)",
+            service_name,
+        )
+        return
+
     _install_propagators()
 
     endpoints = _nonempty_endpoints(otlp_endpoint, otlp_datadog_endpoint)
@@ -96,6 +115,8 @@ def _instrument_client_libraries() -> None:
 
 def instrument_sqlalchemy_async_engine(async_engine: object) -> None:
     """Attach SQLAlchemy 2 async engine to OTEL (spans for DB statements)."""
+    if _datadog_apm_only():
+        return
     try:
         from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 
@@ -107,6 +128,8 @@ def instrument_sqlalchemy_async_engine(async_engine: object) -> None:
 
 def instrument_sqlalchemy_sync_engine(engine: object) -> None:
     """Attach a sync SQLAlchemy engine (e.g. Celery worker DB)."""
+    if _datadog_apm_only():
+        return
     try:
         from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 
@@ -127,6 +150,8 @@ def setup_telemetry(
         otlp_endpoint=otlp_endpoint,
         otlp_datadog_endpoint=otlp_datadog_endpoint,
     )
+    if _datadog_apm_only():
+        return
     FastAPIInstrumentor.instrument_app(app)
 
 

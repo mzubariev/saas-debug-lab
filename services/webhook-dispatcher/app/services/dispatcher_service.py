@@ -5,13 +5,9 @@ from typing import Any
 import httpx
 import structlog
 from aiokafka import AIOKafkaProducer
-from opentelemetry import trace
 from saas_shared.kafka_envelope import encode_envelope_bytes, parse_envelope_message
-from saas_shared.kafka_trace import (
-    attach_kafka_message_trace,
-    current_trace_id_for_kafka_envelope,
-    otel_kafka_headers,
-)
+from saas_shared.kafka_messaging import kafka_consume_span, kafka_publish_span
+from saas_shared.kafka_trace import current_trace_id_for_kafka_envelope, otel_kafka_headers
 
 from ..core.config import settings
 from ..metrics import (
@@ -22,7 +18,6 @@ from ..metrics import (
 )
 
 logger = structlog.get_logger()
-_tracer = trace.get_tracer(__name__)
 
 _TOPIC_EVENT_TYPE: dict[str, str] = {
     "webhook_sent": "webhook.sent",
@@ -93,13 +88,14 @@ async def deliver(
 
 async def _produce(producer: AIOKafkaProducer, topic: str, payload: dict) -> None:
     try:
-        event_type = _TOPIC_EVENT_TYPE.get(topic, topic.replace("_", "."))
-        value = encode_envelope_bytes(
-            event_type,
-            payload,
-            trace_id=current_trace_id_for_kafka_envelope(),
-        )
-        await producer.send_and_wait(topic, value, headers=otel_kafka_headers())
+        async with kafka_publish_span(topic):
+            event_type = _TOPIC_EVENT_TYPE.get(topic, topic.replace("_", "."))
+            value = encode_envelope_bytes(
+                event_type,
+                payload,
+                trace_id=current_trace_id_for_kafka_envelope(),
+            )
+            await producer.send_and_wait(topic, value, headers=otel_kafka_headers())
     except Exception as exc:
         logger.error("kafka_produce_failed", topic=topic, error=str(exc))
 
@@ -114,24 +110,21 @@ async def process_consumed_message(
         raw = json.loads(msg.value.decode("utf-8"))
         kafka_messages_consumed_total.labels(topic=msg.topic).inc()
         event_type, event, envelope_trace_id = parse_envelope_message(raw)
-        with attach_kafka_message_trace(envelope_trace_id, msg.headers):
-            with _tracer.start_as_current_span(
-                "kafka.consume",
-                attributes={
-                    "messaging.system": "kafka",
-                    "messaging.destination.name": msg.topic,
-                    "messaging.kafka.partition": msg.partition,
-                    "messaging.kafka.offset": msg.offset,
-                },
-            ):
-                logger.info(
-                    "event_received",
-                    topic=msg.topic,
-                    event_type=event_type,
-                    task_id=event.get("id"),
-                    status=event.get("status"),
-                )
-                await deliver(http_client, producer, event)
+        with kafka_consume_span(
+            msg.topic,
+            msg.partition,
+            msg.offset,
+            envelope_trace_id,
+            msg.headers,
+        ):
+            logger.info(
+                "event_received",
+                topic=msg.topic,
+                event_type=event_type,
+                task_id=event.get("id"),
+                status=event.get("status"),
+            )
+            await deliver(http_client, producer, event)
     except Exception as exc:
         logger.error(
             "event_processing_failed",

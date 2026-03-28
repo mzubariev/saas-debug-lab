@@ -57,6 +57,10 @@ def current_trace_id_for_kafka_envelope() -> str | None:
 def otel_kafka_headers() -> list[tuple[str, bytes]]:
     """W3C trace context for Kafka message headers (pairs OTEL Jaeger with envelope ``trace_id``)."""
     try:
+        from saas_shared.tracing_env import is_otel_sdk_enabled
+
+        if not is_otel_sdk_enabled():
+            return []
         from opentelemetry.propagate import inject
 
         carrier: dict[str, str] = {}
@@ -118,6 +122,19 @@ def attach_kafka_message_trace(
     kafka_headers: object | None = None,
 ) -> Iterator[None]:
     """Restore W3C context from Kafka headers (preferred) or envelope ``trace_id``."""
+    from saas_shared.tracing_env import is_datadog_apm_enabled
+
+    if is_datadog_apm_enabled():
+        normalized = normalize_kafka_trace_id(envelope_trace_id)
+        try:
+            if normalized:
+                structlog.contextvars.bind_contextvars(trace_id=normalized)
+            yield
+        finally:
+            if normalized:
+                structlog.contextvars.unbind_contextvars("trace_id")
+        return
+
     from opentelemetry import context as otel_context
     from opentelemetry import trace
 
