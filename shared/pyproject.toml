@@ -18,6 +18,7 @@ dependencies = [
 # Install for FastAPI services that need tracing, /health router, and async Redis helpers.
 services = [
     "fastapi",
+    "prometheus-client",
     "redis[asyncio]",
     "opentelemetry-api",
     "opentelemetry-sdk",

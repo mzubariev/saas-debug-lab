@@ -1,4 +1,8 @@
-"""Prometheus metrics (exposed on ``METRICS_PORT``, default 9100)."""
+"""Prometheus metrics (exposed on ``METRICS_PORT``, default 9100).
+
+This consumer exposes only ``/metrics`` via ``start_http_server`` (no public HTTP API).
+``http_requests_total`` / ``http_request_duration_seconds`` are registered on FastAPI services.
+"""
 
 from prometheus_client import Counter
 

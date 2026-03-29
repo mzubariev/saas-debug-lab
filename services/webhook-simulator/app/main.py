@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from prometheus_client import make_asgi_app
+from saas_shared.prometheus_http import install_http_metrics_middleware
 from saas_shared.sentry_setup import setup_sentry_fastapi
 
 from .api.routes import health, routes
@@ -20,6 +21,8 @@ setup_telemetry(
 
 app.include_router(health.router)
 app.include_router(routes.router)
+
+install_http_metrics_middleware(app)
 
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)

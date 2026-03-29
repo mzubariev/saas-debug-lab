@@ -1,4 +1,8 @@
-"""Prometheus metrics (``METRICS_PORT``, default 9100)."""
+"""Prometheus metrics (``METRICS_PORT``, default 9100).
+
+Worker exposes only ``/metrics`` via ``start_http_server``. HTTP ingress metrics live on FastAPI
+services (``saas_shared.prometheus_http``).
+"""
 
 from prometheus_client import Counter
 
