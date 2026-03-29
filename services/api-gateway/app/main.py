@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import make_asgi_app
 from saas_shared.sentry_setup import setup_sentry_fastapi
 
-from .api.routes import proxy, health
+from .api.routes import health
 from .core.config import settings
 from .core.logging import setup_logging
 from .core.telemetry import setup_telemetry
@@ -39,6 +39,11 @@ setup_telemetry(
     settings.service_name,
     settings.otlp_endpoint,
 )
+
+# Import proxy only after telemetry: proxy pulls in the shared httpx.AsyncClient, which must be
+# constructed after HTTPXClientInstrumentor().instrument() or outbound calls won't inject
+# traceparent and downstream services break trace continuity.
+from .api.routes import proxy
 
 app.include_router(health.router)
 app.include_router(proxy.router)
