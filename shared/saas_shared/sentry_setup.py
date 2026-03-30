@@ -7,8 +7,11 @@ Workers without ASGI/Celery use :func:`setup_sentry_worker` so default SDK
 integrations stay enabled (do not pass ``integrations=[]``).
 
 When OpenTelemetry is active (``saas_shared.telemetry``), errors and transactions
-include tag ``otel_trace_id`` (32 lowercase hex), matching Jaeger / Kibana / OTLP
-``trace_id`` so you can search the same id in Sentry.
+include tag ``otel_trace_id`` (32 lowercase hex), matching Jaeger / Kibana / OTLP.
+
+When Datadog APM is active (``DD_TRACE_ENABLED`` / ``ddtrace``), tag ``dd_trace_id``
+is set (decimal string, same as ``dd.trace_id`` in logs) for correlation with the
+Datadog trace UI.
 """
 from __future__ import annotations
 
@@ -29,22 +32,39 @@ def _inject_otel_trace_id_tag(event: dict[str, Any]) -> None:
     event.setdefault("tags", {})["otel_trace_id"] = format(ctx.trace_id, "032x")
 
 
-def _before_send_otel(event: dict[str, Any], hint: object) -> dict[str, Any] | None:
+def _inject_dd_trace_id_tag(event: dict[str, Any]) -> None:
+    """Attach current Datadog trace id when ``ddtrace`` has an active span."""
+    try:
+        from ddtrace import tracer  # type: ignore[import-untyped]
+    except ImportError:
+        return
+    span = tracer.current_span()
+    if span is None or span.context is None:
+        return
+    tid = span.context.trace_id
+    if not tid:
+        return
+    event.setdefault("tags", {})["dd_trace_id"] = str(tid)
+
+
+def _before_send_correlation(event: dict[str, Any], hint: object) -> dict[str, Any] | None:
     _inject_otel_trace_id_tag(event)
+    _inject_dd_trace_id_tag(event)
     return event
 
 
-def _before_send_transaction_otel(
+def _before_send_transaction_correlation(
     event: dict[str, Any], hint: object
 ) -> dict[str, Any] | None:
     _inject_otel_trace_id_tag(event)
+    _inject_dd_trace_id_tag(event)
     return event
 
 
 def _sentry_init_kwargs() -> dict[str, Any]:
     return {
-        "before_send": _before_send_otel,
-        "before_send_transaction": _before_send_transaction_otel,
+        "before_send": _before_send_correlation,
+        "before_send_transaction": _before_send_transaction_correlation,
     }
 
 
