@@ -1,16 +1,39 @@
 """Structured JSON logging to stdout for Fluent Bit → Elasticsearch → Kibana.
 
-Every line is a single JSON object with at least:
-  - hostname      — host / pod identity (``HOSTNAME``, ``SERVER_NAME``, or socket hostname)
-  - service_name  — logical service / worker name
-  - event         — message / event name (structlog convention)
-  - level         — log level (e.g. info, warning)
-  - trace_id      — W3C trace id (32 hex) when OTEL has a span, or from ``traceparent`` /
-                    :func:`bind_log_traceparent` (never copied from Datadog)
-  - span_id       — 16-hex OTEL span id when the active OTEL span is valid (Kibana ↔ Jaeger correlation)
-  - dd.trace_id   — only when ddtrace has an active span (kept separate from ``trace_id``)
+Why not double-encode JSON?
+    If application code logs ``logger.info(json.dumps({"a": 1}))`` (or ``print(json.dumps(...))``),
+    the *event* becomes a **string** that *looks* like JSON. ``JSONRenderer`` then escapes that
+    string inside the outer JSON object, producing ``"event": "{\\"a\\": 1}"``. Downstream,
+    Fluent Bit's ``parser`` with ``Format json`` yields a field ``event`` of type **string**, not
+    nested JSON — Kibana cannot index structured fields inside that blob without another parse
+    pass and fragile regex. Worse, Docker's json-file driver already wraps each line in an object
+    with a ``log`` key; the *inner* payload must be **one** JSON object per line, not a string
+    containing JSON.
 
-No file handlers; ``PrintLoggerFactory`` writes to stdout only.
+Why emit structured logs directly (native JSON per line)?
+    ``structlog`` + ``JSONRenderer`` writes a **single** JSON object per line to stdout. Fluent Bit
+    tails the file, reads the ``log`` field from Docker's wrapper JSON, and parses it **once** with
+    a JSON parser. Each key becomes a top-level field in Elasticsearch. No string-within-string,
+    no custom regex parsers, and no risk of log injection breaking JSON boundaries.
+
+Why this helps Elasticsearch / Kibana?
+    Fields like ``@timestamp``, ``level``, ``service``, ``message``, ``trace_id``, and
+    ``request_id`` are indexed as typed columns. You can filter, aggregate, and build dashboards
+    (e.g. error rate by service, latency correlation with trace_id) without parsing raw strings.
+
+Standard fields on every line:
+    - ``@timestamp`` / ``timestamp`` — ISO8601 UTC (``...Z``)
+    - ``level`` — e.g. ``info``, ``warning``, ``error``
+    - ``service`` — logical service name (same value as ``service_name`` for compatibility)
+    - ``message`` — human-oriented line (copy of structlog's ``event`` key)
+
+Optional when available (contextvars / OTEL / ddtrace):
+    - ``trace_id``, ``span_id`` — W3C / OTEL
+    - ``request_id`` — HTTP middleware or worker-bound correlation id
+    - ``hostname``, ``dd.*`` — see processors below
+
+Application code should use only ``structlog.get_logger()`` — never ``print(json.dumps(...))``
+for operational logs.
 """
 from __future__ import annotations
 
@@ -19,7 +42,9 @@ import logging
 import os
 import socket
 import sys
-from typing import Any
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Callable
 
 import structlog
 from structlog.typing import EventDict
@@ -65,7 +90,7 @@ def _resolve_hostname() -> str:
     )
 
 
-def _add_hostname():
+def _add_hostname() -> Callable[..., EventDict]:
     name = _resolve_hostname()
 
     def processor(_logger: Any, _method: str, event_dict: EventDict) -> EventDict:
@@ -75,9 +100,11 @@ def _add_hostname():
     return processor
 
 
-def _add_service_name(service_name: str):
+def _add_service_fields(service_name: str) -> Callable[..., EventDict]:
+    """ECS-compatible service field."""
+
     def processor(_logger: Any, _method: str, event_dict: EventDict) -> EventDict:
-        event_dict["service_name"] = service_name
+        event_dict["service.name"] = service_name
         return event_dict
 
     return processor
@@ -104,13 +131,12 @@ def _inject_dd_trace_context(
         env_tag = span.get_tag("env")
         if env_tag:
             event_dict["dd.env"] = env_tag
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         event_dict["dd_trace_error"] = str(e)
     return event_dict
 
 
 def _add_level_name(_logger: Any, method_name: str, event_dict: EventDict) -> EventDict:
-    """Required field ``level`` (e.g. info, warning)."""
     name = method_name.lower()
     if name == "warn":
         name = "warning"
@@ -119,11 +145,7 @@ def _add_level_name(_logger: Any, method_name: str, event_dict: EventDict) -> Ev
 
 
 def _add_trace_id(_logger: Any, _method: str, event_dict: EventDict) -> EventDict:
-    """W3C-style ``trace_id`` (32 hex): OTEL current span, then bound/context ``traceparent``.
-
-    Datadog ids stay under ``dd.*`` only; they are never copied here.
-    The raw ``traceparent`` bound key is dropped from output (``trace_id`` is canonical).
-    """
+    """W3C-style ``trace_id`` (32 hex): OTEL current span, then bound/context ``traceparent``."""
     if "trace_id" in event_dict:
         event_dict.pop("traceparent", None)
         return event_dict
@@ -137,7 +159,7 @@ def _add_trace_id(_logger: Any, _method: str, event_dict: EventDict) -> EventDic
             event_dict["span_id"] = format(ctx.span_id, "016x")
             event_dict.pop("traceparent", None)
             return event_dict
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         event_dict["logging_error"] = str(e)
 
     tp = _traceparent_ctx.get() or event_dict.pop("traceparent", None)
@@ -146,6 +168,27 @@ def _add_trace_id(_logger: Any, _method: str, event_dict: EventDict) -> EventDic
         parsed = _parse_trace_id_from_traceparent(tp)
         if parsed:
             event_dict["trace_id"] = parsed
+    return event_dict
+
+
+def _utc_iso_timestamp(_logger: Any, _method: str, event_dict: EventDict) -> EventDict:
+    """Single ECS-compatible timestamp."""
+    now = datetime.now(timezone.utc)
+    s = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond:06d}Z"
+    event_dict["@timestamp"] = s
+    return event_dict
+
+
+def _event_to_ecs(_logger: Any, _method: str, event_dict: EventDict) -> EventDict:
+    """Map structlog event → ECS fields safely."""
+    ev = event_dict.get("event")
+
+    if ev is not None:
+        if "message" not in event_dict:
+            event_dict["message"] = ev if isinstance(ev, str) else str(ev)
+
+        event_dict["event.name"] = ev
+
     return event_dict
 
 
@@ -162,10 +205,13 @@ def _silence_noisy_stdlib_loggers() -> None:
 
 
 def setup_logging(*, service_name: str, log_level: str = "INFO") -> None:
-    """Configure structlog → strict JSON on stdout. Call once per process (or per Celery fork)."""
+    """Configure structlog → **one JSON object per line** on stdout (no nested JSON strings).
+
+    Call once per process (or again after Celery fork in ``worker_process_init``).
+    """
     level = getattr(logging, log_level.upper(), logging.INFO)
 
-    # Stdlib logs (libraries only — app code uses structlog) → stdout, message-only.
+    # Stdlib (libraries only): plain text message to stdout — avoids double-wrapping structlog JSON.
     logging.basicConfig(
         level=level,
         format="%(message)s",
@@ -180,10 +226,11 @@ def setup_logging(*, service_name: str, log_level: str = "INFO") -> None:
             structlog.contextvars.merge_contextvars,
             _add_level_name,
             _add_hostname(),
-            _add_service_name(service_name),
+            _add_service_fields(service_name),
             _inject_dd_trace_context,
             _add_trace_id,
-            structlog.processors.TimeStamper(fmt="iso", key="timestamp"),
+            _utc_iso_timestamp,
+            _event_to_ecs,
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),
@@ -192,3 +239,30 @@ def setup_logging(*, service_name: str, log_level: str = "INFO") -> None:
         logger_factory=structlog.PrintLoggerFactory(file=sys.stdout),
         cache_logger_on_first_use=True,
     )
+
+
+def install_request_context_middleware(app: object) -> None:
+    """Bind ``request_id`` for each HTTP request (``X-Request-ID`` / ``X-Correlation-ID`` or generated).
+
+    Starlette is imported lazily so workers without FastAPI do not need it on ``import saas_shared.logging``.
+    Call **after** ``install_http_metrics_middleware`` so this layer is outermost: ``request_id`` is
+    bound before Prometheus timing and all inner middleware/handlers.
+    """
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request
+    from starlette.responses import Response
+    from structlog.contextvars import bound_contextvars
+
+    class RequestContextMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next: Callable) -> Response:
+            incoming = request.headers.get("x-request-id") or request.headers.get(
+                "x-correlation-id"
+            )
+            rid = (incoming or "").strip() or uuid.uuid4().hex
+            response: Response
+            with bound_contextvars(request_id=rid):
+                response = await call_next(request)
+            response.headers["X-Request-ID"] = rid
+            return response
+
+    app.add_middleware(RequestContextMiddleware)

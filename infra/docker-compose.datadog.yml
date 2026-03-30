@@ -36,7 +36,7 @@ services:
       - /sys/fs/cgroup:/host/sys/fs/cgroup:ro
 
   api-gateway:
-    command: ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--no-access-log"]
     environment:
       DD_TRACE_ENABLED: "true"
       DD_AGENT_HOST: datadog-agent
@@ -48,7 +48,7 @@ services:
       com.datadoghq.ad.logs: '[{"source":"python","service":"api-gateway"}]'
 
   auth-service:
-    command: ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--no-access-log"]
     environment:
       DD_TRACE_ENABLED: "true"
       DD_AGENT_HOST: datadog-agent
@@ -60,7 +60,7 @@ services:
       com.datadoghq.ad.logs: '[{"source":"python","service":"auth-service"}]'
 
   task-service:
-    command: ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--no-access-log"]
     environment:
       DD_TRACE_ENABLED: "true"
       DD_AGENT_HOST: datadog-agent
@@ -72,7 +72,7 @@ services:
       com.datadoghq.ad.logs: '[{"source":"python","service":"task-service"}]'
 
   integration-service:
-    command: ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--no-access-log"]
     environment:
       DD_TRACE_ENABLED: "true"
       DD_AGENT_HOST: datadog-agent
@@ -84,7 +84,7 @@ services:
       com.datadoghq.ad.logs: '[{"source":"python","service":"integration-service"}]'
 
   webhook-simulator:
-    command: ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    command: ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload", "--no-access-log"]
     environment:
       DD_TRACE_ENABLED: "true"
       DD_AGENT_HOST: datadog-agent

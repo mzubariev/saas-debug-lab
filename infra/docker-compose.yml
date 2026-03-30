@@ -540,13 +540,17 @@ services:
   fluent-bit:
     image: fluent/fluent-bit:3.0
     container_name: fluent-bit
+    user: root
     restart: unless-stopped
     profiles: ["observability"]
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/log/fluentbit:/var/log/fluentbit
       - ../observability/fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
       - ../observability/fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf:ro
+    logging:
+      driver: json-file
     depends_on:
       - elasticsearch
 

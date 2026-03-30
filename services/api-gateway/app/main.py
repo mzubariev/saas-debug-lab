@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import make_asgi_app
+from saas_shared.logging import install_request_context_middleware
 from saas_shared.prometheus_http import install_http_metrics_middleware
 from saas_shared.sentry_setup import setup_sentry_fastapi
 
@@ -17,7 +18,7 @@ setup_sentry_fastapi(
     httpx=True,
 )
 
-app = FastAPI(title="api-gateway")
+app = FastAPI(title="api-gateway", redirect_slashes=False)
 
 # The frontend Vite dev server runs on port 5173 (a different origin from the
 # Nginx port 80 that the API lives behind).  CORS headers are required for the
@@ -50,6 +51,7 @@ app.include_router(health.router)
 app.include_router(proxy.router)
 
 install_http_metrics_middleware(app)
+install_request_context_middleware(app)
 
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)

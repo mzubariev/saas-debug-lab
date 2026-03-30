@@ -11,7 +11,7 @@ Do **not** run OTEL export and ddtrace in the same process.
 """
 from __future__ import annotations
 
-import logging
+import structlog
 from opentelemetry import trace
 from opentelemetry.baggage.propagation import W3CBaggagePropagator
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -24,7 +24,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
-_log = logging.getLogger(__name__)
+_log = structlog.get_logger(__name__)
 
 
 def _datadog_apm_only() -> bool:
@@ -52,8 +52,9 @@ def setup_tracer_provider(
     """Configure global propagators and ``TracerProvider`` with an OTLP gRPC exporter."""
     if _datadog_apm_only():
         _log.info(
-            "otel_sdk_skipped service=%s reason=DD_TRACE_ENABLED (Datadog APM / ddtrace-run)",
-            service_name,
+            "otel_sdk_skipped",
+            service=service_name,
+            reason="DD_TRACE_ENABLED (Datadog APM / ddtrace-run)",
         )
         return
 
@@ -61,7 +62,7 @@ def setup_tracer_provider(
 
     ep = (otlp_endpoint or "").strip()
     if not ep:
-        _log.warning("no_otlp_endpoint_configured service=%s", service_name)
+        _log.warning("no_otlp_endpoint_configured", service=service_name)
     else:
         try:
             resource = Resource.create({SERVICE_NAME: service_name})
@@ -70,7 +71,7 @@ def setup_tracer_provider(
             provider.add_span_processor(BatchSpanProcessor(exporter))
             trace.set_tracer_provider(provider)
         except Exception:  # noqa: BLE001
-            _log.exception("otlp_exporter_init_failed endpoint=%s", ep)
+            _log.exception("otlp_exporter_init_failed", endpoint=ep)
 
     _instrument_client_libraries()
 
