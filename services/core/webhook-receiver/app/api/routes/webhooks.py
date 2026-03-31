@@ -16,17 +16,8 @@ async def receive_inbound_webhook(payload: WebhookPayload, request: Request):
     """
     Inbound webhook receiver — called by external-service-simulator's /trigger-event.
     Acknowledges the call and publishes the payload to Kafka for downstream consumers.
+    Outbound delivery is handled exclusively by webhook-dispatcher consuming Kafka topics.
     """
     return await webhook_service.receive_inbound(
         request, event=payload.event, data=payload.data
     )
-
-
-@router.post("/webhooks/send", status_code=202)
-async def send_outbound_webhook(payload: WebhookPayload, request: Request):
-    """
-    Queue an outbound webhook for delivery. webhook-dispatcher consumes the message
-    and performs HTTP delivery with retries / DLQ — same path as task_* events.
-    """
-    webhook_service.accept_outbound_send(request, event=payload.event, data=payload.data)
-    return {"status": "accepted", "event": payload.event}

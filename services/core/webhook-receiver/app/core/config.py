@@ -3,12 +3,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
 
-    service_name: str = "integration-service"
+    service_name: str = "webhook-receiver"
     kafka_bootstrap_servers: str = "kafka:9092"
 
-    # Topics produced by this service (consumed by webhook-dispatcher and optional analytics).
+    # Inbound events published to Kafka for downstream consumers.
     topic_webhook_inbound: str = "webhook_inbound"
-    topic_webhook_dispatch: str = "webhook_dispatch"
 
     otlp_endpoint: str = "http://otel-collector:4317"
     log_level: str = "INFO"

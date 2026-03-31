@@ -26,5 +26,5 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Topics consumed — task lifecycle events + manual dispatch queue from integration-service.
+# Topics consumed — task lifecycle events + any service publishing directly to webhook_dispatch.
 CONSUME_TOPICS: tuple[str, ...] = ("task_created", "task_updated", "webhook_dispatch")

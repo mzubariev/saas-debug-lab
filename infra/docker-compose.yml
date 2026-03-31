@@ -127,7 +127,7 @@ services:
         condition: service_healthy
       auth-service:
         condition: service_healthy
-      integration-service:
+      webhook-receiver:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
@@ -271,20 +271,20 @@ services:
       start_period: 10s
 
 ############################
-# INTEGRATION SERVICE
+# WEBHOOK RECEIVER
 ############################
 
-  integration-service:
+  webhook-receiver:
     build:
       context: ..
-      dockerfile: services/core/integration-service/Dockerfile
-    container_name: integration-service
+      dockerfile: services/core/webhook-receiver/Dockerfile
+    container_name: webhook-receiver
     volumes:
-      - ../services/core/integration-service/app:/app/app
+      - ../services/core/webhook-receiver/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     env_file:
-      - ../services/core/integration-service/.env
+      - ../services/core/webhook-receiver/.env
     environment:
       SENTRY_DSN: ${SENTRY_DSN:-}
     ports:

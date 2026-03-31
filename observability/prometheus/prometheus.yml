@@ -15,9 +15,9 @@ scrape_configs:
     static_configs:
       - targets: ["task-service:8000"]
 
-  - job_name: integration-service
+  - job_name: webhook-receiver
     static_configs:
-      - targets: ["integration-service:8000"]
+      - targets: ["webhook-receiver:8000"]
 
   - job_name: external-service-simulator
     static_configs:

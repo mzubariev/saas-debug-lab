@@ -71,17 +71,17 @@ services:
     labels:
       com.datadoghq.ad.logs: '[{"source":"python","service":"task-service"}]'
 
-  integration-service:
+  webhook-receiver:
     command: ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--no-access-log"]
     environment:
       DD_TRACE_ENABLED: "true"
       DD_AGENT_HOST: datadog-agent
       DD_ENV: ${DD_ENV:-dev}
-      DD_SERVICE: integration-service
+      DD_SERVICE: webhook-receiver
       DD_VERSION: ${DD_VERSION:-1.0.0}
       DD_LOGS_INJECTION: "true"
     labels:
-      com.datadoghq.ad.logs: '[{"source":"python","service":"integration-service"}]'
+      com.datadoghq.ad.logs: '[{"source":"python","service":"webhook-receiver"}]'
 
   external-service-simulator:
     command: ["ddtrace-run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload", "--no-access-log"]
