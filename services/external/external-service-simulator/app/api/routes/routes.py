@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 import structlog
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, Query, Request, Response
 from pydantic import BaseModel
 
 from ...core.config import settings
@@ -12,6 +12,11 @@ from ...core.config import settings
 router = APIRouter()
 
 logger = structlog.get_logger()
+
+# In-memory deduplication store.  Keyed on the Idempotency-Key header sent by
+# webhook-dispatcher.  Only successfully processed (HTTP 200) deliveries are
+# recorded so transient failures can be safely retried.
+_processed_keys: set[str] = set()
 
 
 class InboundTrigger(BaseModel):
@@ -22,6 +27,7 @@ class InboundTrigger(BaseModel):
 @router.post("/receive-webhook")
 async def receive_webhook(
     payload: dict[str, Any],
+    request: Request,
     response: Response,
     fail_rate: float | None = Query(default=None, ge=0.0, le=1.0),
     delay: float | None = Query(default=None, ge=0.0),
@@ -30,7 +36,21 @@ async def receive_webhook(
     """
     Acts as the external system receiving outbound webhooks from webhook-dispatcher.
     Supports per-request fail_rate, delay, and status overrides for chaos testing.
+
+    Idempotency: if the same ``Idempotency-Key`` was already processed successfully,
+    return HTTP 200 ``{"status": "duplicate"}`` immediately so the caller knows the
+    event was already handled and won't retry.
     """
+    idempotency_key = request.headers.get("Idempotency-Key")
+
+    if idempotency_key and idempotency_key in _processed_keys:
+        logger.info(
+            "outbound_webhook_duplicate",
+            idempotency_key=idempotency_key,
+            task_id=payload.get("id"),
+        )
+        return {"status": "duplicate", "idempotency_key": idempotency_key}
+
     effective_fail_rate = fail_rate if fail_rate is not None else settings.default_fail_rate
     effective_delay = delay if delay is not None else settings.default_delay
     effective_status = status if status is not None else settings.default_status
@@ -40,19 +60,25 @@ async def receive_webhook(
 
     logger.info(
         "outbound_webhook_received",
+        idempotency_key=idempotency_key,
         fail_rate=effective_fail_rate,
         delay=effective_delay,
         requested_status=effective_status,
     )
 
     if random.random() < effective_fail_rate:
-        logger.warning("outbound_webhook_simulated_failure")
+        logger.warning("outbound_webhook_simulated_failure", idempotency_key=idempotency_key)
         response.status_code = 500
         return {"status": "error", "reason": "simulated_failure"}
 
     if effective_status != 200:
         response.status_code = effective_status
         return {"status": "custom_status", "code": effective_status}
+
+    # Record the key only after a successful (200) delivery so retries on
+    # transient failures (5xx, network errors) are still processed.
+    if idempotency_key:
+        _processed_keys.add(idempotency_key)
 
     return {"status": "received", "payload": payload}
 
@@ -64,7 +90,7 @@ async def trigger_event(
     delay: float = Query(default=1.0, ge=0.0),
 ) -> dict[str, Any]:
     """
-    Simulates an external system sending a webhook event inbound to integration-service (via api-gateway or direct URL).
+    Simulates an external system sending a webhook event inbound to webhook-receiver (via api-gateway or direct URL).
     Retries on failure with exponential backoff.
     """
     asyncio.create_task(

@@ -1,5 +1,7 @@
 import asyncio
 import json
+import random
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -33,21 +35,31 @@ async def deliver(
     producer: AIOKafkaProducer,
     payload: dict,
 ) -> None:
-    """
-    Deliver payload to WEBHOOK_URL (external-service-simulator or any real endpoint).
+    """Deliver payload to WEBHOOK_URL with exponential backoff + jitter.
 
-    Retries up to MAX_RETRIES times with exponential backoff.
-    On permanent failure, publishes the payload to the webhook_dlq Kafka topic.
+    Retry policy:
+    - ``httpx.RequestError`` (network failure) → retry up to MAX_RETRIES.
+    - HTTP 5xx → retry up to MAX_RETRIES.
+    - HTTP 4xx → fail immediately; retrying a client error is pointless.
+
+    Every attempt sends an ``Idempotency-Key`` header so the receiver can
+    deduplicate safe retries without side-effects.
+
+    On permanent failure the full DLQ payload includes ``error``, ``attempts``,
+    and ``timestamp`` for forensic analysis.
     """
     last_error: str = ""
+    attempts_made: int = 0
 
     for attempt in range(1, settings.max_retries + 1):
+        attempts_made = attempt
         if attempt > 1:
             webhook_retries_total.inc()
         try:
             resp = await client.post(
                 settings.webhook_url,
                 json=payload,
+                headers={"Idempotency-Key": str(payload.get("id", ""))},
                 timeout=settings.webhook_timeout,
             )
             resp.raise_for_status()
@@ -64,17 +76,32 @@ async def deliver(
 
         except httpx.HTTPStatusError as exc:
             last_error = str(exc)
+            status = exc.response.status_code
+
+            if 400 <= status < 500:
+                logger.warning(
+                    "webhook_attempt_failed",
+                    task_id=payload.get("id"),
+                    attempt=attempt,
+                    status_code=status,
+                    error=last_error,
+                    retry=False,
+                )
+                break  # client error — retrying won't help, go straight to DLQ
+
             logger.warning(
                 "webhook_attempt_failed",
                 task_id=payload.get("id"),
                 attempt=attempt,
                 max_retries=settings.max_retries,
-                status_code=exc.response.status_code,
-                error=last_error
+                status_code=status,
+                error=last_error,
             )
             if attempt < settings.max_retries:
                 backoff = _BACKOFF_BASE * (2 ** (attempt - 1))
-                await asyncio.sleep(backoff)
+                jitter = random.uniform(0, backoff * 0.1)
+                await asyncio.sleep(backoff + jitter)
+
         except httpx.RequestError as exc:
             last_error = str(exc)
             logger.warning(
@@ -82,22 +109,29 @@ async def deliver(
                 task_id=payload.get("id"),
                 attempt=attempt,
                 max_retries=settings.max_retries,
-                error=last_error
+                error=last_error,
             )
             if attempt < settings.max_retries:
                 backoff = _BACKOFF_BASE * (2 ** (attempt - 1))
-                await asyncio.sleep(backoff)
+                jitter = random.uniform(0, backoff * 0.1)
+                await asyncio.sleep(backoff + jitter)
 
+    dlq_payload = {
+        **payload,
+        "error": last_error,
+        "attempts": attempts_made,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
     logger.error(
         "webhook_failed_permanently",
         task_id=payload.get("id"),
         webhook_url=settings.webhook_url,
-        total_attempts=settings.max_retries,
+        total_attempts=attempts_made,
         error=last_error,
     )
     webhook_failures_total.inc()
-    await _produce(producer, "webhook_failed", {**payload, "error": last_error})
-    await _produce(producer, "webhook_dlq", {**payload, "error": last_error})
+    await _produce(producer, "webhook_failed", dlq_payload)
+    await _produce(producer, "webhook_dlq", dlq_payload)
 
 
 async def _produce(producer: AIOKafkaProducer, topic: str, payload: dict) -> None:
