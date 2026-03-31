@@ -6,7 +6,6 @@ from email.mime.text import MIMEText
 import aiosmtplib
 import sentry_sdk
 import structlog
-from structlog.contextvars import bound_contextvars
 from aiokafka import AIOKafkaConsumer
 from saas_shared.kafka_envelope import parse_envelope_message
 from saas_shared.kafka_messaging import kafka_consume_span
@@ -192,31 +191,28 @@ async def consume() -> None:
                     tx.set_data("messaging.kafka.offset", msg.offset)
                     tx.set_data("task.id", event.get("id"))
                     tx.set_data("kafka.event_type", _event_type)
-                    # Correlate JSON logs with this Kafka message (same fields as in log line).
-                    rid = f"kafka:{msg.topic}:{msg.partition}:{msg.offset}"
-                    with bound_contextvars(request_id=rid):
-                        try:
-                            logger.info(
-                                "notification_event_received",
-                                kafka_topic=msg.topic,
-                                kafka_partition=msg.partition,
-                                kafka_offset=msg.offset,
-                                task_id=event.get("id"),
-                            )
-                            await handle_event(event)
-                        except Exception as exc:
-                            logger.error(
-                                "event_processing_failed",
-                                error=str(exc),
-                                topic=msg.topic,
-                                offset=msg.offset,
-                                task_id=event.get("id")
-                            )
-                            with sentry_sdk.push_scope() as scope:
-                                scope.set_tag("error_type", "event_processing")
-                                scope.set_extra("kafka_topic", msg.topic)
-                                scope.set_extra("kafka_offset", msg.offset)
-                                sentry_sdk.capture_exception(exc)
+                    try:
+                        logger.info(
+                            "notification_event_received",
+                            kafka_topic=msg.topic,
+                            kafka_partition=msg.partition,
+                            kafka_offset=msg.offset,
+                            task_id=event.get("id"),
+                        )
+                        await handle_event(event)
+                    except Exception as exc:
+                        logger.error(
+                            "event_processing_failed",
+                            error=str(exc),
+                            topic=msg.topic,
+                            offset=msg.offset,
+                            task_id=event.get("id")
+                        )
+                        with sentry_sdk.push_scope() as scope:
+                            scope.set_tag("error_type", "event_processing")
+                            scope.set_extra("kafka_topic", msg.topic)
+                            scope.set_extra("kafka_offset", msg.offset)
+                            sentry_sdk.capture_exception(exc)
     finally:
         await consumer.stop()
 
