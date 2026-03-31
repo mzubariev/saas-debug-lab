@@ -179,6 +179,23 @@ def _utc_iso_timestamp(_logger: Any, _method: str, event_dict: EventDict) -> Eve
     return event_dict
 
 
+def _auto_exc_info(_logger: Any, method: str, event_dict: EventDict) -> EventDict:
+    """Auto-inject ``exc_info`` when an exception is active so developers don't have to remember it.
+
+    Fires only for ``warning`` / ``error`` / ``critical`` / ``exception`` calls made inside an
+    active ``except`` block (``sys.exc_info()[1] is not None``).  Outside exception handlers the
+    processor is a no-op so regular warning/error calls are not affected.
+    If ``exc_info`` is already set explicitly the existing value is preserved.
+    """
+    if (
+        method in ("warning", "error", "critical", "exception")
+        and "exc_info" not in event_dict
+        and sys.exc_info()[1] is not None
+    ):
+        event_dict["exc_info"] = True
+    return event_dict
+
+
 def _event_to_ecs(_logger: Any, _method: str, event_dict: EventDict) -> EventDict:
     """Map structlog event → ECS fields safely."""
     ev = event_dict.get("event")
@@ -231,6 +248,7 @@ def setup_logging(*, service_name: str, log_level: str = "INFO") -> None:
             _add_trace_id,
             _utc_iso_timestamp,
             _event_to_ecs,
+            _auto_exc_info,
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),
@@ -266,3 +284,39 @@ def install_request_context_middleware(app: object) -> None:
             return response
 
     app.add_middleware(RequestContextMiddleware)
+
+
+def install_unhandled_exception_middleware(app: object) -> None:
+    """Catch unhandled exceptions before FastAPI's plain-text ``ServerErrorMiddleware``.
+
+    Without this, any exception that escapes a route handler is logged by uvicorn as
+    plain text on **stderr** — invisible in Kibana (Fluent Bit's JSON parser drops it).
+    This handler logs it as structured JSON to stdout (same pipeline as every other log)
+    and optionally forwards to Sentry.
+
+    Register **after** ``app = FastAPI(...)`` in each service ``main.py``.
+    HTTPException and RequestValidationError have their own handlers and are not affected.
+    """
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+
+    _log = structlog.get_logger("saas_shared.exceptions")
+
+    async def _catch_all(request: Request, exc: Exception) -> JSONResponse:
+        _log.error(
+            "unhandled_exception",
+            path=str(request.url.path),
+            method=request.method,
+        )
+        try:
+            import sentry_sdk  # optional dependency
+
+            sentry_sdk.capture_exception(exc)
+        except Exception:  # noqa: BLE001
+            pass
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
+
+    app.add_exception_handler(Exception, _catch_all)

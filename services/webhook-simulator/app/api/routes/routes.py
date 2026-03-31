@@ -97,9 +97,14 @@ async def _send_with_retry(payload: dict[str, Any], url: str, retries: int, dela
                     "inbound_trigger_attempt_failed",
                     url=url,
                     attempt=attempt,
-                    error=str(exc),
+                    max_retries=retries,
+                    error=str(exc)
                 )
             if attempt < retries:
                 await asyncio.sleep(delay * (2**attempt))
 
-    logger.error("inbound_trigger_failed_permanently", url=url)
+    logger.error(
+        "inbound_trigger_failed_permanently",
+        url=url,
+        total_attempts=retries + 1,
+    )

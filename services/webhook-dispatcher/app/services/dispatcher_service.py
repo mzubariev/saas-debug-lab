@@ -62,16 +62,28 @@ async def deliver(
             await _produce(producer, "webhook_sent", payload)
             return
 
-        except (httpx.RequestError, httpx.HTTPStatusError) as exc:
+        except httpx.HTTPStatusError as exc:
             last_error = str(exc)
             logger.warning(
                 "webhook_attempt_failed",
                 task_id=payload.get("id"),
                 attempt=attempt,
                 max_retries=settings.max_retries,
-                error=last_error,
+                status_code=exc.response.status_code,
+                error=last_error
             )
-
+            if attempt < settings.max_retries:
+                backoff = _BACKOFF_BASE * (2 ** (attempt - 1))
+                await asyncio.sleep(backoff)
+        except httpx.RequestError as exc:
+            last_error = str(exc)
+            logger.warning(
+                "webhook_attempt_failed",
+                task_id=payload.get("id"),
+                attempt=attempt,
+                max_retries=settings.max_retries,
+                error=last_error
+            )
             if attempt < settings.max_retries:
                 backoff = _BACKOFF_BASE * (2 ** (attempt - 1))
                 await asyncio.sleep(backoff)
@@ -79,6 +91,8 @@ async def deliver(
     logger.error(
         "webhook_failed_permanently",
         task_id=payload.get("id"),
+        webhook_url=settings.webhook_url,
+        total_attempts=settings.max_retries,
         error=last_error,
     )
     webhook_failures_total.inc()
@@ -130,5 +144,5 @@ async def process_consumed_message(
             "event_processing_failed",
             topic=msg.topic,
             offset=msg.offset,
-            error=str(exc),
+            error=str(exc)
         )

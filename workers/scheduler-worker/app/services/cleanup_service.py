@@ -53,7 +53,7 @@ def cleanup() -> dict:
             "cleanup_failed",
             error=str(exc),
             cutoff=cutoff.isoformat(),
-            older_than_days=settings.cleanup_completed_tasks_days,
+            older_than_days=settings.cleanup_completed_tasks_days
         )
         sentry_sdk.set_tag("task", "cleanup_old_tasks")
         sentry_sdk.set_extra("cutoff_iso", cutoff.isoformat())

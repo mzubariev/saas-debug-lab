@@ -2,6 +2,7 @@
 
 import asyncio
 
+import sentry_sdk
 import structlog
 from fastapi import Request
 
@@ -15,16 +16,25 @@ logger = structlog.get_logger()
 
 async def receive_inbound(request: Request, *, event: str, data: dict) -> dict:
     producer = request.app.state.kafka_producer
-    await publish_json(
-        producer,
-        settings.topic_webhook_inbound,
-        {"event": event, "data": data},
-        event_type="webhook.inbound",
-    )
+    try:
+        await publish_json(
+            producer,
+            settings.topic_webhook_inbound,
+            {"event": event, "data": data},
+            event_type="webhook.inbound",
+        )
+    except Exception as exc:
+        logger.error(
+            "inbound_webhook_publish_failed",
+            event=event,
+            topic=settings.topic_webhook_inbound,
+            error=str(exc)
+        )
+        sentry_sdk.capture_exception(exc)
+        raise
     logger.info(
         "inbound_webhook_received",
         event=event,
-        data=data,
         topic=settings.topic_webhook_inbound,
     )
     return {"status": "received", "event": event}
@@ -53,13 +63,23 @@ async def _enqueue_outbound(
     trace_id: str | None,
 ) -> None:
     payload = {"event": event, **data}
-    await publish_json(
-        producer,
-        settings.topic_webhook_dispatch,
-        payload,
-        event_type="webhook.dispatch",
-        trace_id=trace_id,
-    )
+    try:
+        await publish_json(
+            producer,
+            settings.topic_webhook_dispatch,
+            payload,
+            event_type="webhook.dispatch",
+            trace_id=trace_id,
+        )
+    except Exception as exc:
+        logger.error(
+            "outbound_webhook_publish_failed",
+            event=event,
+            topic=settings.topic_webhook_dispatch,
+            error=str(exc)
+        )
+        sentry_sdk.capture_exception(exc)
+        return
     logger.info(
         "outbound_webhook_queued",
         event=event,

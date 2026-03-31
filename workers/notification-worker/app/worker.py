@@ -100,7 +100,9 @@ async def handle_event(event: dict) -> None:
             task_id=task_id,
             title=title,
             to=settings.email_to,
-            error=str(exc),
+            smtp_host=settings.smtp_host,
+            smtp_port=settings.smtp_port,
+            error=str(exc)
         )
         # Use push_scope so extra context is isolated to this single capture
         # and does not bleed into events from other Kafka messages.
@@ -121,7 +123,7 @@ async def handle_event(event: dict) -> None:
             task_id=task_id,
             smtp_host=settings.smtp_host,
             smtp_port=settings.smtp_port,
-            error=str(exc),
+            error=str(exc)
         )
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("task_id",    task_id or "unknown")
@@ -156,7 +158,7 @@ async def consume() -> None:
                     "event_processing_failed",
                     error=str(exc),
                     topic=msg.topic,
-                    offset=msg.offset,
+                    offset=msg.offset
                 )
                 with sentry_sdk.push_scope() as scope:
                     scope.set_tag("error_type", "event_processing")
@@ -208,6 +210,7 @@ async def consume() -> None:
                                 error=str(exc),
                                 topic=msg.topic,
                                 offset=msg.offset,
+                                task_id=event.get("id")
                             )
                             with sentry_sdk.push_scope() as scope:
                                 scope.set_tag("error_type", "event_processing")

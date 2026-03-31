@@ -41,12 +41,17 @@ async def _proxy(request: Request, url: str) -> Response:
             content=body,
             headers=headers,
         )
-    except httpx.TimeoutException:
+    except httpx.TimeoutException as exc:
         logger.error("proxy_timeout", method=request.method, url=url)
-        raise HTTPException(status_code=504, detail="Upstream timeout")
+        raise HTTPException(status_code=504, detail="Upstream timeout") from exc
     except httpx.RequestError as exc:
-        logger.error("proxy_connection_error", method=request.method, url=url, error=str(exc))
-        raise HTTPException(status_code=502, detail="Upstream unavailable")
+        logger.error(
+            "proxy_connection_error",
+            method=request.method,
+            url=url,
+            error=str(exc)
+        )
+        raise HTTPException(status_code=502, detail="Upstream unavailable") from exc
 
     log = logger.warning if resp.status_code >= 400 else logger.info
     log(

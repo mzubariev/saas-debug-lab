@@ -38,7 +38,7 @@ def process_dlq() -> dict:
         logger.error(
             "dlq_consumer_unavailable",
             error=str(exc),
-            duration_seconds=round(duration, 3),
+            duration_seconds=round(duration, 3)
         )
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("task", "retry_failed_webhooks")
@@ -96,7 +96,7 @@ def process_dlq() -> dict:
                         task_id=payload.get("id"),
                         event_type=_event_type,
                         error=str(exc),
-                        topic_offset=msg.offset,
+                        topic_offset=msg.offset
                     )
                     sentry_sdk.add_breadcrumb(
                         category="dlq",

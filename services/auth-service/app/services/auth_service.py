@@ -42,10 +42,12 @@ class AuthService:
     def _decode_token(token: str) -> dict:
         try:
             return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
-        except jwt.ExpiredSignatureError:
-            raise HTTPException(status_code=401, detail="Token expired")
+        except jwt.ExpiredSignatureError as exc:
+            logger.info("token_expired")
+            raise HTTPException(status_code=401, detail="Token expired") from exc
         except jwt.InvalidTokenError as exc:
-            raise HTTPException(status_code=401, detail=f"Invalid token: {exc}")
+            logger.warning("token_invalid", error=str(exc))
+            raise HTTPException(status_code=401, detail=f"Invalid token: {exc}") from exc
 
     async def login(self, username: str, password: str) -> TokenResponse:
         key = _user_key(username)
@@ -101,7 +103,10 @@ class AuthService:
     def user_info_from_token(token: str) -> UserInfo:
         """Decode JWT and build UserInfo — no DB / Redis (used by GET /auth/me)."""
         payload = AuthService._decode_token(token)
+        username = payload["sub"]
+        role = payload.get("role", "user")
 
-        sentry_sdk.set_user({"username": payload["sub"], "role": payload.get("role", "user")})
+        sentry_sdk.set_user({"username": username, "role": role})
+        logger.debug("token_verified", username=username, role=role)
 
-        return UserInfo(username=payload["sub"], role=payload.get("role", "user"))
+        return UserInfo(username=username, role=role)

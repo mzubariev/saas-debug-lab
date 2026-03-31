@@ -40,10 +40,11 @@ class TaskService:
     async def list_tasks(self) -> list[Task] | list:
         cached = await cache_get(self._redis, _LIST_KEY)
         if cached is not None:
-            logger.debug("cache_hit", key=_LIST_KEY)
+            logger.info("cache_hit", key=_LIST_KEY, count=len(cached))
             return cached
 
         tasks = await self._repo.list_all()
+        logger.info("tasks_listed", count=len(tasks), source="db")
 
         serialized = [TaskOut.model_validate(t).model_dump(mode="json") for t in tasks]
         await cache_set(self._redis, _LIST_KEY, serialized, ttl=_CACHE_TTL_LIST)
@@ -55,13 +56,15 @@ class TaskService:
 
         cached = await cache_get(self._redis, key)
         if cached is not None:
-            logger.debug("cache_hit", key=key)
+            logger.info("cache_hit", key=key, task_id=str(task_id))
             return cached
 
         task = await self._repo.get_by_id(task_id)
         if task is None:
+            logger.warning("task_not_found", task_id=str(task_id))
             raise HTTPException(status_code=404, detail="Task not found")
 
+        logger.info("task_fetched", task_id=str(task.id), status=task.status.value, source="db")
         serialized = TaskOut.model_validate(task).model_dump(mode="json")
         await cache_set(self._redis, key, serialized, ttl=_CACHE_TTL_SINGLE)
 
@@ -92,6 +95,13 @@ class TaskService:
             raise HTTPException(status_code=404, detail="Task not found")
 
         if task.status != TaskStatus.created:
+            logger.warning(
+                "invalid_task_transition",
+                task_id=str(task_id),
+                current_status=task.status.value,
+                attempted_transition="start",
+                expected_status="created",
+            )
             sentry_sdk.add_breadcrumb(
                 category="task_lifecycle",
                 message=f"Invalid transition: start() called on task in state '{task.status.value}'",
@@ -125,6 +135,13 @@ class TaskService:
             raise HTTPException(status_code=404, detail="Task not found")
 
         if task.status != TaskStatus.in_progress:
+            logger.warning(
+                "invalid_task_transition",
+                task_id=str(task_id),
+                current_status=task.status.value,
+                attempted_transition="complete",
+                expected_status="in_progress",
+            )
             sentry_sdk.add_breadcrumb(
                 category="task_lifecycle",
                 message=f"Invalid transition: complete() called on task in state '{task.status.value}'",
