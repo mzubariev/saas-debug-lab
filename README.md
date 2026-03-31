@@ -55,7 +55,7 @@ cd infra
 docker compose --profile core up -d
 ```
 
-This starts Nginx, api-gateway, auth-service, task-service, integration-service, webhook-dispatcher, webhook-simulator, workers (notification-worker, **scheduler-worker**), Flower, Kafka, Redis, Postgres, frontend, Kafka UI, MailHog, Toxiproxy, and a one-shot **`migrations`** container (`alembic upgrade head` for `users` + `tasks`) before auth-service and task-service start.
+This starts Nginx, api-gateway, auth-service, task-service, integration-service, webhook-dispatcher, external-service-simulator, workers (notification-worker, **scheduler-worker**), Flower, Kafka, Redis, Postgres, frontend, Kafka UI, MailHog, Toxiproxy, and a one-shot **`migrations`** container (`alembic upgrade head` for `users` + `tasks`) before auth-service and task-service start.
 
 **Database:** set `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` in **`infra/.env`** — the same file is used by the Postgres service and the `migrations` job.
 
@@ -205,7 +205,7 @@ The system follows a microservices architecture with synchronous and asynchronou
 - **task-service** — task CRUD, state machine, Redis cache-aside, Kafka producer (`task_created`, `task_updated`)
 - **integration-service** — `/webhooks/inbound`, `/webhooks/send`; Kafka producer only
 - **webhook-dispatcher** — consumes Kafka, delivers outbound webhooks, retries, DLQ
-- **webhook-simulator** — external webhook test double (`fail_rate`, `delay`, `status`)
+- **external-service-simulator** — external webhook test double (`fail_rate`, `delay`, `status`)
 - **notification-worker** — consumes `task_created`, sends SMTP (via Toxiproxy → MailHog)
 - **scheduler-worker** — Celery + Beat: DLQ replay, old-task cleanup; **Flower** on port 5555
 - **Postgres**, **Redis**, **Kafka** — data, cache, events
@@ -217,7 +217,7 @@ For ports, envelopes, and request diagrams, see [`docs/SERVICE_MAP.md`](docs/SER
 ## Observability stack
 
 - **Logging** — structured JSON (structlog); **Fluent Bit → Elasticsearch → Kibana**
-- **Metrics** — **Prometheus** scrapes FastAPI services (`/metrics`), **webhook-simulator**, and worker Prometheus servers on port **9100** (webhook-dispatcher, notification-worker, scheduler-worker); **Grafana**
+- **Metrics** — **Prometheus** scrapes FastAPI services (`/metrics`), **external-service-simulator**, and worker Prometheus servers on port **9100** (webhook-dispatcher, notification-worker, scheduler-worker); **Grafana**
 - **Tracing** — **OpenTelemetry** → **Collector** → **Jaeger** (with the `observability` profile) in services and the frontend (`frontend/src/telemetry.ts`). **Datadog APM** is a separate compose path only ([`infra/docker-compose.datadog.yml`](infra/docker-compose.datadog.yml)).
 - **Errors (optional)** — **Sentry** across FastAPI apps, workers, and the React SPA when `SENTRY_DSN` / `VITE_SENTRY_DSN` are set; shared initialisation lives in `shared/saas_shared/sentry_setup.py`
 

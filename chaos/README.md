@@ -64,7 +64,7 @@ curl -sS -X DELETE "http://localhost:8474/proxies/mailhog-smtp/toxics/latency"
 | `kafka_down.sh`        | Messaging / dependency down     |
 | `redis_down.sh`        | Cache down                      |
 | `slow_db.sh`           | Slow Query Injection            |
-| `inject_latency.sh`    | Add Latency (webhook-simulator) |
+| `inject_latency.sh`    | Add Latency (external-service-simulator) |
 | `toxiproxy_latency.sh` | Add Latency (SMTP proxy path)   |
 
 

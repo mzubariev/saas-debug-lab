@@ -110,14 +110,14 @@ services:
   api-gateway:
     build:
       context: ..
-      dockerfile: services/api-gateway/Dockerfile
+      dockerfile: services/core/api-gateway/Dockerfile
     container_name: api-gateway
     volumes:
-      - ../services/api-gateway/app:/app/app
+      - ../services/core/api-gateway/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     env_file:
-      - ../services/api-gateway/.env
+      - ../services/core/api-gateway/.env
     environment:
       SENTRY_DSN: ${SENTRY_DSN:-}
     # Port 8000 is intentionally NOT exposed to the host.
@@ -189,14 +189,14 @@ services:
   auth-service:
     build:
       context: ..
-      dockerfile: services/auth-service/Dockerfile
+      dockerfile: services/core/auth-service/Dockerfile
     container_name: auth-service
     volumes:
-      - ../services/auth-service/app:/app/app
+      - ../services/core/auth-service/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     env_file:
-      - ../services/auth-service/.env
+      - ../services/core/auth-service/.env
     environment:
       SENTRY_DSN: ${SENTRY_DSN:-}
     ports:
@@ -218,14 +218,14 @@ services:
   task-service:
     build:
       context: ..
-      dockerfile: services/task-service/Dockerfile
+      dockerfile: services/core/task-service/Dockerfile
     container_name: task-service
     volumes:
-      - ../services/task-service/app:/app/app
+      - ../services/core/task-service/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     env_file:
-      - ../services/task-service/.env
+      - ../services/core/task-service/.env
     environment:
       SENTRY_DSN: ${SENTRY_DSN:-}
     ports:
@@ -250,17 +250,17 @@ services:
 # WEBHOOK SIMULATOR
 ############################
 
-  webhook-simulator:
+  external-service-simulator:
     build:
       context: ..
-      dockerfile: services/webhook-simulator/Dockerfile
-    container_name: webhook-simulator
+      dockerfile: services/external/external-service-simulator/Dockerfile
+    container_name: external-service-simulator
     volumes:
-      - ../services/webhook-simulator/app:/app/app
+      - ../services/external/external-service-simulator/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     env_file:
-      - ../services/webhook-simulator/.env
+      - ../services/external/external-service-simulator/.env
     ports:
       - "8004:8001"
     healthcheck:
@@ -277,14 +277,14 @@ services:
   integration-service:
     build:
       context: ..
-      dockerfile: services/integration-service/Dockerfile
+      dockerfile: services/core/integration-service/Dockerfile
     container_name: integration-service
     volumes:
-      - ../services/integration-service/app:/app/app
+      - ../services/core/integration-service/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     env_file:
-      - ../services/integration-service/.env
+      - ../services/core/integration-service/.env
     environment:
       SENTRY_DSN: ${SENTRY_DSN:-}
     ports:
@@ -303,21 +303,21 @@ services:
   webhook-dispatcher:
     build:
       context: ..
-      dockerfile: services/webhook-dispatcher/Dockerfile
+      dockerfile: services/core/webhook-dispatcher/Dockerfile
     container_name: webhook-dispatcher
     volumes:
-      - ../services/webhook-dispatcher/app:/app/app
+      - ../services/core/webhook-dispatcher/app:/app/app
     restart: unless-stopped
     profiles: ["core"]
     env_file:
-      - ../services/webhook-dispatcher/.env
+      - ../services/core/webhook-dispatcher/.env
     environment:
       SENTRY_DSN: ${SENTRY_DSN:-}
       METRICS_PORT: "9100"
     depends_on:
       kafka:
         condition: service_healthy
-      webhook-simulator:
+      external-service-simulator:
         condition: service_healthy
 
 ############################

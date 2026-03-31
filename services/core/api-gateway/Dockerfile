@@ -5,10 +5,10 @@ WORKDIR /app
 COPY shared/ /shared
 RUN pip install --no-cache-dir "/shared[services]"
 
-COPY services/api-gateway/requirements.txt .
+COPY services/core/api-gateway/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY services/api-gateway/app ./app
+COPY services/core/api-gateway/app ./app
 
 # Datadog APM (`ddtrace-run`) is applied only via `docker-compose.datadog.yml` override.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--no-access-log"]

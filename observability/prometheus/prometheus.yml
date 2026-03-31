@@ -19,9 +19,9 @@ scrape_configs:
     static_configs:
       - targets: ["integration-service:8000"]
 
-  - job_name: webhook-simulator
+  - job_name: external-service-simulator
     static_configs:
-      - targets: ["webhook-simulator:8001"]
+      - targets: ["external-service-simulator:8001"]
 
   - job_name: webhook-dispatcher
     static_configs:

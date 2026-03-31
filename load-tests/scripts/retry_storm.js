@@ -73,7 +73,7 @@ export function setup() {
   if (!token) throw new Error('Setup failed: could not obtain JWT')
   console.log(
     `[retry_storm] configured FAIL_RATE=${FAIL_RATE}. ` +
-      `Ensure webhook-simulator DEFAULT_FAIL_RATE >= ${FAIL_RATE} for end-to-end testing.`,
+      `Ensure external-service-simulator DEFAULT_FAIL_RATE >= ${FAIL_RATE} for end-to-end testing.`,
   )
   return { token }
 }

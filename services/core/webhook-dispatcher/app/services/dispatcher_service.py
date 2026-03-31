@@ -34,7 +34,7 @@ async def deliver(
     payload: dict,
 ) -> None:
     """
-    Deliver payload to WEBHOOK_URL (webhook-simulator or any real endpoint).
+    Deliver payload to WEBHOOK_URL (external-service-simulator or any real endpoint).
 
     Retries up to MAX_RETRIES times with exponential backoff.
     On permanent failure, publishes the payload to the webhook_dlq Kafka topic.

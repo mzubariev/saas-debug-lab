@@ -211,11 +211,11 @@ k6 run -e VUS=30 load-tests/scripts/concurrency.js
 
 **Setup — configure webhook failures before running**
 
-Option A: restart webhook-simulator with a high default fail rate:
+Option A: restart external-service-simulator with a high default fail rate:
 ```bash
 # Edit workers/notification-worker/.env or set inline:
 DEFAULT_FAIL_RATE=0.9 \
-docker compose -f infra/docker-compose.yml up -d --no-deps webhook-simulator
+docker compose -f infra/docker-compose.yml up -d --no-deps external-service-simulator
 ```
 
 Option B: inject latency via Toxiproxy (no restart needed):
@@ -316,7 +316,7 @@ k6 run -e BASE_URL=http://localhost:18000 load-tests/scripts/slow_clients.js
 | Environment variable | Default | Description |
 |---|---|---|
 | `BASE_URL` | `http://localhost` | Nginx entry point for all API calls |
-| `WEBHOOK_SIM_URL` | `http://localhost:8004` | Direct access to webhook-simulator |
+| `WEBHOOK_SIM_URL` | `http://localhost:8004` | Direct access to external-service-simulator |
 | `VUS` | `20` | VU count override for `concurrency.js` |
 | `FAIL_RATE` | `0.9` | Failure rate passed to `retry_storm.js` simulator baseline |
 | `DEBUG_VU` | unset | Set to `1` to print `VU` / `ITER` in `chaos_mode.js` |

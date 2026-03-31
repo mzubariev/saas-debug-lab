@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     kafka_bootstrap_servers: str = "kafka:9092"
     consumer_group: str = "webhook-dispatcher"
 
-    webhook_url: str = "http://webhook-simulator:8001/receive-webhook"
+    webhook_url: str = "http://external-service-simulator:8001/receive-webhook"
     webhook_timeout: int = 10
     max_retries: int = 3
 

@@ -2,8 +2,8 @@
 # Scenario: External webhook endpoint failing (maps to docs/SCENARIO_MAPPING.md —
 #   Tasks created but webhooks not delivered → External API Failure)
 #
-# Sends a single request to webhook-simulator with fail_rate=1.0 (that call always fails).
-# For sustained high fail rate during load tests, restart webhook-simulator with
+# Sends a single request to external-service-simulator with fail_rate=1.0 (that call always fails).
+# For sustained high fail rate during load tests, restart external-service-simulator with
 # WEBHOOK_SIMULATOR_DEFAULT_FAIL_RATE — see load-tests/README.md (retry_storm).
 set -euo pipefail
 

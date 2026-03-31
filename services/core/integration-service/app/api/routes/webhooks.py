@@ -14,7 +14,7 @@ class WebhookPayload(BaseModel):
 @router.post("/webhooks/inbound", status_code=200)
 async def receive_inbound_webhook(payload: WebhookPayload, request: Request):
     """
-    Inbound webhook receiver — called by webhook-simulator's /trigger-event.
+    Inbound webhook receiver — called by external-service-simulator's /trigger-event.
     Acknowledges the call and publishes the payload to Kafka for downstream consumers.
     """
     return await webhook_service.receive_inbound(

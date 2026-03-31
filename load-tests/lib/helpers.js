@@ -147,7 +147,7 @@ export function sendWebhook(event, data = {}, tags) {
   })
 }
 
-/** POST webhook-simulator /receive-webhook */
+/** POST external-service-simulator /receive-webhook */
 export function simulateWebhookReceive(
   event,
   data = {},
@@ -162,7 +162,7 @@ export function simulateWebhookReceive(
   })
 }
 
-/** POST webhook-simulator /trigger-event */
+/** POST external-service-simulator /trigger-event */
 export function triggerInboundEvent(event, data = {}, tags) {
   return http.post(`${WEBHOOK_SIM_URL}/trigger-event`, JSON.stringify({ event, data }), {
     headers: anonJsonHeaders(),

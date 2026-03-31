@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Failure primitive: Add Latency — downstream webhook-simulator (see docs/FAILURE_PRIMITIVES.md)
+# Failure primitive: Add Latency — downstream external-service-simulator (see docs/FAILURE_PRIMITIVES.md)
 set -euo pipefail
 
 DELAY="${DELAY_SECONDS:-2}"

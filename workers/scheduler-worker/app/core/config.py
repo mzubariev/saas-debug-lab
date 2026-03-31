@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # Webhook delivery target — used by retry_failed_webhooks.
     # Should match webhook-dispatcher’s WEBHOOK_URL so retried events
     # reach the same endpoint as the original delivery attempts.
-    webhook_url: str = "http://webhook-simulator:8001/receive-webhook"
+    webhook_url: str = "http://external-service-simulator:8001/receive-webhook"
     webhook_timeout: int = 10
 
     # Tasks older than this many days (status=completed) will be deleted by
