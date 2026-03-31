@@ -12,13 +12,17 @@ from .core.telemetry import setup_telemetry
 
 
 setup_logging(service_name=settings.service_name, log_level=settings.log_level)
+
+app = FastAPI(title="api-gateway", redirect_slashes=False)
+
+# Bridge is registered on the app before setup_telemetry so that OTel's middleware
+# ends up outermost (Starlette LIFO). Request flow: OTel → CORS → Bridge → handler.
 setup_sentry_fastapi(
     service_name=settings.service_name,
     dsn=settings.sentry_dsn,
     httpx=True,
+    app=app,
 )
-
-app = FastAPI(title="api-gateway", redirect_slashes=False)
 
 # The frontend Vite dev server runs on port 5173 (a different origin from the
 # Nginx port 80 that the API lives behind).  CORS headers are required for the

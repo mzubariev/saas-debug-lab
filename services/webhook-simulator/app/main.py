@@ -10,9 +10,10 @@ from .core.logging import setup_logging
 from .core.telemetry import setup_telemetry
 
 setup_logging(service_name=settings.service_name, log_level=settings.log_level)
-setup_sentry_fastapi(service_name=settings.service_name, dsn=settings.sentry_dsn)
 
 app = FastAPI(title=settings.service_name, redirect_slashes=False)
+
+setup_sentry_fastapi(service_name=settings.service_name, dsn=settings.sentry_dsn, app=app)
 
 setup_telemetry(
     app,

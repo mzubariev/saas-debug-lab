@@ -15,11 +15,12 @@ from .infrastructure.db.session import engine
 
 
 setup_logging(service_name=settings.service_name, log_level=settings.log_level)
-setup_sentry_fastapi(service_name=settings.service_name, dsn=settings.sentry_dsn)
 
 # Schema is created by the shared `migrations` one-shot container before startup.
 
 app = FastAPI(title="task-service", redirect_slashes=False)
+
+setup_sentry_fastapi(service_name=settings.service_name, dsn=settings.sentry_dsn, app=app)
 
 setup_telemetry(
     app,

@@ -13,9 +13,10 @@ from .api.routes import health, webhooks
 
 
 setup_logging(service_name=settings.service_name, log_level=settings.log_level)
-setup_sentry_fastapi(service_name=settings.service_name, dsn=settings.sentry_dsn)
 
 app = FastAPI(title="integration-service", redirect_slashes=False)
+
+setup_sentry_fastapi(service_name=settings.service_name, dsn=settings.sentry_dsn, app=app)
 
 setup_telemetry(
     app,
