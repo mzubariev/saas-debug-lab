@@ -234,8 +234,7 @@ organic_task_events  5 VUs × 3 min  → POST /tasks → task_created Kafka even
 simulator_baseline   2 VUs × 3 min  → POST external-service-simulator /receive-webhook directly (fail_rate=FAIL_RATE)
 ```
 
-> The former `direct_webhook_flood` scenario (`POST /webhooks/send`) has been removed.
-> Outbound dispatch is now triggered exclusively via Kafka events. The organic task flow
+> Outbound dispatch is triggered exclusively via Kafka events. The organic task flow
 > already exercises the full retry pipeline end-to-end.
 
 **Run**
