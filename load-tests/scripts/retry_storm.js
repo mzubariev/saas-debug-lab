@@ -4,6 +4,13 @@
  * RUN
  *   k6 run load-tests/scripts/retry_storm.js
  *   k6 run -e FAIL_RATE=0.9 load-tests/scripts/retry_storm.js
+ *
+ * Two concurrent scenarios:
+ *   organic_task_events  — POST /tasks → Kafka task_created → webhook-dispatcher → external-service-simulator
+ *   simulator_baseline   — POST external-service-simulator /receive-webhook directly (fail injection)
+ *
+ * Outbound dispatch is triggered exclusively via Kafka events. Use organic_task_events
+ * to exercise the full retry pipeline.
  */
 
 import { check, group, sleep } from 'k6'
@@ -12,25 +19,21 @@ import {
   login,
   randomTitle,
   createTask,
-  sendWebhook,
   simulateWebhookReceive,
   reqTags,
 } from '../lib/helpers.js'
 
 const SCENARIO_ORGANIC = 'retry_storm_organic'
-const SCENARIO_DIRECT = 'retry_storm_direct'
 const SCENARIO_SIM = 'retry_storm_simulator'
 
 // ─── Custom metrics ────────────────────────────────────────────────────────
-const webhookAccepted = new Counter('webhook_accepted_202')
-const webhookFailed = new Counter('webhook_endpoint_errors')
 const taskCreated = new Counter('tasks_created_for_events')
 const simFailures = new Counter('simulator_direct_failures')
 const simFailRate = new Rate('simulator_fail_rate')
 
 const FAIL_RATE = parseFloat(__ENV.FAIL_RATE || '0.9')
 
-// ─── Test configuration — two parallel scenarios ──────────────────────────
+// ─── Test configuration ───────────────────────────────────────────────────
 export const options = {
   scenarios: {
     organic_task_events: {
@@ -38,14 +41,6 @@ export const options = {
       vus: 5,
       duration: '3m',
       exec: 'organicFlow',
-      gracefulStop: '10s',
-    },
-
-    direct_webhook_flood: {
-      executor: 'constant-vus',
-      vus: 5,
-      duration: '3m',
-      exec: 'directFlow',
       gracefulStop: '10s',
     },
 
@@ -61,9 +56,7 @@ export const options = {
   thresholds: {
     http_req_failed: ['rate<0.10'],
     'http_req_duration{endpoint:create_task}': ['p(95)<2000'],
-    'http_req_duration{endpoint:webhooks_send}': ['p(95)<1500'],
     'http_req_duration{endpoint:simulator_receive_webhook}': ['p(95)<3000'],
-    webhook_endpoint_errors: ['count<30'],
   },
 }
 
@@ -94,30 +87,6 @@ export function organicFlow(data) {
   })
 
   sleep(0.5)
-}
-
-export function directFlow(data) {
-  group('direct_webhook_send', () => {
-    const res = sendWebhook(
-      'load_test.retry_storm',
-      {
-        source: 'k6',
-        timestamp: Date.now(),
-        iteration: __ITER,
-      },
-      reqTags(SCENARIO_DIRECT, 'webhooks_send'),
-    )
-
-    if (res.status === 202) {
-      webhookAccepted.add(1)
-    } else {
-      webhookFailed.add(1)
-    }
-
-    check(res, { 'direct send: 202 accepted': r => r.status === 202 })
-  })
-
-  sleep(0.3)
 }
 
 export function simulatorBaseline() {

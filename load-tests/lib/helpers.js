@@ -139,14 +139,6 @@ export function completeTask(token, taskId, tags) {
   })
 }
 
-/** POST /webhooks/send — no auth */
-export function sendWebhook(event, data = {}, tags) {
-  return http.post(`${BASE_URL}/webhooks/send`, JSON.stringify({ event, data }), {
-    headers: anonJsonHeaders(),
-    tags,
-  })
-}
-
 /** POST external-service-simulator /receive-webhook */
 export function simulateWebhookReceive(
   event,

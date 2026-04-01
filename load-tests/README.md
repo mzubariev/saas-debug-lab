@@ -204,35 +204,39 @@ k6 run -e VUS=30 load-tests/scripts/concurrency.js
 ### 3. `retry_storm.js` — Webhook failure cascade
 
 **What it tests**
-- webhook-dispatcher exponential back-off (1 s → 2 s → 4 s) on delivery failure
+- webhook-dispatcher exponential back-off (1 s → 2 s → 4 s) with ±10 % jitter on 5xx / network failures
+- Immediate DLQ routing on 4xx (no retries wasted on client errors)
 - Dead-letter queue (`webhook_dlq` Kafka topic) filling under sustained failures
 - Celery `retry_failed_webhooks` job draining the DLQ (runs every 60 s)
 - Notification-worker receiving `task_created` events while the webhook storm runs
+- Idempotency deduplication in external-service-simulator (already-processed keys return `duplicate`)
 
 **Setup — configure webhook failures before running**
 
 Option A: restart external-service-simulator with a high default fail rate:
 ```bash
-# Edit workers/notification-worker/.env or set inline:
 DEFAULT_FAIL_RATE=0.9 \
 docker compose -f infra/docker-compose.yml up -d --no-deps external-service-simulator
 ```
 
 Option B: inject latency via Toxiproxy (no restart needed):
 ```bash
-# Slow the SMTP path as a proxy for the webhook path
 curl -s -X POST http://localhost:8474/proxies/mailhog-smtp/toxics \
   -H 'Content-Type: application/json' \
   -d '{"name":"latency","type":"latency","attributes":{"latency":3000,"jitter":500}}'
 ```
 
-**Three concurrent scenarios**
+**Two concurrent scenarios**
 
 ```
-organic_task_events   5 VUs × 3 min  → POST /tasks → task_created Kafka event → webhook attempt
-direct_webhook_flood  5 VUs × 3 min  → POST /webhooks/send → immediate webhook attempt
-simulator_baseline    2 VUs × 3 min  → POST webhook-sim /receive-webhook directly (fail_rate=0.9)
+organic_task_events  5 VUs × 3 min  → POST /tasks → task_created Kafka event
+                                       → webhook-dispatcher → POST /receive-webhook (fail_rate=FAIL_RATE)
+simulator_baseline   2 VUs × 3 min  → POST external-service-simulator /receive-webhook directly (fail_rate=FAIL_RATE)
 ```
+
+> The former `direct_webhook_flood` scenario (`POST /webhooks/send`) has been removed.
+> Outbound dispatch is now triggered exclusively via Kafka events. The organic task flow
+> already exercises the full retry pipeline end-to-end.
 
 **Run**
 ```bash
@@ -245,9 +249,9 @@ k6 run -e FAIL_RATE=0.9 load-tests/scripts/retry_storm.js
 |---|---|
 | Kafka UI `localhost:8080` | `webhook_dlq` topic depth growing during test, draining in 60-s windows (Celery retries) |
 | Flower `localhost:5555` | `retry_failed_webhooks` task execution count and last-run time |
-| webhook-dispatcher logs | `webhook_attempt_failed`, `webhook_failed_permanently`, DLQ-related structlog events |
-| k6 output | `webhook_accepted_202` (integration-service accepted **queued** request) vs `simulator_fail_rate` (~0.9) |
-| Jaeger `localhost:16686` | Traces: integration-service (HTTP) vs webhook-dispatcher (no HTTP server in lab — stdout logs) |
+| webhook-dispatcher logs | `webhook_attempt_failed` (with `retry=False` for 4xx), `webhook_failed_permanently`, DLQ structlog events |
+| k6 output | `tasks_created_for_events` counter vs `simulator_fail_rate` (~0.9) |
+| Jaeger `localhost:16686` | Traces: api-gateway → task-service → Kafka → webhook-dispatcher → external-service-simulator |
 
 **Clean up after** (remove Toxiproxy toxic):
 ```bash

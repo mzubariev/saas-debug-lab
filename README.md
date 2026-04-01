@@ -55,7 +55,7 @@ cd infra
 docker compose --profile core up -d
 ```
 
-This starts Nginx, api-gateway, auth-service, task-service, integration-service, webhook-dispatcher, external-service-simulator, workers (notification-worker, **scheduler-worker**), Flower, Kafka, Redis, Postgres, frontend, Kafka UI, MailHog, Toxiproxy, and a one-shot **`migrations`** container (`alembic upgrade head` for `users` + `tasks`) before auth-service and task-service start.
+This starts Nginx, api-gateway, auth-service, task-service, webhook-receiver, webhook-dispatcher, external-service-simulator, workers (notification-worker, **scheduler-worker**), Flower, Kafka, Redis, Postgres, frontend, Kafka UI, MailHog, Toxiproxy, and a one-shot **`migrations`** container (`alembic upgrade head` for `users` + `tasks`) before auth-service and task-service start.
 
 **Database:** set `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` in **`infra/.env`** — the same file is used by the Postgres service and the `migrations` job.
 
@@ -203,9 +203,9 @@ The system follows a microservices architecture with synchronous and asynchronou
 - **api-gateway** — routing, JWT validation for `/tasks/*`
 - **auth-service** — authentication, JWT issuance, user store in Postgres, Redis cache-aside
 - **task-service** — task CRUD, state machine, Redis cache-aside, Kafka producer (`task_created`, `task_updated`)
-- **integration-service** — `/webhooks/inbound`, `/webhooks/send`; Kafka producer only
-- **webhook-dispatcher** — consumes Kafka, delivers outbound webhooks, retries, DLQ
-- **external-service-simulator** — external webhook test double (`fail_rate`, `delay`, `status`)
+- **webhook-receiver** — `/webhooks/inbound`; inbound-only Kafka producer (`webhook_inbound` topic)
+- **webhook-dispatcher** — consumes Kafka (`task_created`, `task_updated`, `webhook_dispatch`), delivers outbound webhooks with exponential backoff + jitter, no retry on 4xx, DLQ on permanent failure
+- **external-service-simulator** — external webhook test double (`fail_rate`, `delay`, `status`, idempotency deduplication)
 - **notification-worker** — consumes `task_created`, sends SMTP (via Toxiproxy → MailHog)
 - **scheduler-worker** — Celery + Beat: DLQ replay, old-task cleanup; **Flower** on port 5555
 - **Postgres**, **Redis**, **Kafka** — data, cache, events
