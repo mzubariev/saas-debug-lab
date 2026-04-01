@@ -26,5 +26,5 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Topics consumed — task lifecycle events + any service publishing directly to webhook_dispatch.
-CONSUME_TOPICS: tuple[str, ...] = ("task_created", "task_updated", "webhook_dispatch")
+# Topics consumed — task lifecycle events produced by task-service.
+CONSUME_TOPICS: tuple[str, ...] = ("task_created", "task_updated")

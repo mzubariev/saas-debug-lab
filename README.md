@@ -204,7 +204,7 @@ The system follows a microservices architecture with synchronous and asynchronou
 - **auth-service** — authentication, JWT issuance, user store in Postgres, Redis cache-aside
 - **task-service** — task CRUD, state machine, Redis cache-aside, Kafka producer (`task_created`, `task_updated`)
 - **webhook-receiver** — `/webhooks/inbound`; inbound-only Kafka producer (`webhook_inbound` topic)
-- **webhook-dispatcher** — consumes Kafka (`task_created`, `task_updated`, `webhook_dispatch`), delivers outbound webhooks with exponential backoff + jitter, no retry on 4xx, DLQ on permanent failure
+- **webhook-dispatcher** — consumes Kafka (`task_created`, `task_updated`), delivers outbound webhooks with exponential backoff + jitter, no retry on 4xx, DLQ on permanent failure
 - **external-service-simulator** — external webhook test double (`fail_rate`, `delay`, `status`, idempotency deduplication)
 - **notification-worker** — consumes `task_created`, sends SMTP (via Toxiproxy → MailHog)
 - **scheduler-worker** — Celery + Beat: DLQ replay, old-task cleanup; **Flower** on port 5555
