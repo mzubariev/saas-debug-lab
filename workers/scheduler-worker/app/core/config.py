@@ -35,9 +35,9 @@ class Settings(BaseSettings):
     webhook_url: str = "http://external-service-simulator:8001/receive-webhook"
     webhook_timeout: int = 10
 
-    # Tasks older than this many days (status=completed) will be deleted by
+    # Tasks completed more than this many minutes ago will be deleted by
     # cleanup_old_tasks. Set to 0 to disable deletion.
-    cleanup_completed_tasks_days: int = 30
+    cleanup_completed_tasks_minutes: int = 15
 
     @computed_field
     @property

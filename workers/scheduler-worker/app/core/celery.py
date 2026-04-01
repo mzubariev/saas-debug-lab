@@ -1,5 +1,4 @@
 from celery import Celery
-from celery.schedules import crontab
 from celery.signals import task_failure, task_success, worker_process_init
 from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from prometheus_client import start_http_server
@@ -64,9 +63,9 @@ celery_app.conf.update(
             "task": "app.tasks.webhook_tasks.retry_failed_webhooks",
             "schedule": 60.0,
         },
-        "cleanup-old-tasks-daily": {
+        "cleanup-old-tasks-every-15m": {
             "task": "app.tasks.cleanup_tasks.cleanup_old_tasks",
-            "schedule": crontab(hour=2, minute=0),
+            "schedule": 900.0,
         },
     },
 )
