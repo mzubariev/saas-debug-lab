@@ -5,10 +5,12 @@ from saas_shared.prometheus_http import install_http_metrics_middleware
 from saas_shared.sentry_setup import setup_sentry_fastapi
 from saas_shared.telemetry import instrument_sqlalchemy_async_engine
 
+from saas_shared.health import router as health_router
+from saas_shared.logging import setup_logging
+from saas_shared.telemetry import setup_telemetry
+
 from .core.config import settings
-from .core.logging import setup_logging
-from .core.telemetry import setup_telemetry
-from .api.routes import health, tasks
+from .api.routes import tasks
 from .infrastructure.messaging.producer import start_kafka, stop_kafka
 from .infrastructure.cache.client import start_redis, stop_redis
 from .infrastructure.db.session import engine
@@ -42,7 +44,7 @@ async def shutdown():
     await stop_redis(app)
 
 
-app.include_router(health.router)
+app.include_router(health_router)
 app.include_router(tasks.router)
 
 install_http_metrics_middleware(app)

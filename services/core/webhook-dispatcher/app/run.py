@@ -8,7 +8,7 @@ from saas_shared.telemetry import setup_worker_telemetry
 
 from .consumer import run_consumer_loop
 from .core.config import CONSUME_TOPICS, settings
-from .core.logging import setup_logging
+from saas_shared.logging import setup_logging
 from .infrastructure.http_client import create_http_client
 from .infrastructure.messaging.producer import close_producer, create_producer
 

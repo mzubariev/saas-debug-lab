@@ -26,7 +26,7 @@ from saas_shared.metrics import (
 )
 
 from .config import settings
-from .logging import setup_logging
+from saas_shared.logging import setup_logging
 
 TOPIC = "task_created"
 GROUP_ID = "notification-worker"

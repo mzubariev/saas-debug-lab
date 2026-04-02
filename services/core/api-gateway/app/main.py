@@ -5,10 +5,11 @@ from saas_shared.logging import install_request_context_middleware, install_unha
 from saas_shared.prometheus_http import install_http_metrics_middleware
 from saas_shared.sentry_setup import setup_sentry_fastapi
 
-from .api.routes import health
+from saas_shared.health import router as health_router
+from saas_shared.logging import setup_logging
+from saas_shared.telemetry import setup_telemetry
+
 from .core.config import settings
-from .core.logging import setup_logging
-from .core.telemetry import setup_telemetry
 
 
 setup_logging(service_name=settings.service_name, log_level=settings.log_level)
@@ -51,7 +52,7 @@ setup_telemetry(
 # traceparent and downstream services break trace continuity.
 from .api.routes import proxy
 
-app.include_router(health.router)
+app.include_router(health_router)
 app.include_router(proxy.router)
 
 install_http_metrics_middleware(app)
