@@ -1,8 +1,11 @@
-import structlog
+import time
 
 import httpx
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
+
+from saas_shared.metrics import upstream_request_duration_seconds, upstream_requests_total
 
 from ...core.config import settings
 from ...dependencies import verify_token
@@ -24,9 +27,24 @@ logger = structlog.get_logger()
 #   headers on each outbound call so upstreams see gateway → service (not browser → service).
 _EXCLUDED_PROXY_HEADERS = frozenset({"host", "sentry-trace", "baggage", "traceparent", "tracestate"})
 
+# Map upstream base URL prefix → stable service label for Prometheus.
+_SERVICE_LABELS: dict[str, str] = {
+    settings.auth_service_url: "auth-service",
+    settings.task_service_url: "task-service",
+    settings.integration_service_url: "webhook-receiver",
+}
+
+
+def _service_label(url: str) -> str:
+    for base, label in _SERVICE_LABELS.items():
+        if url.startswith(base):
+            return label
+    return "unknown"
+
 
 async def _proxy(request: Request, url: str) -> Response:
     body = await request.body()
+    service = _service_label(url)
 
     headers = {
         k: v
@@ -34,6 +52,7 @@ async def _proxy(request: Request, url: str) -> Response:
         if k.lower() not in _EXCLUDED_PROXY_HEADERS
     }
 
+    t0 = time.perf_counter()
     try:
         resp = await client.request(
             request.method,
@@ -42,16 +61,29 @@ async def _proxy(request: Request, url: str) -> Response:
             headers=headers,
         )
     except httpx.TimeoutException as exc:
+        upstream_requests_total.labels(service=service, status="timeout").inc()
+        upstream_request_duration_seconds.labels(service=service).observe(
+            time.perf_counter() - t0
+        )
         logger.error("proxy_timeout", method=request.method, url=url)
         raise HTTPException(status_code=504, detail="Upstream timeout") from exc
     except httpx.RequestError as exc:
+        upstream_requests_total.labels(service=service, status="connection_error").inc()
+        upstream_request_duration_seconds.labels(service=service).observe(
+            time.perf_counter() - t0
+        )
         logger.error(
             "proxy_connection_error",
             method=request.method,
             url=url,
-            error=str(exc)
+            error=str(exc),
         )
         raise HTTPException(status_code=502, detail="Upstream unavailable") from exc
+
+    elapsed = time.perf_counter() - t0
+    status_label = str(resp.status_code)
+    upstream_requests_total.labels(service=service, status=status_label).inc()
+    upstream_request_duration_seconds.labels(service=service).observe(elapsed)
 
     log = logger.warning if resp.status_code >= 400 else logger.info
     log(
@@ -60,6 +92,7 @@ async def _proxy(request: Request, url: str) -> Response:
         path=str(request.url.path),
         status=resp.status_code,
         upstream=url,
+        service=service,
     )
 
     return Response(

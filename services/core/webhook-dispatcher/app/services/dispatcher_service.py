@@ -1,6 +1,7 @@
 import asyncio
 import json
 import random
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -10,14 +11,17 @@ from aiokafka import AIOKafkaProducer
 from saas_shared.kafka_envelope import encode_envelope_bytes, parse_envelope_message
 from saas_shared.kafka_messaging import kafka_consume_span, kafka_publish_span
 from saas_shared.kafka_trace import current_trace_id_for_kafka_envelope, otel_kafka_headers
-
-from ..core.config import settings
-from ..metrics import (
+from saas_shared.metrics import (
+    dlq_messages_total,
     kafka_messages_consumed_total,
-    webhook_failures_total,
+    kafka_processing_errors_total,
+    webhook_delivery_duration_seconds,
+    webhook_in_progress,
     webhook_requests_total,
     webhook_retries_total,
 )
+
+from ..core.config import settings
 
 logger = structlog.get_logger()
 
@@ -28,6 +32,17 @@ _TOPIC_EVENT_TYPE: dict[str, str] = {
 }
 
 _BACKOFF_BASE = 1.0  # seconds
+_TARGET = settings.webhook_url  # constant label value — set once at import time
+
+
+def _webhook_reason(exc: httpx.RequestError) -> str:
+    """Classify a failed httpx request into a controlled low-cardinality reason label.
+
+    ``TimeoutException`` is a subclass of ``RequestError``, so it must be checked first.
+    """
+    if isinstance(exc, httpx.TimeoutException):
+        return "timeout"
+    return "network"
 
 
 async def deliver(
@@ -38,83 +53,112 @@ async def deliver(
     """Deliver payload to WEBHOOK_URL with exponential backoff + jitter.
 
     Retry policy:
-    - ``httpx.RequestError`` (network failure) → retry up to MAX_RETRIES.
+    - ``httpx.RequestError`` (network / timeout) → retry up to MAX_RETRIES.
     - HTTP 5xx → retry up to MAX_RETRIES.
     - HTTP 4xx → fail immediately; retrying a client error is pointless.
 
     Every attempt sends an ``Idempotency-Key`` header so the receiver can
     deduplicate safe retries without side-effects.
 
-    On permanent failure the full DLQ payload includes ``error``, ``attempts``,
+    On permanent failure the DLQ payload includes ``error``, ``attempts``,
     and ``timestamp`` for forensic analysis.
     """
     last_error: str = ""
     attempts_made: int = 0
 
-    for attempt in range(1, settings.max_retries + 1):
-        attempts_made = attempt
-        if attempt > 1:
-            webhook_retries_total.inc()
-        try:
-            resp = await client.post(
-                settings.webhook_url,
-                json=payload,
-                headers={"Idempotency-Key": str(payload.get("id", ""))},
-                timeout=settings.webhook_timeout,
-            )
-            resp.raise_for_status()
+    webhook_in_progress.inc()
+    try:
+        for attempt in range(1, settings.max_retries + 1):
+            attempts_made = attempt
+            if attempt > 1:
+                webhook_retries_total.inc()
 
-            logger.info(
-                "webhook_sent",
-                task_id=payload.get("id"),
-                status_code=resp.status_code,
-                attempt=attempt,
-            )
-            webhook_requests_total.inc()
-            await _produce(producer, "webhook_sent", payload)
-            return
+            t0 = time.perf_counter()
+            try:
+                resp = await client.post(
+                    settings.webhook_url,
+                    json=payload,
+                    headers={"Idempotency-Key": str(payload.get("id", ""))},
+                    timeout=settings.webhook_timeout,
+                )
+                resp.raise_for_status()
 
-        except httpx.HTTPStatusError as exc:
-            last_error = str(exc)
-            status = exc.response.status_code
+                elapsed = time.perf_counter() - t0
+                webhook_delivery_duration_seconds.labels(status="success").observe(elapsed)
+                webhook_requests_total.labels(
+                    status="success", reason="", target=_TARGET
+                ).inc()
 
-            if 400 <= status < 500:
+                logger.info(
+                    "webhook_sent",
+                    task_id=payload.get("id"),
+                    status_code=resp.status_code,
+                    attempt=attempt,
+                )
+                await _produce(producer, "webhook_sent", payload)
+                return
+
+            except httpx.HTTPStatusError as exc:
+                elapsed = time.perf_counter() - t0
+                last_error = str(exc)
+                status = exc.response.status_code
+
+                if 400 <= status < 500:
+                    reason = "4xx"
+                    webhook_delivery_duration_seconds.labels(status="4xx").observe(elapsed)
+                    webhook_requests_total.labels(
+                        status="fail", reason=reason, target=_TARGET
+                    ).inc()
+                    logger.warning(
+                        "webhook_attempt_failed",
+                        task_id=payload.get("id"),
+                        attempt=attempt,
+                        status_code=status,
+                        error=last_error,
+                        retry=False,
+                    )
+                    break  # client error — retrying won't help, go straight to DLQ
+
+                reason = "5xx"
+                webhook_delivery_duration_seconds.labels(status="5xx").observe(elapsed)
+                webhook_requests_total.labels(
+                    status="fail", reason=reason, target=_TARGET
+                ).inc()
                 logger.warning(
                     "webhook_attempt_failed",
                     task_id=payload.get("id"),
                     attempt=attempt,
+                    max_retries=settings.max_retries,
                     status_code=status,
                     error=last_error,
-                    retry=False,
                 )
-                break  # client error — retrying won't help, go straight to DLQ
+                if attempt < settings.max_retries:
+                    backoff = _BACKOFF_BASE * (2 ** (attempt - 1))
+                    jitter = random.uniform(0, backoff * 0.1)
+                    await asyncio.sleep(backoff + jitter)
 
-            logger.warning(
-                "webhook_attempt_failed",
-                task_id=payload.get("id"),
-                attempt=attempt,
-                max_retries=settings.max_retries,
-                status_code=status,
-                error=last_error,
-            )
-            if attempt < settings.max_retries:
-                backoff = _BACKOFF_BASE * (2 ** (attempt - 1))
-                jitter = random.uniform(0, backoff * 0.1)
-                await asyncio.sleep(backoff + jitter)
-
-        except httpx.RequestError as exc:
-            last_error = str(exc)
-            logger.warning(
-                "webhook_attempt_failed",
-                task_id=payload.get("id"),
-                attempt=attempt,
-                max_retries=settings.max_retries,
-                error=last_error,
-            )
-            if attempt < settings.max_retries:
-                backoff = _BACKOFF_BASE * (2 ** (attempt - 1))
-                jitter = random.uniform(0, backoff * 0.1)
-                await asyncio.sleep(backoff + jitter)
+            except httpx.RequestError as exc:
+                elapsed = time.perf_counter() - t0
+                last_error = str(exc)
+                reason = _webhook_reason(exc)  # "timeout" or "network"
+                webhook_delivery_duration_seconds.labels(status=reason).observe(elapsed)
+                webhook_requests_total.labels(
+                    status="fail", reason=reason, target=_TARGET
+                ).inc()
+                logger.warning(
+                    "webhook_attempt_failed",
+                    task_id=payload.get("id"),
+                    attempt=attempt,
+                    max_retries=settings.max_retries,
+                    reason=reason,
+                    error=last_error,
+                )
+                if attempt < settings.max_retries:
+                    backoff = _BACKOFF_BASE * (2 ** (attempt - 1))
+                    jitter = random.uniform(0, backoff * 0.1)
+                    await asyncio.sleep(backoff + jitter)
+    finally:
+        webhook_in_progress.dec()
 
     dlq_payload = {
         **payload,
@@ -129,7 +173,7 @@ async def deliver(
         total_attempts=attempts_made,
         error=last_error,
     )
-    webhook_failures_total.inc()
+    dlq_messages_total.inc()
     await _produce(producer, "webhook_failed", dlq_payload)
     await _produce(producer, "webhook_dlq", dlq_payload)
 
@@ -174,9 +218,10 @@ async def process_consumed_message(
             )
             await deliver(http_client, producer, event)
     except Exception as exc:
+        kafka_processing_errors_total.labels(topic=msg.topic).inc()
         logger.error(
             "event_processing_failed",
             topic=msg.topic,
             offset=msg.offset,
-            error=str(exc)
+            error=str(exc),
         )

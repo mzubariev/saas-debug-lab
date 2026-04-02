@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -7,22 +8,29 @@ import aiosmtplib
 import sentry_sdk
 import structlog
 from aiokafka import AIOKafkaConsumer
+from aiokafka.structs import TopicPartition
+from prometheus_client import start_http_server
 from saas_shared.kafka_envelope import parse_envelope_message
 from saas_shared.kafka_messaging import kafka_consume_span
-from prometheus_client import start_http_server
 from saas_shared.sentry_setup import setup_sentry_worker
 from saas_shared.telemetry import setup_worker_telemetry
 
-from .config import settings
-from .logging import setup_logging
-from .metrics import (
-    emails_failed_total,
-    emails_sent_total,
+from saas_shared.metrics import (
+    email_send_duration_seconds,
+    emails_total,
+    kafka_consumer_lag,
     kafka_messages_consumed_total,
+    kafka_partition_count,
+    kafka_processing_duration_seconds,
+    kafka_processing_errors_total,
 )
 
-TOPIC    = "task_created"
+from .config import settings
+from .logging import setup_logging
+
+TOPIC = "task_created"
 GROUP_ID = "notification-worker"
+_SMTP_PROVIDER = settings.smtp_host  # stable label value
 
 logger = structlog.get_logger()
 
@@ -80,9 +88,12 @@ async def handle_event(event: dict) -> None:
     title   = event.get("title")
     msg     = _build_message(event)
 
+    t0 = time.perf_counter()
     try:
         await _send_email(msg)
-        emails_sent_total.inc()
+        elapsed = time.perf_counter() - t0
+        email_send_duration_seconds.observe(elapsed)
+        emails_total.labels(status="success", provider=_SMTP_PROVIDER).inc()
         logger.info(
             "notification_sent",
             task_id=task_id,
@@ -93,7 +104,9 @@ async def handle_event(event: dict) -> None:
         )
 
     except aiosmtplib.SMTPException as exc:
-        emails_failed_total.inc()
+        elapsed = time.perf_counter() - t0
+        email_send_duration_seconds.observe(elapsed)
+        emails_total.labels(status="smtp_error", provider=_SMTP_PROVIDER).inc()
         logger.error(
             "smtp_delivery_failed",
             task_id=task_id,
@@ -101,10 +114,8 @@ async def handle_event(event: dict) -> None:
             to=settings.email_to,
             smtp_host=settings.smtp_host,
             smtp_port=settings.smtp_port,
-            error=str(exc)
+            error=str(exc),
         )
-        # Use push_scope so extra context is isolated to this single capture
-        # and does not bleed into events from other Kafka messages.
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("task_id",    task_id or "unknown")
             scope.set_tag("error_type", "smtp_protocol")
@@ -115,14 +126,16 @@ async def handle_event(event: dict) -> None:
             sentry_sdk.capture_exception(exc)
 
     except OSError as exc:
-        emails_failed_total.inc()
+        elapsed = time.perf_counter() - t0
+        email_send_duration_seconds.observe(elapsed)
+        emails_total.labels(status="connection_error", provider=_SMTP_PROVIDER).inc()
         # Connection-refused, DNS failure, TCP reset, Toxiproxy chaos.
         logger.error(
             "smtp_connection_failed",
             task_id=task_id,
             smtp_host=settings.smtp_host,
             smtp_port=settings.smtp_port,
-            error=str(exc)
+            error=str(exc),
         )
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("task_id",    task_id or "unknown")
@@ -132,6 +145,20 @@ async def handle_event(event: dict) -> None:
             scope.set_extra("smtp_port",   settings.smtp_port)
             scope.set_extra("recipient",   settings.email_to)
             sentry_sdk.capture_exception(exc)
+
+
+async def _update_consumer_lag(consumer: AIOKafkaConsumer, msg) -> None:
+    tp = TopicPartition(msg.topic, msg.partition)
+    try:
+        end_offsets = await consumer.end_offsets([tp])
+        lag = max(0, end_offsets[tp] - (msg.offset + 1))
+        kafka_consumer_lag.labels(
+            topic=msg.topic,
+            partition=str(msg.partition),
+            group=GROUP_ID,
+        ).set(lag)
+    except Exception:
+        pass
 
 
 async def consume() -> None:
@@ -144,20 +171,29 @@ async def consume() -> None:
 
     await consumer.start()
 
+    try:
+        partitions = consumer.partitions_for_topic(TOPIC)
+        if partitions:
+            kafka_partition_count.labels(topic=TOPIC).set(len(partitions))
+    except Exception:
+        pass
+
     logger.info("consumer_started", topic=TOPIC, group_id=GROUP_ID)
 
     try:
         async for msg in consumer:
+            t0 = time.perf_counter()
             try:
                 raw = json.loads(msg.value.decode("utf-8"))
                 kafka_messages_consumed_total.labels(topic=msg.topic).inc()
                 _event_type, event, envelope_trace_id = parse_envelope_message(raw)
             except Exception as exc:
+                kafka_processing_errors_total.labels(topic=msg.topic).inc()
                 logger.error(
                     "event_processing_failed",
                     error=str(exc),
                     topic=msg.topic,
-                    offset=msg.offset
+                    offset=msg.offset,
                 )
                 with sentry_sdk.push_scope() as scope:
                     scope.set_tag("error_type", "event_processing")
@@ -166,7 +202,7 @@ async def consume() -> None:
                     sentry_sdk.capture_exception(exc)
                 continue
 
-            # OTEL consumer span + W3C extract (``kafka_consume_span``), then Sentry.
+            # OTel consumer span + W3C extract, then Sentry.
             with kafka_consume_span(
                 msg.topic,
                 msg.partition,
@@ -201,18 +237,24 @@ async def consume() -> None:
                         )
                         await handle_event(event)
                     except Exception as exc:
+                        kafka_processing_errors_total.labels(topic=msg.topic).inc()
                         logger.error(
                             "event_processing_failed",
                             error=str(exc),
                             topic=msg.topic,
                             offset=msg.offset,
-                            task_id=event.get("id")
+                            task_id=event.get("id"),
                         )
                         with sentry_sdk.push_scope() as scope:
                             scope.set_tag("error_type", "event_processing")
                             scope.set_extra("kafka_topic", msg.topic)
                             scope.set_extra("kafka_offset", msg.offset)
                             sentry_sdk.capture_exception(exc)
+
+            kafka_processing_duration_seconds.labels(topic=msg.topic).observe(
+                time.perf_counter() - t0
+            )
+            await _update_consumer_lag(consumer, msg)
     finally:
         await consumer.stop()
 

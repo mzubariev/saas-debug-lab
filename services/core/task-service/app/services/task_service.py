@@ -1,3 +1,4 @@
+import time
 import uuid
 
 import sentry_sdk
@@ -6,6 +7,8 @@ from fastapi import HTTPException
 from redis.asyncio import Redis
 from aiokafka import AIOKafkaProducer
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from saas_shared.metrics import task_processing_duration_seconds, tasks_total
 
 from ..models.task import Task, TaskStatus
 from ..schemas.task import TaskOut
@@ -71,6 +74,7 @@ class TaskService:
         return task
 
     async def create_task(self, title: str) -> Task:
+        t0 = time.perf_counter()
         task = await self._repo.create(title)
 
         sentry_sdk.set_tag("task_id", str(task.id))
@@ -84,10 +88,15 @@ class TaskService:
 
         await cache_delete(self._redis, _LIST_KEY)
 
+        tasks_total.labels(status="created").inc()
+        task_processing_duration_seconds.labels(operation="create").observe(
+            time.perf_counter() - t0
+        )
         logger.info("task_created", task_id=str(task.id), title=task.title)
         return task
 
     async def start_task(self, task_id: uuid.UUID) -> Task:
+        t0 = time.perf_counter()
         sentry_sdk.set_tag("task_id", str(task_id))
 
         task = await self._repo.get_by_id(task_id)
@@ -124,10 +133,15 @@ class TaskService:
 
         await cache_delete(self._redis, _LIST_KEY, _task_key(task_id))
 
+        tasks_total.labels(status="in_progress").inc()
+        task_processing_duration_seconds.labels(operation="start").observe(
+            time.perf_counter() - t0
+        )
         logger.info("task_started", task_id=str(task.id))
         return task
 
     async def complete_task(self, task_id: uuid.UUID) -> Task:
+        t0 = time.perf_counter()
         sentry_sdk.set_tag("task_id", str(task_id))
 
         task = await self._repo.get_by_id(task_id)
@@ -164,5 +178,9 @@ class TaskService:
 
         await cache_delete(self._redis, _LIST_KEY, _task_key(task_id))
 
+        tasks_total.labels(status="completed").inc()
+        task_processing_duration_seconds.labels(operation="complete").observe(
+            time.perf_counter() - t0
+        )
         logger.info("task_completed", task_id=str(task.id))
         return task

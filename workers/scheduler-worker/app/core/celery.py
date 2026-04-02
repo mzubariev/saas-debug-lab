@@ -1,5 +1,8 @@
+import time
+from threading import local
+
 from celery import Celery
-from celery.signals import task_failure, task_success, worker_process_init
+from celery.signals import task_postrun, task_prerun, worker_process_init
 from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from prometheus_client import start_http_server
 from saas_shared.logging import setup_logging
@@ -7,7 +10,6 @@ from saas_shared.sentry_setup import setup_sentry_celery
 from saas_shared.telemetry import instrument_sqlalchemy_sync_engine, setup_worker_telemetry
 
 from .config import settings
-
 
 setup_logging(service_name=settings.service_name, log_level=settings.log_level)
 # Sentry at import (beat/parent) and again in worker_process_init after fork.
@@ -37,18 +39,52 @@ def _task_name(sender) -> str:
     return getattr(sender, "name", None) or getattr(sender, "__name__", "unknown")
 
 
-@task_success.connect
-def _on_celery_task_success(sender=None, **kwargs) -> None:
-    from ..metrics import celery_tasks_total
-
-    celery_tasks_total.labels(task_name=_task_name(sender)).inc()
+# Thread-local store for per-task start timestamps (Celery workers are forked processes).
+_task_start: local = local()
 
 
-@task_failure.connect
-def _on_celery_task_failure(sender=None, **kwargs) -> None:
-    from ..metrics import celery_failures_total
+@task_prerun.connect
+def _on_task_prerun(task_id: str = "", **kwargs) -> None:
+    from saas_shared.metrics import celery_active_tasks
 
-    celery_failures_total.labels(task_name=_task_name(sender)).inc()
+    _task_start.__dict__[task_id] = time.perf_counter()
+    celery_active_tasks.inc()
+
+
+@task_postrun.connect
+def _on_task_postrun(
+    sender=None,
+    task_id: str = "",
+    state: str = "UNKNOWN",
+    **kwargs,
+) -> None:
+    from saas_shared.metrics import (
+        celery_active_tasks,
+        celery_queue_size,
+        celery_task_duration_seconds,
+        celery_tasks_total,
+    )
+
+    name = _task_name(sender)
+    status = "success" if state == "SUCCESS" else "failure"
+    celery_tasks_total.labels(task_name=name, status=status).inc()
+    celery_active_tasks.dec()
+
+    start = _task_start.__dict__.pop(task_id, None)
+    if start is not None:
+        celery_task_duration_seconds.labels(task_name=name).observe(
+            time.perf_counter() - start
+        )
+
+    # Update queue size using Redis list length (best-effort; never raises).
+    try:
+        from redis import Redis as SyncRedis
+
+        r = SyncRedis.from_url(settings.celery_broker_url, socket_timeout=1)
+        celery_queue_size.set(r.llen("celery"))
+        r.close()
+    except Exception:
+        pass
 
 
 celery_app.conf.update(
@@ -63,9 +99,9 @@ celery_app.conf.update(
             "task": "app.tasks.webhook_tasks.retry_failed_webhooks",
             "schedule": 60.0,
         },
-        "cleanup-old-tasks-every-15m": {
+        "cleanup-old-tasks-hourly": {
             "task": "app.tasks.cleanup_tasks.cleanup_old_tasks",
-            "schedule": 900.0,
+            "schedule": 3600.0,
         },
     },
 )
