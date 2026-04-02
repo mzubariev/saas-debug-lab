@@ -5,7 +5,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 
-from saas_shared.metrics import upstream_request_duration_seconds, upstream_requests_total
+from saas_shared.prometheus_metrics import upstream_request_duration_seconds, upstream_requests_total
 
 from ...core.config import settings
 from ...dependencies import verify_token

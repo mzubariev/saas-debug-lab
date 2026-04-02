@@ -45,7 +45,7 @@ _task_start: local = local()
 
 @task_prerun.connect
 def _on_task_prerun(task_id: str = "", **kwargs) -> None:
-    from saas_shared.metrics import celery_active_tasks
+    from saas_shared.prometheus_metrics import celery_active_tasks
 
     _task_start.__dict__[task_id] = time.perf_counter()
     celery_active_tasks.inc()
@@ -58,7 +58,7 @@ def _on_task_postrun(
     state: str = "UNKNOWN",
     **kwargs,
 ) -> None:
-    from saas_shared.metrics import (
+    from saas_shared.prometheus_metrics import (
         celery_active_tasks,
         celery_queue_size,
         celery_task_duration_seconds,

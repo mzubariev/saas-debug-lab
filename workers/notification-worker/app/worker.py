@@ -15,7 +15,7 @@ from saas_shared.kafka_messaging import kafka_consume_span
 from saas_shared.sentry_setup import setup_sentry_worker
 from saas_shared.telemetry import setup_worker_telemetry
 
-from saas_shared.metrics import (
+from saas_shared.prometheus_metrics import (
     email_send_duration_seconds,
     emails_total,
     kafka_consumer_lag,

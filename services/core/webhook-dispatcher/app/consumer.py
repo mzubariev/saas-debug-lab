@@ -3,7 +3,7 @@ import time
 import httpx
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.structs import TopicPartition
-from saas_shared.metrics import (
+from saas_shared.prometheus_metrics import (
     kafka_consumer_lag,
     kafka_partition_count,
     kafka_processing_duration_seconds,

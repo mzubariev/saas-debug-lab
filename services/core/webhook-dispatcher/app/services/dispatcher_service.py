@@ -11,7 +11,7 @@ from aiokafka import AIOKafkaProducer
 from saas_shared.kafka_envelope import encode_envelope_bytes, parse_envelope_message
 from saas_shared.kafka_messaging import kafka_consume_span, kafka_publish_span
 from saas_shared.kafka_trace import current_trace_id_for_kafka_envelope, otel_kafka_headers
-from saas_shared.metrics import (
+from saas_shared.prometheus_metrics import (
     dlq_messages_total,
     kafka_messages_consumed_total,
     kafka_processing_errors_total,

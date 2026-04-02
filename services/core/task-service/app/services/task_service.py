@@ -8,7 +8,7 @@ from redis.asyncio import Redis
 from aiokafka import AIOKafkaProducer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from saas_shared.metrics import task_processing_duration_seconds, tasks_total
+from saas_shared.prometheus_metrics import task_processing_duration_seconds, tasks_total
 
 from ..models.task import Task, TaskStatus
 from ..schemas.task import TaskOut

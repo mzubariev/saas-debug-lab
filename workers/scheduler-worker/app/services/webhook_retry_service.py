@@ -7,7 +7,7 @@ from kafka.errors import NoBrokersAvailable
 from saas_shared.kafka_envelope import parse_envelope_message
 from saas_shared.kafka_messaging import kafka_consume_span
 
-from saas_shared.metrics import dlq_processed_total, kafka_messages_consumed_total
+from saas_shared.prometheus_metrics import dlq_processed_total, kafka_messages_consumed_total
 
 from ..core.config import settings
 from ..infrastructure.http.client import post_json_sync
