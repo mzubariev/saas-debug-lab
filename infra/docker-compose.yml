@@ -590,6 +590,7 @@ services:
   pyroscope:
     image: pyroscope/pyroscope:latest
     container_name: pyroscope
+    command: server
     restart: unless-stopped
     profiles: ["observability"]
     ports:
