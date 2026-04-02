@@ -8,8 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 COPY shared/ /shared
 RUN pip install --no-cache-dir "/shared[services]"
 
-COPY services/core/task-service/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY services/core/task-service/requirements-dev.txt .
+RUN pip install --no-cache-dir -r requirements-dev.txt
 
 COPY services/core/task-service/app        ./app
 

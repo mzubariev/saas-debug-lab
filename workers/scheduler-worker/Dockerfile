@@ -5,8 +5,8 @@ WORKDIR /app
 COPY shared/ /shared
 RUN pip install --no-cache-dir "/shared[services]"
 
-COPY workers/scheduler-worker/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY workers/scheduler-worker/requirements-dev.txt .
+RUN pip install --no-cache-dir -r requirements-dev.txt
 
 COPY workers/scheduler-worker/app ./app
 
