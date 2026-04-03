@@ -1,0 +1,20 @@
+groups:
+  - name: saas-debug-lab-recording
+    interval: 30s
+    rules:
+
+      # Общий RPS
+      - record: job:http_requests_rate5m
+        expr: sum(rate(http_requests_total[5m])) by (job)
+
+      # 5xx RPS
+      - record: job:http_5xx_rate5m
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) by (job)
+
+      # Error rate %
+      - record: job:http_error_rate5m_percent
+        expr: job:http_5xx_rate5m / job:http_requests_rate5m * 100
+
+      # P95 latency
+      - record: job:http_p95_latency5m
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (job, le))

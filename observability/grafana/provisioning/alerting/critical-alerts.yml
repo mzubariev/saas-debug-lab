@@ -1,0 +1,133 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: SaaS Debug Lab — Critical
+    folder: Alerts
+    interval: 30s
+    rules:
+
+      - uid: alert-service-down
+        title: "Service Down"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: "prometheus"
+            relativeTimeRange: { from: 60, to: 0 }
+            model:
+              expr: up{job=~"api-gateway|task-service|auth-service|webhook-dispatcher|notification-worker|scheduler-worker"}
+              range: true
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              conditions:
+                - evaluator: { params: [1], type: lt }
+                  query: { params: [B] }
+
+        for: 1m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+
+
+      - uid: alert-high-error-rate
+        title: "High HTTP Error Rate > 5%"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: "prometheus"
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: job:http_error_rate5m_percent
+              range: true
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              conditions:
+                - evaluator: { params: [5], type: gt }
+                  query: { params: [B] }
+
+        for: 2m
+        labels:
+          severity: critical
+
+
+      - uid: alert-upstream-5xx
+        title: "Upstream 5xx from api-gateway"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: "prometheus"
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: sum(rate(upstream_requests_total{job="api-gateway",status=~"5.."}[5m])) by (service)
+              range: true
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              conditions:
+                - evaluator: { params: [0.05], type: gt }
+                  query: { params: [B] }
+
+        for: 2m
+        labels:
+          severity: critical
+
+
+      - uid: alert-webhook-network-errors
+        title: "Webhook Network Errors Spike"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: "prometheus"
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: sum(rate(webhook_requests_total{status="fail",reason="network"}[5m]))
+              range: true
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              conditions:
+                - evaluator: { params: [0.1], type: gt }
+                  query: { params: [B] }
+
+        for: 2m
+        labels:
+          severity: critical

@@ -517,6 +517,7 @@ services:
       - "9090:9090"
     volumes:
       - ../observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ../observability/prometheus/rules:/etc/prometheus/rules:ro
 
 ############################
 # GRAFANA
@@ -532,6 +533,11 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      GF_ALERTING_ENABLED: "true"
+      GF_UNIFIED_ALERTING_ENABLED: "true"
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
 
 ############################
 # FLUENT BIT

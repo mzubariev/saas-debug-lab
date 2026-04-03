@@ -1,0 +1,296 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: SaaS Debug Lab — Warning
+    folder: Alerts
+    interval: 1m
+    rules:
+
+      - uid: alert-high-latency
+        title: "P95 Latency > 1s"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: "prometheus"
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: job:http_p95_latency5m
+              range: true
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              conditions:
+                - evaluator: { params: [1], type: gt }
+                  query: { params: [B] }
+
+        noDataState: NoData
+        execErrState: Error
+        for: 3m
+        annotations:
+          summary: "High latency on {{ $labels.job }}"
+          description: "P95 latency on {{ $labels.job }} is {{ $values.A }}s"
+        labels:
+          severity: warning
+
+
+      - uid: alert-kafka-lag
+        title: "Kafka Consumer Lag > 1000"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: "prometheus"
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: sum(kafka_consumer_lag) by (job)
+              range: true
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              conditions:
+                - evaluator: { params: [1000], type: gt }
+                  query: { params: [B] }
+
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Kafka lag growing on {{ $labels.job }}"
+          description: "Consumer lag on {{ $labels.job }} is {{ $values.A }} messages"
+        labels:
+          severity: warning
+
+
+      - uid: alert-dlq-growing
+        title: "DLQ Size > 0"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: "prometheus"
+            relativeTimeRange: { from: 120, to: 0 }
+            model:
+              expr: sum(dlq_size) by (job)
+              range: true
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              conditions:
+                - evaluator: { params: [0], type: gt }
+                  query: { params: [B] }
+
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: "Messages in DLQ on {{ $labels.job }}"
+          description: "{{ $values.A }} messages stuck in Dead Letter Queue on {{ $labels.job }}"
+        labels:
+          severity: warning
+
+
+      - uid: alert-celery-queue
+        title: "Celery Queue Backed Up > 500"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: "prometheus"
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: sum(celery_queue_size) by (job)
+              range: true
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              conditions:
+                - evaluator: { params: [500], type: gt }
+                  query: { params: [B] }
+
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "Celery queue backed up on {{ $labels.job }}"
+          description: "Queue size is {{ $values.A }} on {{ $labels.job }}"
+        labels:
+          severity: warning
+
+
+      - uid: alert-fd-exhaustion
+        title: "File Descriptor Exhaustion > 80%"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: "prometheus"
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: process_open_fds / process_max_fds * 100
+              range: true
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              conditions:
+                - evaluator: { params: [80], type: gt }
+                  query: { params: [B] }
+
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: "File descriptor exhaustion on {{ $labels.job }}"
+          description: "{{ $labels.job }} using {{ $values.A }}% of file descriptors"
+        labels:
+          severity: warning
+
+
+      - uid: alert-webhook-timeout-errors
+        title: "Webhook Timeouts Spike"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: "prometheus"
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: sum(rate(webhook_requests_total{status="fail",reason="timeout"}[5m]))
+              range: true
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              conditions:
+                - evaluator: { params: [0.1], type: gt }
+                  query: { params: [B] }
+
+        noDataState: NoData
+        execErrState: Error
+        for: 3m
+        annotations:
+          summary: "Webhook timeouts spike"
+          description: "Timeout rate: {{ $values.A }} rps — downstream may be overloaded"
+        labels:
+          severity: warning
+
+
+      - uid: alert-auth-401-spike
+        title: "Auth 401 Spike > 10%"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: "prometheus"
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: sum(rate(upstream_requests_total{job="api-gateway",service="auth-service",status="401"}[5m]))
+                / sum(rate(upstream_requests_total{job="api-gateway",service="auth-service"}[5m])) * 100
+              range: true
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              conditions:
+                - evaluator: { params: [10], type: gt }
+                  query: { params: [B] }
+
+        noDataState: NoData
+        execErrState: Error
+        for: 3m
+        annotations:
+          summary: "High 401 rate from auth-service"
+          description: "{{ $values.A }}% of auth requests returning 401 — token issue or brute force"
+        labels:
+          severity: warning
+
+
+      - uid: alert-webhook-saturation
+        title: "Webhook Concurrency Saturation > 80"
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: "prometheus"
+            relativeTimeRange: { from: 120, to: 0 }
+            model:
+              expr: webhook_in_progress{job="webhook-dispatcher"}
+              range: true
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              conditions:
+                - evaluator: { params: [80], type: gt }
+                  query: { params: [B] }
+
+        noDataState: NoData
+        execErrState: Error
+        for: 3m
+        annotations:
+          summary: "Webhook dispatcher near concurrency limit"
+          description: "{{ $values.A }} webhooks in flight — dispatcher may be saturated"
+        labels:
+          severity: warning
