@@ -1,301 +1,85 @@
 {
   "title": "4. Business Metrics",
   "uid": "business-metrics",
-  "tags": [
-    "business",
-    "tasks",
-    "emails",
-    "notifications"
-  ],
+  "tags": ["business", "tasks", "emails", "notifications"],
   "timezone": "browser",
   "refresh": "30s",
-  "time": {
-    "from": "now-24h",
-    "to": "now"
-  },
+  "time": { "from": "now-24h", "to": "now" },
   "panels": [
     {
       "id": 1,
       "title": "Tasks Created Total",
       "type": "stat",
-      "gridPos": {
-        "x": 0,
-        "y": 0,
-        "w": 6,
-        "h": 4
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": {
-            "fixedColor": "blue",
-            "mode": "fixed"
-          }
-        }
-      },
-      "targets": [
-        {
-          "expr": "sum(tasks_total{job=\"task-service\"})",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ]
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "fixedColor": "blue", "mode": "fixed" } } },
+      "targets": [{ "expr": "sum(tasks_total{job=\"task-service\"})", "refId": "A" }]
     },
     {
       "id": 2,
       "title": "Tasks Created Rate",
       "type": "stat",
-      "gridPos": {
-        "x": 6,
-        "y": 0,
-        "w": 6,
-        "h": 4
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "color": {
-            "fixedColor": "blue",
-            "mode": "fixed"
-          }
-        }
-      },
-      "targets": [
-        {
-          "expr": "sum(rate(tasks_total{job=\"task-service\"}[5m]))",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ]
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "color": { "fixedColor": "blue", "mode": "fixed" } } },
+      "targets": [{ "expr": "sum(rate(tasks_total{job=\"task-service\"}[5m]))", "refId": "A" }]
     },
     {
       "id": 3,
       "title": "Emails Sent Total",
       "type": "stat",
-      "gridPos": {
-        "x": 12,
-        "y": 0,
-        "w": 6,
-        "h": 4
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": {
-            "fixedColor": "green",
-            "mode": "fixed"
-          }
-        }
-      },
-      "targets": [
-        {
-          "expr": "sum(emails_total{job=\"notification-worker\"})",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ]
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "fixedColor": "green", "mode": "fixed" } } },
+      "targets": [{ "expr": "sum(emails_total{job=\"notification-worker\"})", "refId": "A" }]
     },
     {
       "id": 4,
       "title": "Webhooks Delivered Total",
       "type": "stat",
-      "gridPos": {
-        "x": 18,
-        "y": 0,
-        "w": 6,
-        "h": 4
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": {
-            "fixedColor": "purple",
-            "mode": "fixed"
-          }
-        }
-      },
-      "targets": [
-        {
-          "expr": "sum(webhook_requests_total{job=\"webhook-dispatcher\"})",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
-      ]
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "fixedColor": "purple", "mode": "fixed" } } },
+      "targets": [{ "expr": "sum(webhook_requests_total{job=\"webhook-dispatcher\"})", "refId": "A" }]
     },
     {
       "id": 5,
       "title": "Tasks Created — trend",
       "type": "timeseries",
-      "gridPos": {
-        "x": 0,
-        "y": 4,
-        "w": 12,
-        "h": 8
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 15
-          }
-        }
-      },
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 15 } } },
       "targets": [
-        {
-          "expr": "rate(tasks_total{job=\"task-service\"}[5m])",
-          "legendFormat": "{{status}}",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
+        { "expr": "rate(tasks_total{job=\"task-service\"}[5m])", "legendFormat": "{{status}}", "refId": "A" }
       ]
     },
     {
       "id": 6,
       "title": "Task Processing Duration P50/P95/P99",
       "type": "timeseries",
-      "gridPos": {
-        "x": 12,
-        "y": 4,
-        "w": 12,
-        "h": 8
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10
-          }
-        }
-      },
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
       "targets": [
-        {
-          "expr": "histogram_quantile(0.50, sum(rate(task_processing_duration_seconds_bucket{job=\"task-service\"}[5m])) by (le))",
-          "legendFormat": "p50",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(task_processing_duration_seconds_bucket{job=\"task-service\"}[5m])) by (le))",
-          "legendFormat": "p95",
-          "refId": "B",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "expr": "histogram_quantile(0.99, sum(rate(task_processing_duration_seconds_bucket{job=\"task-service\"}[5m])) by (le))",
-          "legendFormat": "p99",
-          "refId": "C",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
+        { "expr": "histogram_quantile(0.50, sum(rate(task_processing_duration_seconds_bucket{job=\"task-service\"}[5m])) by (le))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(task_processing_duration_seconds_bucket{job=\"task-service\"}[5m])) by (le))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum(rate(task_processing_duration_seconds_bucket{job=\"task-service\"}[5m])) by (le))", "legendFormat": "p99", "refId": "C" }
       ]
     },
     {
       "id": 7,
       "title": "Email Send Duration P50/P95/P99",
       "type": "timeseries",
-      "gridPos": {
-        "x": 0,
-        "y": 12,
-        "w": 12,
-        "h": 7
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10
-          }
-        }
-      },
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
       "targets": [
-        {
-          "expr": "histogram_quantile(0.50, sum(rate(email_send_duration_seconds_bucket{job=\"notification-worker\"}[5m])) by (le))",
-          "legendFormat": "p50",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(email_send_duration_seconds_bucket{job=\"notification-worker\"}[5m])) by (le))",
-          "legendFormat": "p95",
-          "refId": "B",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "expr": "histogram_quantile(0.99, sum(rate(email_send_duration_seconds_bucket{job=\"notification-worker\"}[5m])) by (le))",
-          "legendFormat": "p99",
-          "refId": "C",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
+        { "expr": "histogram_quantile(0.50, sum(rate(email_send_duration_seconds_bucket{job=\"notification-worker\"}[5m])) by (le))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(email_send_duration_seconds_bucket{job=\"notification-worker\"}[5m])) by (le))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum(rate(email_send_duration_seconds_bucket{job=\"notification-worker\"}[5m])) by (le))", "legendFormat": "p99", "refId": "C" }
       ]
     },
     {
       "id": 8,
       "title": "Email Retries Rate",
       "type": "timeseries",
-      "gridPos": {
-        "x": 12,
-        "y": 12,
-        "w": 12,
-        "h": 7
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10
-          },
-          "color": {
-            "fixedColor": "orange",
-            "mode": "fixed"
-          }
-        }
-      },
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10 }, "color": { "fixedColor": "orange", "mode": "fixed" } } },
       "targets": [
-        {
-          "expr": "rate(email_retries_total{job=\"notification-worker\"}[5m])",
-          "legendFormat": "email retries",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
+        { "expr": "rate(email_retries_total{job=\"notification-worker\"}[5m])", "legendFormat": "email retries", "refId": "A" }
       ]
     }
   ],

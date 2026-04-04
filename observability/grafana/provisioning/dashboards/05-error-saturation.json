@@ -1,259 +1,76 @@
 {
   "title": "5. Error Breakdown & Saturation",
   "uid": "error-saturation",
-  "tags": [
-    "errors",
-    "saturation",
-    "dlq",
-    "webhook"
-  ],
+  "tags": ["errors", "saturation", "dlq", "webhook"],
   "timezone": "browser",
   "refresh": "15s",
-  "time": {
-    "from": "now-1h",
-    "to": "now"
-  },
+  "time": { "from": "now-1h", "to": "now" },
   "panels": [
     {
       "id": 1,
       "title": "Webhook Failure Reasons — now",
       "type": "piechart",
-      "gridPos": {
-        "x": 0,
-        "y": 0,
-        "w": 8,
-        "h": 8
-      },
-      "options": {
-        "pieType": "donut",
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "values": [
-            "value",
-            "percent"
-          ]
-        }
-      },
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 8 },
+      "options": { "pieType": "donut", "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] } },
       "targets": [
-        {
-          "expr": "sum(rate(webhook_requests_total{status=\"fail\"}[5m])) by (reason)",
-          "legendFormat": "{{reason}}",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
+        { "expr": "sum(rate(webhook_requests_total{status=\"fail\"}[5m])) by (reason)", "legendFormat": "{{reason}}", "refId": "A" }
       ]
     },
     {
       "id": 2,
       "title": "Webhook Success vs Fail Rate",
       "type": "timeseries",
-      "gridPos": {
-        "x": 8,
-        "y": 0,
-        "w": 8,
-        "h": 8
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 15
-          }
-        }
-      },
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 15 } } },
       "targets": [
-        {
-          "expr": "sum(rate(webhook_requests_total{status=\"success\"}[5m])) by (job)",
-          "legendFormat": "success",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "expr": "sum(rate(webhook_requests_total{status=\"fail\"}[5m])) by (job)",
-          "legendFormat": "fail",
-          "refId": "B",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
+        { "expr": "sum(rate(webhook_requests_total{status=\"success\"}[5m])) by (job)", "legendFormat": "success", "refId": "A" },
+        { "expr": "sum(rate(webhook_requests_total{status=\"fail\"}[5m])) by (job)", "legendFormat": "fail", "refId": "B" }
       ]
     },
     {
       "id": 3,
       "title": "Failure Reason Breakdown — trend",
       "type": "timeseries",
-      "gridPos": {
-        "x": 16,
-        "y": 0,
-        "w": 8,
-        "h": 8
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10
-          }
-        }
-      },
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
       "targets": [
-        {
-          "expr": "sum(rate(webhook_requests_total{status=\"fail\",reason=\"timeout\"}[5m]))",
-          "legendFormat": "timeout",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "expr": "sum(rate(webhook_requests_total{status=\"fail\",reason=\"5xx\"}[5m]))",
-          "legendFormat": "5xx",
-          "refId": "B",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "expr": "sum(rate(webhook_requests_total{status=\"fail\",reason=\"4xx\"}[5m]))",
-          "legendFormat": "4xx",
-          "refId": "C",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "expr": "sum(rate(webhook_requests_total{status=\"fail\",reason=\"network\"}[5m]))",
-          "legendFormat": "network",
-          "refId": "D",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "expr": "sum(rate(webhook_requests_total{status=\"fail\",reason=\"unknown\"}[5m]))",
-          "legendFormat": "unknown",
-          "refId": "E",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
+        { "expr": "sum(rate(webhook_requests_total{status=\"fail\",reason=\"timeout\"}[5m]))", "legendFormat": "timeout", "refId": "A" },
+        { "expr": "sum(rate(webhook_requests_total{status=\"fail\",reason=\"5xx\"}[5m]))", "legendFormat": "5xx", "refId": "B" },
+        { "expr": "sum(rate(webhook_requests_total{status=\"fail\",reason=\"4xx\"}[5m]))", "legendFormat": "4xx", "refId": "C" },
+        { "expr": "sum(rate(webhook_requests_total{status=\"fail\",reason=\"network\"}[5m]))", "legendFormat": "network", "refId": "D" },
+        { "expr": "sum(rate(webhook_requests_total{status=\"fail\",reason=\"unknown\"}[5m]))", "legendFormat": "unknown", "refId": "E" }
       ]
     },
     {
       "id": 4,
       "title": "Failures by Target Endpoint",
       "type": "bargauge",
-      "gridPos": {
-        "x": 0,
-        "y": 8,
-        "w": 12,
-        "h": 7
-      },
-      "options": {
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "sum"
-          ]
-        },
-        "displayMode": "gradient"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "yellow",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 10
-              }
-            ]
-          }
-        }
-      },
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 7 },
+      "options": { "orientation": "horizontal", "reduceOptions": { "calcs": ["sum"] }, "displayMode": "gradient" },
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 }] } } },
       "targets": [
-        {
-          "expr": "sum(increase(webhook_requests_total{status=\"fail\"}[1h])) by (target, reason)",
-          "legendFormat": "{{target}} / {{reason}}",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
+        { "expr": "sum(increase(webhook_requests_total{status=\"fail\"}[1h])) by (target, reason)", "legendFormat": "{{target}} / {{reason}}", "refId": "A" }
       ]
     },
     {
       "id": 5,
       "title": "Webhook Success Rate % by Target",
       "type": "timeseries",
-      "gridPos": {
-        "x": 12,
-        "y": 8,
-        "w": 12,
-        "h": 7
-      },
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 7 },
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
           "min": 0,
           "max": 100,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": 0
-              },
-              {
-                "color": "yellow",
-                "value": 95
-              },
-              {
-                "color": "green",
-                "value": 99
-              }
-            ]
-          },
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10
-          }
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": 0 }, { "color": "yellow", "value": 95 }, { "color": "green", "value": 99 }] },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
         }
       },
       "targets": [
         {
           "expr": "sum(rate(webhook_requests_total{status=\"success\"}[5m])) by (target) / sum(rate(webhook_requests_total[5m])) by (target) * 100",
           "legendFormat": "{{target}}",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
+          "refId": "A"
         }
       ]
     },
@@ -261,215 +78,65 @@
       "id": 6,
       "title": "SATURATION — Webhook In Progress (concurrency)",
       "type": "timeseries",
-      "gridPos": {
-        "x": 0,
-        "y": 15,
-        "w": 8,
-        "h": 7
-      },
+      "gridPos": { "x": 0, "y": 15, "w": 8, "h": 7 },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "yellow",
-                "value": 50
-              },
-              {
-                "color": "red",
-                "value": 100
-              }
-            ]
-          },
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 20
-          }
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 50 }, { "color": "red", "value": 100 }] },
+          "custom": { "lineWidth": 2, "fillOpacity": 20 }
         }
       },
       "targets": [
-        {
-          "expr": "webhook_in_progress{job=\"webhook-dispatcher\"}",
-          "legendFormat": "in progress",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
+        { "expr": "webhook_in_progress{job=\"webhook-dispatcher\"}", "legendFormat": "in progress", "refId": "A" }
       ]
     },
     {
       "id": 7,
       "title": "SATURATION — Kafka Partitions vs Consumers",
       "type": "timeseries",
-      "gridPos": {
-        "x": 8,
-        "y": 15,
-        "w": 8,
-        "h": 7
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10
-          }
-        }
-      },
+      "gridPos": { "x": 8, "y": 15, "w": 8, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
       "targets": [
-        {
-          "expr": "kafka_partition_count{job=\"webhook-dispatcher\"}",
-          "legendFormat": "partitions dispatcher ({{topic}})",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "expr": "kafka_partition_count{job=\"notification-worker\"}",
-          "legendFormat": "partitions notification ({{topic}})",
-          "refId": "B",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
+        { "expr": "kafka_partition_count{job=\"webhook-dispatcher\"}", "legendFormat": "partitions dispatcher ({{topic}})", "refId": "A" },
+        { "expr": "kafka_partition_count{job=\"notification-worker\"}", "legendFormat": "partitions notification ({{topic}})", "refId": "B" }
       ]
     },
     {
       "id": 8,
       "title": "SATURATION — Celery Active vs Queue",
       "type": "timeseries",
-      "gridPos": {
-        "x": 16,
-        "y": 15,
-        "w": 8,
-        "h": 7
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10
-          }
-        }
-      },
+      "gridPos": { "x": 16, "y": 15, "w": 8, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
       "targets": [
-        {
-          "expr": "celery_active_tasks{job=\"scheduler-worker\"}",
-          "legendFormat": "active tasks",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "expr": "celery_queue_size{job=\"scheduler-worker\"}",
-          "legendFormat": "queue size",
-          "refId": "B",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
+        { "expr": "celery_active_tasks{job=\"scheduler-worker\"}", "legendFormat": "active tasks", "refId": "A" },
+        { "expr": "celery_queue_size{job=\"scheduler-worker\"}", "legendFormat": "queue size", "refId": "B" }
       ]
     },
     {
       "id": 9,
       "title": "DLQ Size — all services",
       "type": "timeseries",
-      "gridPos": {
-        "x": 0,
-        "y": 22,
-        "w": 12,
-        "h": 7
-      },
+      "gridPos": { "x": 0, "y": 22, "w": 12, "h": 7 },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          },
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 25,
-            "lineStyle": {
-              "fill": "solid"
-            }
-          }
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }, { "color": "red", "value": 1 }] },
+          "custom": { "lineWidth": 2, "fillOpacity": 25, "lineStyle": { "fill": "solid" } }
         }
       },
       "targets": [
-        {
-          "expr": "dlq_size",
-          "legendFormat": "{{job}}",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
+        { "expr": "dlq_size", "legendFormat": "{{job}}", "refId": "A" }
       ]
     },
     {
       "id": 10,
       "title": "Webhook Retries Rate — dispatcher vs scheduler",
       "type": "timeseries",
-      "gridPos": {
-        "x": 12,
-        "y": 22,
-        "w": 12,
-        "h": 7
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 10
-          }
-        }
-      },
+      "gridPos": { "x": 12, "y": 22, "w": 12, "h": 7 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
       "targets": [
-        {
-          "expr": "rate(webhook_retries_total{job=\"webhook-dispatcher\"}[5m])",
-          "legendFormat": "dispatcher",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "expr": "rate(webhook_retries_total{job=\"scheduler-worker\"}[5m])",
-          "legendFormat": "scheduler",
-          "refId": "B",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        }
+        { "expr": "rate(webhook_retries_total{job=\"webhook-dispatcher\"}[5m])", "legendFormat": "dispatcher", "refId": "A" },
+        { "expr": "rate(webhook_retries_total{job=\"scheduler-worker\"}[5m])", "legendFormat": "scheduler", "refId": "B" }
       ]
     }
   ],
