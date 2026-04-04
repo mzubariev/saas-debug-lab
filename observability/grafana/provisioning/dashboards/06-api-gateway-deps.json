@@ -1,18 +1,34 @@
 {
   "title": "6. API Gateway — Dependency Visibility",
   "uid": "api-gateway-deps",
-  "tags": ["api-gateway", "upstream", "dependencies"],
+  "tags": [
+    "api-gateway",
+    "upstream",
+    "dependencies"
+  ],
   "timezone": "browser",
   "refresh": "15s",
-  "time": { "from": "now-1h", "to": "now" },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "panels": [
     {
       "id": 1,
       "title": "Downstream Services — Error Rate %",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 4 },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "colorMode": "background",
         "graphMode": "area",
         "orientation": "horizontal"
@@ -20,14 +36,34 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
         }
       },
       "targets": [
         {
           "expr": "sum(rate(upstream_requests_total{status=~\"5..\"}[5m])) by (service) / sum(rate(upstream_requests_total[5m])) by (service) * 100",
           "legendFormat": "{{service}}",
-          "refId": "A"
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ]
     },
@@ -35,31 +71,80 @@
       "id": 2,
       "title": "Upstream Request Rate — per services",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 4, "w": 8, "h": 8 },
-      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
       "targets": [
-        { "expr": "sum(rate(upstream_requests_total{job=\"api-gateway\"}[5m])) by (service)", "legendFormat": "{{service}}", "refId": "A" }
+        {
+          "expr": "sum(rate(upstream_requests_total{job=\"api-gateway\"}[5m])) by (service)",
+          "legendFormat": "{{service}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
       ]
     },
     {
       "id": 3,
       "title": "Upstream Error Rate % — per services",
       "type": "timeseries",
-      "gridPos": { "x": 8, "y": 4, "w": 8, "h": 8 },
+      "gridPos": {
+        "x": 8,
+        "y": 4,
+        "w": 8,
+        "h": 8
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
           "min": 0,
           "max": 100,
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] },
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
         }
       },
       "targets": [
         {
           "expr": "sum(rate(upstream_requests_total{job=\"api-gateway\",status=~\"5..\"}[5m])) by (service) / sum(rate(upstream_requests_total{job=\"api-gateway\"}[5m])) by (service) * 100",
           "legendFormat": "{{service}}",
-          "refId": "A"
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ]
     },
@@ -67,24 +152,56 @@
       "id": 4,
       "title": "Upstream P95 Latency — per services",
       "type": "timeseries",
-      "gridPos": { "x": 16, "y": 4, "w": 8, "h": 8 },
+      "gridPos": {
+        "x": 16,
+        "y": 4,
+        "w": 8,
+        "h": 8
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }, { "color": "yellow", "value": 0.3 }, { "color": "red", "value": 1 }] },
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 0.3
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
         }
       },
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum(rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])) by (service, le))",
           "legendFormat": "p95 {{service}}",
-          "refId": "A"
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         },
         {
           "expr": "histogram_quantile(0.50, sum(rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])) by (service, le))",
           "legendFormat": "p50 {{service}}",
-          "refId": "B"
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ]
     },
@@ -92,13 +209,32 @@
       "id": 5,
       "title": "Status Code Breakdown — auth-service",
       "type": "piechart",
-      "gridPos": { "x": 0, "y": 12, "w": 8, "h": 8 },
-      "options": { "pieType": "donut", "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] } },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 8,
+        "h": 8
+      },
+      "options": {
+        "pieType": "donut",
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        }
+      },
       "targets": [
         {
           "expr": "sum(increase(upstream_requests_total{job=\"api-gateway\",service=\"auth-service\"}[1h])) by (status)",
           "legendFormat": "{{status}}",
-          "refId": "A"
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ]
     },
@@ -106,13 +242,32 @@
       "id": 6,
       "title": "Status Code Breakdown — task-service",
       "type": "piechart",
-      "gridPos": { "x": 8, "y": 12, "w": 8, "h": 8 },
-      "options": { "pieType": "donut", "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] } },
+      "gridPos": {
+        "x": 8,
+        "y": 12,
+        "w": 8,
+        "h": 8
+      },
+      "options": {
+        "pieType": "donut",
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        }
+      },
       "targets": [
         {
           "expr": "sum(increase(upstream_requests_total{job=\"api-gateway\",service=\"task-service\"}[1h])) by (status)",
           "legendFormat": "{{status}}",
-          "refId": "A"
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ]
     },
@@ -120,19 +275,46 @@
       "id": 7,
       "title": "401 Rate — auth-service (auth failures trend)",
       "type": "timeseries",
-      "gridPos": { "x": 16, "y": 12, "w": 8, "h": 8 },
+      "gridPos": {
+        "x": 16,
+        "y": 12,
+        "w": 8,
+        "h": 8
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }, { "color": "red", "value": 0.1 }] },
-          "custom": { "lineWidth": 2, "fillOpacity": 20, "lineStyle": { "fill": "solid" } }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 0.1
+              }
+            ]
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "lineStyle": {
+              "fill": "solid"
+            }
+          }
         }
       },
       "targets": [
         {
           "expr": "rate(upstream_requests_total{job=\"api-gateway\",service=\"auth-service\",status=\"401\"}[5m])",
           "legendFormat": "401 auth failures",
-          "refId": "A"
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ]
     },
@@ -140,18 +322,39 @@
       "id": 8,
       "title": "Gateway vs Upstream — Latency Comparison",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 7 },
-      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])) by (le))",
           "legendFormat": "gateway p95 (total)",
-          "refId": "A"
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         },
         {
           "expr": "histogram_quantile(0.95, sum(rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])) by (le))",
           "legendFormat": "upstream p95 (downstream only)",
-          "refId": "B"
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ]
     },
@@ -159,13 +362,34 @@
       "id": 9,
       "title": "Gateway Overhead = Total - Upstream latency",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 7 },
-      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2, "fillOpacity": 10 }, "color": { "fixedColor": "purple", "mode": "fixed" } } },
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "color": {
+            "fixedColor": "purple",
+            "mode": "fixed"
+          }
+        }
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])) by (le)) - histogram_quantile(0.95, sum(rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])) by (le))",
           "legendFormat": "gateway overhead p95",
-          "refId": "A"
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ]
     }
