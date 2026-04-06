@@ -277,9 +277,17 @@ def install_request_context_middleware(app: object) -> None:
                 "x-correlation-id"
             )
             rid = (incoming or "").strip() or uuid.uuid4().hex
+
+            # Bind traceparent as a structlog fallback so _add_trace_id can
+            # parse trace_id even when Starlette's BaseHTTPMiddleware breaks
+            # OTel's contextvars span propagation between middleware layers.
+            tp_token = bind_log_traceparent(request.headers.get("traceparent"))
             response: Response
-            with bound_contextvars(request_id=rid):
-                response = await call_next(request)
+            try:
+                with bound_contextvars(request_id=rid):
+                    response = await call_next(request)
+            finally:
+                reset_log_traceparent(tp_token)
             response.headers["X-Request-ID"] = rid
             return response
 

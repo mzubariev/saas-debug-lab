@@ -92,7 +92,7 @@ async def _proxy(request: Request, url: str) -> Response:
         path=str(request.url.path),
         status=resp.status_code,
         upstream=url,
-        service=service,
+        upstream_service=service,
     )
 
     return Response(
