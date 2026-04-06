@@ -94,7 +94,25 @@ def _inject_dd_trace_id_to_scope() -> None:
 # before_send / before_send_transaction hooks (workers + fallback)
 # ---------------------------------------------------------------------------
 
+# Logger name prefixes whose ERROR records must never become Sentry events.
+# OTel/gRPC export failures ("Failed to export traces … DEADLINE_EXCEEDED") are
+# infrastructure noise when the collector is unreachable — not application bugs.
+_SUPPRESS_LOGGER_PREFIXES = ("opentelemetry", "grpc")
+
+
+def _is_otel_infra_noise(hint: object) -> bool:
+    """Return True when the event originates from an OTel/gRPC logger."""
+    if not isinstance(hint, dict):
+        return False
+    log_record = hint.get("log_record")
+    if log_record is None:
+        return False
+    return any(log_record.name.startswith(p) for p in _SUPPRESS_LOGGER_PREFIXES)
+
+
 def _before_send_correlation(event: dict[str, Any], hint: object) -> dict[str, Any] | None:
+    if _is_otel_infra_noise(hint):
+        return None
     _inject_otel_trace_id_tag(event)
     _inject_dd_trace_id_tag(event)
     return event
