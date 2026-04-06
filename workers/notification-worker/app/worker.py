@@ -11,7 +11,7 @@ from aiokafka import AIOKafkaConsumer
 from aiokafka.structs import TopicPartition
 from prometheus_client import start_http_server
 from saas_shared.kafka_envelope import parse_envelope_message
-from saas_shared.kafka_messaging import kafka_consume_span
+from saas_shared.kafka_messaging import kafka_consume_span, record_span_exception
 from saas_shared.sentry_setup import setup_sentry_worker
 from saas_shared.telemetry import setup_worker_telemetry
 
@@ -237,6 +237,7 @@ async def consume() -> None:
                         )
                         await handle_event(event)
                     except Exception as exc:
+                        record_span_exception(exc)
                         kafka_processing_errors_total.labels(topic=msg.topic).inc()
                         logger.error(
                             "event_processing_failed",

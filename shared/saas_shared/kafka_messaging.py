@@ -5,13 +5,27 @@ from contextlib import asynccontextmanager, contextmanager
 from typing import AsyncIterator, Iterator
 
 from opentelemetry import trace
-from opentelemetry.trace import SpanKind
+from opentelemetry.trace import SpanKind, StatusCode
 from structlog.contextvars import bound_contextvars
 
 from saas_shared.kafka_trace import attach_kafka_message_trace
 from saas_shared.tracing_env import is_otel_sdk_enabled
 
 _TRACER = trace.get_tracer(__name__)
+
+
+def record_span_exception(exc: BaseException) -> None:
+    """Mark the active OTel span as ERROR and attach the exception to it.
+
+    OTel only sets ERROR status automatically when an exception propagates
+    *out* of a ``with span:`` block.  Call this whenever you catch an
+    exception *inside* a span context without re-raising, otherwise the span
+    exits with status OK and Jaeger shows it green despite the failure.
+    """
+    span = trace.get_current_span()
+    if span.is_recording():
+        span.record_exception(exc)
+        span.set_status(StatusCode.ERROR, str(exc))
 
 
 @asynccontextmanager
