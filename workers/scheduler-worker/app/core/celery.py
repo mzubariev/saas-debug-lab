@@ -12,14 +12,12 @@ from saas_shared.telemetry import instrument_sqlalchemy_sync_engine, setup_worke
 from .config import settings
 
 setup_logging(service_name=settings.service_name, log_level=settings.log_level)
-# Sentry at import (beat/parent) and again in worker_process_init after fork.
+# Sentry at import so Beat and the main process capture startup errors.
 setup_sentry_celery(service_name=settings.service_name, dsn=settings.sentry_dsn)
-# OTLP + HTTPX/Redis patches before Celery hooks so task spans use a real TracerProvider.
-setup_worker_telemetry(
-    settings.service_name,
-    settings.otlp_endpoint,
-)
-
+# Instrument Celery internals so task spans are created automatically.
+# TracerProvider is NOT set here — Beat and the main process produce no spans
+# and must not start a BatchSpanProcessor background thread.  Each forked
+# worker subprocess sets up its own TracerProvider in worker_process_init.
 CeleryInstrumentor().instrument()
 
 celery_app = Celery(
