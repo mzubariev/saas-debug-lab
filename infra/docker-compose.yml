@@ -114,6 +114,7 @@ services:
     container_name: api-gateway
     volumes:
       - ../services/core/api-gateway/app:/app/app
+      - ../shared:/app/shared
     restart: unless-stopped
     profiles: ["core"]
     env_file:
@@ -193,6 +194,7 @@ services:
     container_name: auth-service
     volumes:
       - ../services/core/auth-service/app:/app/app
+      - ../shared:/app/shared
     restart: unless-stopped
     profiles: ["core"]
     env_file:
@@ -222,6 +224,7 @@ services:
     container_name: task-service
     volumes:
       - ../services/core/task-service/app:/app/app
+      - ../shared:/app/shared
     restart: unless-stopped
     profiles: ["core"]
     env_file:
@@ -257,6 +260,7 @@ services:
     container_name: external-service-simulator
     volumes:
       - ../services/external/external-service-simulator/app:/app/app
+      - ../shared:/app/shared
     restart: unless-stopped
     profiles: ["core"]
     env_file:
@@ -281,6 +285,7 @@ services:
     container_name: webhook-receiver
     volumes:
       - ../services/core/webhook-receiver/app:/app/app
+      - ../shared:/app/shared
     restart: unless-stopped
     profiles: ["core"]
     env_file:
@@ -307,6 +312,7 @@ services:
     container_name: webhook-dispatcher
     volumes:
       - ../services/core/webhook-dispatcher/app:/app/app
+      - ../shared:/app/shared
     restart: unless-stopped
     profiles: ["core"]
     env_file:
@@ -363,6 +369,7 @@ services:
     container_name: scheduler-worker
     volumes:
       - ../workers/scheduler-worker/app:/app/app
+      - ../shared:/app/shared
     restart: unless-stopped
     profiles: ["core"]
     command: ["celery", "-A", "app.core.celery:celery_app", "worker", "--beat", "--loglevel=info"]
@@ -388,6 +395,7 @@ services:
     container_name: flower
     volumes:
       - ../workers/scheduler-worker/app:/app/app
+      - ../shared:/app/shared
     restart: unless-stopped
     profiles: ["core"]
     command: ["celery", "-A", "app.core.celery:celery_app", "flower", "--port=5555"]
@@ -407,6 +415,7 @@ services:
     container_name: notification-worker
     volumes:
       - ../workers/notification-worker/app:/app/app
+      - ../shared:/app/shared
     restart: unless-stopped
     profiles: ["core"]
     env_file:
