@@ -121,7 +121,6 @@ class TaskService:
                 status_code=409,
                 detail=f"Cannot start task in status '{task.status.value}'. Expected 'created'.",
             )
-
         task.status = TaskStatus.in_progress
         task = await self._repo.save(task)
 

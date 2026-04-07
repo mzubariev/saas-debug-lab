@@ -53,6 +53,17 @@ _traceparent_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "saas_shared_log_traceparent", default=None
 )
 
+# Set by setup_logging; used by _catch_all for its direct-stdout fallback so
+# service identity is correct without any context-variable propagation.
+_current_service_name: str = "unknown"
+
+# Fluent Bit's parser filter has an internal buffer limit (~4 KB by default).
+# Tracebacks with deep FastAPI/Starlette call stacks can easily exceed this,
+# causing silent parse failure → the `level` field is never extracted →
+# the `grep level` filter drops the whole record before it reaches Elasticsearch.
+# 3 KB leaves enough room for all other JSON fields to stay well under 4 KB.
+_MAX_EXCEPTION_CHARS = 3_000
+
 
 def bind_log_traceparent(traceparent: str | None) -> contextvars.Token | None:
     """Bind W3C ``traceparent`` for the current async/task context (e.g. from a request header).
@@ -172,9 +183,12 @@ def _add_trace_id(_logger: Any, _method: str, event_dict: EventDict) -> EventDic
 
 
 def _utc_iso_timestamp(_logger: Any, _method: str, event_dict: EventDict) -> EventDict:
-    """Single ECS-compatible timestamp."""
+    """Single ECS-compatible timestamp (millisecond precision matches Fluent Bit %L parser)."""
     now = datetime.now(timezone.utc)
-    s = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond:06d}Z"
+    # Use 3-digit milliseconds: Fluent Bit's structlog_json parser uses %L which expects ms.
+    # Six-digit microseconds cause the time-key parse to fail (timestamp falls back to
+    # ingest time), and on strict parsers the whole record can be skipped.
+    s = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
     event_dict["@timestamp"] = s
     return event_dict
 
@@ -209,6 +223,20 @@ def _event_to_ecs(_logger: Any, _method: str, event_dict: EventDict) -> EventDic
     return event_dict
 
 
+def _truncate_exception(_logger: Any, _method: str, event_dict: EventDict) -> EventDict:
+    """Truncate the ``exception`` field produced by ``format_exc_info`` to ``_MAX_EXCEPTION_CHARS``.
+
+    Fluent Bit's ``parser`` filter has an internal per-record buffer (~4 KB).  A deep
+    FastAPI/Starlette traceback can exceed this, causing a silent parse failure that
+    drops the entire log record before it reaches Elasticsearch.
+    """
+    exc = event_dict.get("exception")
+    if exc and isinstance(exc, str) and len(exc) > _MAX_EXCEPTION_CHARS:
+        event_dict["exception"] = exc[:_MAX_EXCEPTION_CHARS]
+        event_dict["exception_truncated"] = True
+    return event_dict
+
+
 def _silence_noisy_stdlib_loggers() -> None:
     """Keep third-party noise down; application code should use structlog only."""
     for name in (
@@ -226,6 +254,9 @@ def setup_logging(*, service_name: str, log_level: str = "INFO") -> None:
 
     Call once per process (or again after Celery fork in ``worker_process_init``).
     """
+    global _current_service_name
+    _current_service_name = service_name
+
     level = getattr(logging, log_level.upper(), logging.INFO)
 
     # Stdlib (libraries only): plain text message to stdout — avoids double-wrapping structlog JSON.
@@ -251,6 +282,7 @@ def setup_logging(*, service_name: str, log_level: str = "INFO") -> None:
             _auto_exc_info,
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
+            _truncate_exception,
             structlog.processors.JSONRenderer(),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(level),
@@ -278,13 +310,25 @@ def install_request_context_middleware(app: object) -> None:
             )
             rid = (incoming or "").strip() or uuid.uuid4().hex
 
-            # Bind traceparent as a structlog fallback so _add_trace_id can
-            # parse trace_id even when Starlette's BaseHTTPMiddleware breaks
-            # OTel's contextvars span propagation between middleware layers.
-            tp_token = bind_log_traceparent(request.headers.get("traceparent"))
+            tp = request.headers.get("traceparent")
+            tp_token = bind_log_traceparent(tp)
+            tid = _parse_trace_id_from_traceparent(tp) if tp else None
+
+            # Store on request.state so any code that receives the Request object
+            # (exception handlers, dependencies, route handlers) can read them
+            # directly without relying on contextvars propagation through
+            # BaseHTTPMiddleware's call_next (which creates an anyio task group
+            # that does NOT reliably copy contextvars in all Starlette versions).
+            request.state.request_id = rid
+            request.state.trace_id = tid
+
+            ctx_extras: dict = {"request_id": rid}
+            if tid:
+                ctx_extras["trace_id"] = tid
+
             response: Response
             try:
-                with bound_contextvars(request_id=rid):
+                with bound_contextvars(**ctx_extras):
                     response = await call_next(request)
             finally:
                 reset_log_traceparent(tp_token)
@@ -311,17 +355,75 @@ def install_unhandled_exception_middleware(app: object) -> None:
     _log = structlog.get_logger("saas_shared.exceptions")
 
     async def _catch_all(request: Request, exc: Exception) -> JSONResponse:
-        _log.error(
-            "unhandled_exception",
-            path=str(request.url.path),
-            method=request.method,
+        import json
+        import traceback as _tb
+
+        # ── 1. Resolve trace / request IDs from the request object directly ────
+        # All context-variable mechanisms (bound_contextvars, _traceparent_ctx,
+        # trace.get_current_span) are unreliable here because BaseHTTPMiddleware
+        # spawns an anyio task group whose context inheritance varies by Starlette
+        # version.  request.state and request.headers are always correct.
+        tid = getattr(request.state, "trace_id", None) or (
+            _parse_trace_id_from_traceparent(request.headers.get("traceparent", ""))
         )
+        rid = getattr(request.state, "request_id", None)
+
+        extra: dict = {}
+        if tid:
+            extra["trace_id"] = tid
+        if rid:
+            extra["request_id"] = rid
+
+        # ── 2. structlog path (best-effort, rich output) ─────────────────────
+        # exc_info must be passed explicitly: FastAPI exception handlers are
+        # called outside an except block so sys.exc_info() is (None, None, None).
+        try:
+            _log.error(
+                "unhandled_exception",
+                path=str(request.url.path),
+                method=request.method,
+                exc_info=exc,
+                **extra,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+        # ── 3. Guaranteed fallback: write JSON directly to stdout ─────────────
+        # This record is structurally identical to what structlog would produce
+        # and passes all Fluent Bit filters (level field present, JSON parseable).
+        # It is always emitted — even if structlog fails or its processors swallow
+        # the event — ensuring the error always reaches Kibana with trace_id.
+        try:
+            now = datetime.now(timezone.utc)
+            ts = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
+            raw_tb = "".join(_tb.format_exception(type(exc), exc, exc.__traceback__))
+            record: dict[str, Any] = {
+                "@timestamp": ts,
+                "level": "error",
+                "service.name": _current_service_name,
+                "message": "unhandled_exception",
+                "event.name": "unhandled_exception",
+                "path": str(request.url.path),
+                "method": request.method,
+                "exception": raw_tb[:_MAX_EXCEPTION_CHARS],
+                "log_source": "app",
+            }
+            if len(raw_tb) > _MAX_EXCEPTION_CHARS:
+                record["exception_truncated"] = True
+            record.update(extra)
+            sys.stdout.write(json.dumps(record) + "\n")
+            sys.stdout.flush()
+        except Exception:  # noqa: BLE001
+            pass
+
+        # ── 4. Sentry (optional) ─────────────────────────────────────────────
         try:
             import sentry_sdk  # optional dependency
 
             sentry_sdk.capture_exception(exc)
         except Exception:  # noqa: BLE001
             pass
+
         return JSONResponse(
             status_code=500,
             content={"detail": "Internal server error"},
