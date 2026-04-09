@@ -543,8 +543,6 @@ services:
       - grafana_data:/var/lib/grafana
       - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
     environment:
-      GF_ALERTING_ENABLED: "true"
-      GF_UNIFIED_ALERTING_ENABLED: "true"
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
 
