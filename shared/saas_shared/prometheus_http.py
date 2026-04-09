@@ -6,13 +6,26 @@ Instruments registered in ``saas_shared.metrics`` (single source of truth):
   * ``http_requests_in_progress``    — label: path (gauge, inc before / dec after)
   * ``http_response_size_bytes``     — label: path (histogram, from content-length header)
 
-``path`` is resolved to the matched route template (e.g. ``/tasks/{task_id}``) to
-limit label cardinality; falls back to the raw URL path when no template exists.
+Path label strategy — normalised actual URL path (not route template):
+
+  Route templates (e.g. FastAPI's ``/tasks/{task_id}/complete``) look clean for a
+  single service, but this middleware is shared across all services.  The api-gateway
+  uses catch-all proxy routes (``/tasks/{path:path}``) so its template would be
+  ``/tasks/{path}`` while task-service shows ``/tasks/{task_id}/complete`` for the
+  exact same HTTP call — causing duplicate, confusing labels in Grafana.
+
+  Instead, the *actual* request path is used with dynamic segments normalised:
+    - UUIDs           → ``{id}``   ("/tasks/edfb37b9-.../complete" → "/tasks/{id}/complete")
+    - Bare integers   → ``{id}``   ("/items/42/detail"             → "/items/{id}/detail")
+    - Trailing slash  → stripped  ("/tasks/"                       → "/tasks")
+
+  This produces identical, readable labels across all services for the same endpoint.
 
 Scrapes of ``/metrics`` are excluded to avoid self-noise.
 """
 from __future__ import annotations
 
+import re
 import time
 from typing import Callable
 
@@ -27,6 +40,12 @@ from .prometheus_metrics import (
     http_response_size_bytes,
 )
 
+_UUID_RE = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    re.IGNORECASE,
+)
+_INT_SEGMENT_RE = re.compile(r"(?<=/)\d+(?=/|$)")
+
 
 def _skip_metrics(request: Request) -> bool:
     if request.scope.get("type") != "http":
@@ -35,14 +54,17 @@ def _skip_metrics(request: Request) -> bool:
     return path == "/metrics" or path.startswith("/metrics/")
 
 
-def _path_label(request: Request) -> str:
-    route = request.scope.get("route")
-    if route is not None:
-        template = getattr(route, "path", None)
-        if isinstance(template, str) and template:
-            root = request.scope.get("root_path") or ""
-            return f"{root}{template}" if root else template
-    return request.url.path
+def _normalize_path(path: str) -> str:
+    """Return a Prometheus-safe path label from the raw request URL path.
+
+    Replaces dynamic segments (UUIDs, integers) with ``{id}`` and strips trailing
+    slashes so functionally identical paths always map to the same label value.
+    """
+    if len(path) > 1:
+        path = path.rstrip("/")
+    path = _UUID_RE.sub("{id}", path)
+    path = _INT_SEGMENT_RE.sub("{id}", path)
+    return path
 
 
 class PrometheusHttpMetricsMiddleware(BaseHTTPMiddleware):
@@ -52,7 +74,7 @@ class PrometheusHttpMetricsMiddleware(BaseHTTPMiddleware):
         if _skip_metrics(request):
             return await call_next(request)
 
-        path = _path_label(request)
+        path = _normalize_path(request.url.path)
         http_requests_in_progress.labels(path=path).inc()
 
         start = time.perf_counter()
