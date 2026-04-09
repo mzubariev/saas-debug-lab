@@ -224,15 +224,18 @@ def _event_to_ecs(_logger: Any, _method: str, event_dict: EventDict) -> EventDic
 
 
 def _truncate_exception(_logger: Any, _method: str, event_dict: EventDict) -> EventDict:
-    """Truncate the ``exception`` field produced by ``format_exc_info`` to ``_MAX_EXCEPTION_CHARS``.
+    """Keep the tail of the ``exception`` field produced by ``format_exc_info``.
 
     Fluent Bit's ``parser`` filter has an internal per-record buffer (~4 KB).  A deep
     FastAPI/Starlette traceback can exceed this, causing a silent parse failure that
     drops the entire log record before it reaches Elasticsearch.
+
+    The *tail* is kept (not the head) because the actionable information — the exact
+    file, line number, and exception message — is always at the end of a Python traceback.
     """
     exc = event_dict.get("exception")
     if exc and isinstance(exc, str) and len(exc) > _MAX_EXCEPTION_CHARS:
-        event_dict["exception"] = exc[:_MAX_EXCEPTION_CHARS]
+        event_dict["exception"] = "...(truncated)\n" + exc[-_MAX_EXCEPTION_CHARS:]
         event_dict["exception_truncated"] = True
     return event_dict
 
@@ -397,6 +400,7 @@ def install_unhandled_exception_middleware(app: object) -> None:
             now = datetime.now(timezone.utc)
             ts = now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z"
             raw_tb = "".join(_tb.format_exception(type(exc), exc, exc.__traceback__))
+            truncated = len(raw_tb) > _MAX_EXCEPTION_CHARS
             record: dict[str, Any] = {
                 "@timestamp": ts,
                 "level": "error",
@@ -405,10 +409,10 @@ def install_unhandled_exception_middleware(app: object) -> None:
                 "event.name": "unhandled_exception",
                 "path": str(request.url.path),
                 "method": request.method,
-                "exception": raw_tb[:_MAX_EXCEPTION_CHARS],
+                "exception": ("...(truncated)\n" + raw_tb[-_MAX_EXCEPTION_CHARS:]) if truncated else raw_tb,
                 "log_source": "app",
             }
-            if len(raw_tb) > _MAX_EXCEPTION_CHARS:
+            if truncated:
                 record["exception_truncated"] = True
             record.update(extra)
             sys.stdout.write(json.dumps(record) + "\n")
