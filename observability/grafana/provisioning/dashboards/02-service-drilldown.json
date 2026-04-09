@@ -1,0 +1,58 @@
+{
+  "title": "2. Service Drilldown",
+  "uid": "service-drilldown-v2",
+  "tags": ["service"],
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "type": "query",
+        "datasource": "prometheus",
+        "query": "label_values(http_requests_total, job)"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "title": "RPS by Path",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{job=\"$service\"}[5m])) by (path)"
+        }
+      ]
+    },
+    {
+      "title": "Error Rate by Path",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{job=\"$service\",status=~\"5..\"}[5m])) by (path) / clamp_min(sum(rate(http_requests_total{job=\"$service\"}[5m])) by (path),1)"
+        }
+      ]
+    },
+    {
+      "title": "Latency p95",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"$service\"}[5m])) by (path, le))"
+        }
+      ]
+    },
+    {
+      "title": "In-flight Requests",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "http_requests_in_progress{job=\"$service\"}"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 38
+}

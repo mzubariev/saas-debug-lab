@@ -1,0 +1,58 @@
+{
+  "title": "3. Pipelines",
+  "uid": "pipelines-v2",
+  "tags": ["pipeline"],
+  "panels": [
+    {
+      "title": "Kafka Lag (max)",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "max(kafka_consumer_lag) by (topic)"
+        }
+      ]
+    },
+    {
+      "title": "Kafka Throughput",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(kafka_messages_consumed_total[5m])"
+        }
+      ]
+    },
+    {
+      "title": "Webhook Success Rate",
+      "gridPos": { "x": 0, "y": 8, "w": 6, "h": 4 },
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "sum(rate(webhook_requests_total{status=\"success\"}[5m])) / clamp_min(sum(rate(webhook_requests_total[5m])),1)"
+        }
+      ]
+    },
+    {
+      "title": "Webhook In Progress",
+      "gridPos": { "x": 6, "y": 8, "w": 6, "h": 4 },
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "webhook_in_progress"
+        }
+      ]
+    },
+    {
+      "title": "DLQ Size",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 4 },
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "dlq_size"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 38
+}
