@@ -1,0 +1,26 @@
+apiVersion: 1
+
+contactPoints:
+    - orgId: 1
+      name: telegram
+      receivers:
+        - uid: telegram-receiver
+          type: telegram
+          settings:
+            bottoken: ${TELEGRAM_BOT_TOKEN}
+            chatid: "${TELEGRAM_CHAT_ID}"
+            parseMode: "HTML"
+            message: |
+              <b>{{ .Status | toUpper }}{{ if eq .Status "firing" }} 🔥{{ else }} ✅{{ end }}</b>
+ 
+              {{ range .Alerts }}
+              <b>{{ .Labels.alertname }}</b>
+              {{ if .Annotations.summary }}📋 {{ .Annotations.summary }}{{ end }}
+              {{ if .Annotations.description }}💬 {{ .Annotations.description }}{{ end }}
+              🏷 Severity: <code>{{ .Labels.severity }}</code>
+              {{ if .Labels.job }}🔧 Service: <code>{{ .Labels.job }}</code>{{ end }}
+              {{ end }}
+            disable_notification: false
+            disable_web_page_preview: false
+            protect_content: false
+            disableResolveMessage: false

@@ -5,129 +5,185 @@ groups:
     name: SaaS Debug Lab — Critical
     folder: Alerts
     interval: 30s
+
     rules:
 
-      - uid: alert-service-down
-        title: "Service Down"
-        condition: C
-        data:
-          - refId: A
-            datasourceUid: "prometheus"
-            relativeTimeRange: { from: 60, to: 0 }
-            model:
-              expr: up{job=~"api-gateway|task-service|auth-service|webhook-dispatcher|notification-worker|scheduler-worker"}
-              range: true
-
-          - refId: B
-            datasourceUid: "__expr__"
-            model:
-              type: reduce
-              expression: A
-              reducer: last
-
-          - refId: C
-            datasourceUid: "__expr__"
-            model:
-              type: threshold
-              conditions:
-                - evaluator: { params: [1], type: lt }
-                  query: { params: [B] }
-
+# ----------------------------
+# SERVICE DOWN
+# ----------------------------
+      - uid: service-down
+        title: "Service Down (any instance)"
+        condition: B
         for: 1m
         noDataState: Alerting
         execErrState: Alerting
         labels:
           severity: critical
 
-
-      - uid: alert-high-error-rate
-        title: "High HTTP Error Rate > 5%"
-        condition: C
         data:
           - refId: A
-            datasourceUid: "prometheus"
-            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 60, to: 0 }
             model:
-              expr: job:http_error_rate5m_percent
-              range: true
+              instant: true
+              expr: |
+                min by (job) (
+                  up{
+                    job=~"api-gateway|task-service|auth-service|webhook-dispatcher|notification-worker|scheduler-worker|external-service-simulator"
+                  }
+                )
 
           - refId: B
             datasourceUid: "__expr__"
             model:
-              type: reduce
-              expression: A
-              reducer: last
-
-          - refId: C
-            datasourceUid: "__expr__"
-            model:
               type: threshold
+              expression: A
               conditions:
-                - evaluator: { params: [5], type: gt }
-                  query: { params: [B] }
+                - evaluator: { type: lt, params: [1] }
 
+
+# ----------------------------
+# HTTP ERROR RATE
+# ----------------------------
+      - uid: http-error-rate
+        title: "HTTP Error Rate > 5%"
+        condition: B
         for: 2m
         labels:
           severity: critical
 
-
-      - uid: alert-upstream-5xx
-        title: "Upstream 5xx from api-gateway"
-        condition: C
         data:
           - refId: A
-            datasourceUid: "prometheus"
+            datasourceUid: prometheus
             relativeTimeRange: { from: 300, to: 0 }
             model:
-              expr: sum(rate(upstream_requests_total{job="api-gateway",status=~"5.."}[5m])) by (service)
-              range: true
+              instant: true
+              expr: |
+                (
+                  sum by (job) (
+                    rate(http_requests_total{status=~"5.."}[5m])
+                  )
+                  /
+                  clamp_min(
+                    sum by (job) (
+                      rate(http_requests_total[5m])
+                    ),
+                    0.001
+                  )
+                ) * 100
 
           - refId: B
             datasourceUid: "__expr__"
             model:
-              type: reduce
-              expression: A
-              reducer: last
-
-          - refId: C
-            datasourceUid: "__expr__"
-            model:
               type: threshold
+              expression: A
               conditions:
-                - evaluator: { params: [0.05], type: gt }
-                  query: { params: [B] }
+                - evaluator: { type: gt, params: [5] }
 
+
+# ----------------------------
+# UPSTREAM ERROR RATE
+# ----------------------------
+      - uid: upstream-error-rate
+        title: "Upstream Error Rate > 5%"
+        condition: B
         for: 2m
         labels:
           severity: critical
 
-
-      - uid: alert-webhook-network-errors
-        title: "Webhook Network Errors Spike"
-        condition: C
         data:
           - refId: A
-            datasourceUid: "prometheus"
+            datasourceUid: prometheus
             relativeTimeRange: { from: 300, to: 0 }
             model:
-              expr: sum(rate(webhook_requests_total{status="fail",reason="network"}[5m]))
-              range: true
+              instant: true
+              expr: |
+                (
+                  sum by (service) (
+                    rate(upstream_requests_total{status=~"5.."}[5m])
+                  )
+                  /
+                  clamp_min(
+                    sum by (service) (
+                      rate(upstream_requests_total[5m])
+                    ),
+                    0.001
+                  )
+                ) * 100
 
           - refId: B
             datasourceUid: "__expr__"
             model:
-              type: reduce
-              expression: A
-              reducer: last
-
-          - refId: C
-            datasourceUid: "__expr__"
-            model:
               type: threshold
+              expression: A
               conditions:
-                - evaluator: { params: [0.1], type: gt }
-                  query: { params: [B] }
+                - evaluator: { type: gt, params: [5] }
 
+
+# ----------------------------
+# WEBHOOK FAILURE RATE
+# ----------------------------
+      - uid: webhook-failure-rate
+        title: "Webhook Failure Rate > 5%"
+        condition: B
         for: 2m
         labels:
           severity: critical
+
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              instant: true
+              expr: |
+                (
+                  sum by (job) (
+                    rate(webhook_requests_total{status="fail"}[5m])
+                  )
+                  /
+                  clamp_min(
+                    sum by (job) (
+                      rate(webhook_requests_total[5m])
+                    ),
+                    0.001
+                  )
+                ) * 100
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [5] }
+
+
+# ----------------------------
+# KAFKA PROCESSING ERRORS
+# ----------------------------
+      - uid: kafka-processing-errors
+        title: "Kafka Processing Errors Detected"
+        condition: B
+        for: 2m
+        labels:
+          severity: critical
+
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              instant: true
+              expr: |
+                sum by (job) (
+                  rate(kafka_processing_errors_total[5m])
+                )
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
