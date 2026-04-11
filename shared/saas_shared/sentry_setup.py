@@ -23,12 +23,78 @@ When OpenTelemetry is active (``saas_shared.telemetry``), tag ``otel_trace_id``
 
 When Datadog APM is active (``DD_TRACE_ENABLED`` / ``ddtrace``), tag ``dd_trace_id``
 (decimal string, same as ``dd.trace_id`` in logs) correlates with the Datadog trace UI.
+
+**Observability context — clickable links in every Sentry event:**
+
+Each event includes an "observability" context block with direct links to:
+  - Jaeger: the exact trace by ``trace_id``
+  - Kibana: the pre-saved Discover view filtered to ``trace_id``
+  - Grafana: Service Drilldown dashboard filtered to ``service.name``
 """
 from __future__ import annotations
 
 from typing import Any
 
 import sentry_sdk
+
+# ---------------------------------------------------------------------------
+# Observability tool base URLs — adjust if ports differ in your setup.
+# ---------------------------------------------------------------------------
+_JAEGER_BASE = "http://localhost:16686"
+_GRAFANA_BASE = "http://localhost:3000"
+
+# Kibana Discover settings — index pattern ID comes from Stack Management →
+# Index Patterns.  Columns match the pre-saved table layout.
+_KIBANA_BASE = "http://localhost:5601"
+_KIBANA_INDEX_ID = "3c09e76b-fb4c-4577-8649-493f2d63f589"
+# Rison-encoded column list (no spaces).  Edit here to change visible fields.
+_KIBANA_COLUMNS = (
+    "service.name,event_name,level,status,"
+    "upstream_service,message,exception,request_id,trace_id"
+)
+
+# Set once by each setup_sentry_* function so link builders know the service name.
+_sentry_service_name: str = "unknown"
+
+
+# ---------------------------------------------------------------------------
+# Observability context builder
+# ---------------------------------------------------------------------------
+
+def _observability_context(trace_id: str) -> dict[str, str]:
+    """Return a dict of deep-links to Jaeger / Kibana / Grafana for *trace_id*.
+
+    Attached as ``sentry_sdk.set_context("observability", ...)`` so Sentry renders
+    it as a collapsible "OBSERVABILITY" block with clickable URLs on every event.
+
+    The Kibana URL uses the raw ``#/?_a=`` Discover format with explicit columns so
+    the table layout is always preserved — the saved-view URL form (`#/view/<id>`)
+    can lose column config when ``_a`` overrides it.
+    """
+    kibana = (
+        f"{_KIBANA_BASE}/app/discover#/"
+        f"?_a=("
+        f"columns:!({_KIBANA_COLUMNS})"
+        f",filters:!()"
+        f",index:'{_KIBANA_INDEX_ID}'"
+        f",interval:auto"
+        f",query:(language:kuery,query:'trace_id:\"{trace_id}\"')"
+        f",sort:!(!('@timestamp',desc))"
+        f")"
+        f"&_g=("
+        f"filters:!()"
+        f",refreshInterval:(pause:!t,value:60000)"
+        f",time:(from:now-1h,to:now)"
+        f")"
+    )
+    return {
+        "jaeger": f"{_JAEGER_BASE}/trace/{trace_id}",
+        "kibana": kibana,
+        "grafana": (
+            f"{_GRAFANA_BASE}/d/service-drilldown-v2"
+            f"?var-job={_sentry_service_name}&from=now-1h&to=now"
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +130,7 @@ def _inject_dd_trace_id_tag(event: dict[str, Any]) -> None:
 
 
 def _inject_otel_trace_id_to_scope() -> None:
-    """Set ``otel_trace_id`` on the current Sentry isolation scope while span is live."""
+    """Set ``otel_trace_id`` tag and ``observability`` context on the current Sentry scope."""
     try:
         from opentelemetry import trace
     except ImportError:
@@ -72,7 +138,9 @@ def _inject_otel_trace_id_to_scope() -> None:
     ctx = trace.get_current_span().get_span_context()
     if not ctx.is_valid:
         return
-    sentry_sdk.set_tag("otel_trace_id", format(ctx.trace_id, "032x"))
+    trace_id = format(ctx.trace_id, "032x")
+    sentry_sdk.set_tag("otel_trace_id", trace_id)
+    sentry_sdk.set_context("observability", _observability_context(trace_id))
 
 
 def _inject_dd_trace_id_to_scope() -> None:
@@ -115,6 +183,9 @@ def _before_send_correlation(event: dict[str, Any], hint: object) -> dict[str, A
         return None
     _inject_otel_trace_id_tag(event)
     _inject_dd_trace_id_tag(event)
+    trace_id = event.get("tags", {}).get("otel_trace_id")
+    if trace_id:
+        event.setdefault("contexts", {})["observability"] = _observability_context(trace_id)
     return event
 
 
@@ -186,6 +257,8 @@ def setup_sentry_fastapi(
                       middleware is installed.  Must be passed *before*
                       ``setup_telemetry`` is called so OTel ends up outer (LIFO).
     """
+    global _sentry_service_name
+    _sentry_service_name = service_name
     if not dsn:
         return
     from sentry_sdk.integrations.fastapi import FastApiIntegration
@@ -218,6 +291,8 @@ def setup_sentry_worker(
     worker_name: str,
 ) -> None:
     """Minimal SDK (Kafka/async workers). No framework integrations; default integrations apply."""
+    global _sentry_service_name
+    _sentry_service_name = service_name
     if not dsn:
         return
     sentry_sdk.init(
@@ -236,6 +311,8 @@ def setup_sentry_celery(
     dsn: str,
 ) -> None:
     """Celery workers: ``CeleryIntegration`` for tasks and performance."""
+    global _sentry_service_name
+    _sentry_service_name = service_name
     if not dsn:
         return
     from sentry_sdk.integrations.celery import CeleryIntegration
