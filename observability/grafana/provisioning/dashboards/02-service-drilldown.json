@@ -10,7 +10,7 @@
   "editable": true,
   "links": [
     {
-      "title": "← Global Overview",
+      "title": "← System Health",
       "type": "link",
       "url": "/d/global-overview-v2",
       "keepTime": true,
@@ -24,12 +24,20 @@
       "icon": "external link"
     },
     {
-      "title": "→ Resources",
+      "title": "Kibana: logs for this service",
       "type": "link",
-      "url": "/d/resources-deps-v2",
-      "keepTime": true,
-      "includeVars": true,
-      "icon": "external link"
+      "url": "http://localhost:5601/app/discover#/?_a=(query:(language:kuery,query:'service.name:\"${job}\"'))",
+      "targetBlank": true,
+      "icon": "external link",
+      "tooltip": "Open Kibana filtered to the selected service"
+    },
+    {
+      "title": "Jaeger: traces for this service",
+      "type": "link",
+      "url": "http://localhost:16686/search?service=${job}&lookback=1h",
+      "targetBlank": true,
+      "icon": "external link",
+      "tooltip": "Open Jaeger filtered to the selected service"
     }
   ],
   "templating": {
@@ -158,7 +166,7 @@
     },
     {
       "id": 4,
-      "title": "In-flight Requests",
+      "title": "In-flight",
       "type": "stat",
       "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -193,9 +201,33 @@
     },
     {
       "id": 5,
-      "title": "RPS by Path",
+      "title": "Error Rate by Endpoint",
+      "description": "Which specific path is returning errors?",
       "type": "timeseries",
       "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit" }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (path) (rate(http_requests_total{job=~\"$job\",path=~\"$path\",status=~\"5..\"}[5m])) / clamp_min(sum by (path) (rate(http_requests_total{job=~\"$job\",path=~\"$path\"}[5m])),1)",
+          "legendFormat": "{{path}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "RPS by Endpoint",
+      "description": "Traffic distribution — where is the load?",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "reqps" }
@@ -214,31 +246,9 @@
       ]
     },
     {
-      "id": 6,
-      "title": "Error Rate by Path",
-      "type": "timeseries",
-      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": {
-        "defaults": { "unit": "percentunit" }
-      },
-      "options": {
-        "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["mean", "lastNotNull"] }
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (path) (rate(http_requests_total{job=~\"$job\",path=~\"$path\",status=~\"5..\"}[5m])) / clamp_min(sum by (path) (rate(http_requests_total{job=~\"$job\",path=~\"$path\"}[5m])),1)",
-          "legendFormat": "{{path}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
       "id": 7,
-      "title": "Latency Percentiles by Path",
-      "description": "p50 (solid), p95 (dashed), p99 (dotted)",
+      "title": "Latency p50 / p95 / p99 by Endpoint",
+      "description": "All percentiles in one view — wide gap between p95 and p99 = occasional spikes",
       "type": "timeseries",
       "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -272,54 +282,10 @@
     },
     {
       "id": 8,
-      "title": "In-flight Requests by Path",
+      "title": "Upstream Calls by Service (api-gateway only)",
+      "description": "Only populated when api-gateway is selected. Shows latency and errors to each downstream service.",
       "type": "timeseries",
       "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": {
-        "defaults": { "unit": "short" }
-      },
-      "options": {
-        "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (path) (http_requests_in_progress{job=~\"$job\",path=~\"$path\"})",
-          "legendFormat": "{{path}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 9,
-      "title": "Response Size p95 by Path",
-      "type": "timeseries",
-      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": {
-        "defaults": { "unit": "bytes" }
-      },
-      "options": {
-        "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (path, le) (rate(http_response_size_bytes_bucket{job=~\"$job\",path=~\"$path\"}[5m])))",
-          "legendFormat": "{{path}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 10,
-      "title": "Upstream Calls by Service (api-gateway)",
-      "description": "Only populated when api-gateway is selected",
-      "type": "timeseries",
-      "gridPos": { "x": 0, "y": 28, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "reqps" }
@@ -338,11 +304,10 @@
       ]
     },
     {
-      "id": 11,
-      "title": "Upstream Latency p95 by Service (api-gateway)",
-      "description": "Only populated when api-gateway is selected",
+      "id": 9,
+      "title": "Upstream P95 Latency (api-gateway only)",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 28, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "s" }

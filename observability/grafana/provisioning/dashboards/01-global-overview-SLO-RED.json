@@ -1,7 +1,7 @@
 {
-  "title": "1. Global Overview (SLO + RED)",
+  "title": "1. System Health",
   "uid": "global-overview-v2",
-  "tags": ["overview", "slo", "red"],
+  "tags": ["overview", "slo"],
   "timezone": "browser",
   "refresh": "15s",
   "time": { "from": "now-1h", "to": "now" },
@@ -12,11 +12,11 @@
     {
       "title": "→ Service Drilldown",
       "type": "link",
-      "url": "/d/service-drilldown-v2",
+      "url": "/d/service-drilldown-v2?var-job=${job}",
       "keepTime": true,
       "includeVars": true,
       "icon": "external link",
-      "tooltip": "Drill into a specific service"
+      "tooltip": "Set $job above, then click to drill into that service"
     },
     {
       "title": "→ Pipelines",
@@ -24,16 +24,23 @@
       "url": "/d/pipelines-v2",
       "keepTime": true,
       "icon": "external link",
-      "tooltip": "Kafka, webhooks, Celery, emails"
+      "tooltip": "Kafka · Webhooks · Celery"
     },
     {
-      "title": "→ Resources",
+      "title": "Kibana Logs",
       "type": "link",
-      "url": "/d/resources-deps-v2",
-      "keepTime": true,
-      "includeVars": true,
+      "url": "http://localhost:5601/app/discover",
+      "targetBlank": true,
       "icon": "external link",
-      "tooltip": "CPU, memory, upstream latency"
+      "tooltip": "Open Kibana (filter by service.name or trace_id)"
+    },
+    {
+      "title": "Jaeger Traces",
+      "type": "link",
+      "url": "http://localhost:16686",
+      "targetBlank": true,
+      "icon": "external link",
+      "tooltip": "Open Jaeger"
     }
   ],
   "templating": {
@@ -57,7 +64,7 @@
     {
       "id": 1,
       "title": "Availability",
-      "description": "% of non-5xx requests (SLO target ≥ 99.9%)",
+      "description": "Non-5xx / total. Target ≥ 99.9%",
       "type": "stat",
       "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -76,12 +83,10 @@
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "orientation": "auto",
-        "textMode": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
         "colorMode": "background",
         "graphMode": "area",
-        "justifyMode": "auto"
+        "textMode": "auto"
       },
       "targets": [
         {
@@ -95,7 +100,7 @@
     {
       "id": 2,
       "title": "Error Rate",
-      "description": "5xx responses / total requests",
+      "description": "5xx / total. Alert if > 1%",
       "type": "stat",
       "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -114,12 +119,10 @@
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "orientation": "auto",
-        "textMode": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
         "colorMode": "background",
         "graphMode": "area",
-        "justifyMode": "auto"
+        "textMode": "auto"
       },
       "targets": [
         {
@@ -133,23 +136,17 @@
     {
       "id": 3,
       "title": "RPS",
-      "description": "Requests per second across all selected services",
       "type": "stat",
       "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
-        "defaults": {
-          "unit": "reqps",
-          "mappings": []
-        }
+        "defaults": { "unit": "reqps", "mappings": [] }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "orientation": "auto",
-        "textMode": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
         "colorMode": "value",
         "graphMode": "area",
-        "justifyMode": "auto"
+        "textMode": "auto"
       },
       "targets": [
         {
@@ -163,7 +160,7 @@
     {
       "id": 4,
       "title": "P95 Latency",
-      "description": "95th-percentile response time",
+      "description": "Alert if > 1s",
       "type": "stat",
       "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -182,12 +179,10 @@
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "orientation": "auto",
-        "textMode": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
         "colorMode": "background",
         "graphMode": "area",
-        "justifyMode": "auto"
+        "textMode": "auto"
       },
       "targets": [
         {
@@ -201,21 +196,12 @@
     {
       "id": 5,
       "title": "Error Rate by Service",
-      "description": "Click a series to drill into that service",
+      "description": "Which service is failing? Select it in $job above, then click '→ Service Drilldown' to investigate.",
       "type": "timeseries",
       "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "links": [
-            {
-              "title": "→ Drilldown: ${__series.labels.job}",
-              "url": "/d/service-drilldown-v2?var-job=${__series.labels.job}&from=${__from}&to=${__to}",
-              "targetBlank": false
-            }
-          ]
-        }
+        "defaults": { "unit": "percentunit" }
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
@@ -232,22 +218,13 @@
     },
     {
       "id": 6,
-      "title": "Top 5 Slowest Endpoints (p95)",
-      "description": "Click a series to drill into that service and path",
+      "title": "P95 Latency by Service",
+      "description": "Which service is slow?",
       "type": "timeseries",
       "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "links": [
-            {
-              "title": "→ Drilldown: ${__series.labels.job} ${__series.labels.path}",
-              "url": "/d/service-drilldown-v2?var-job=${__series.labels.job}&var-path=${__series.labels.path}&from=${__from}&to=${__to}",
-              "targetBlank": false
-            }
-          ]
-        }
+        "defaults": { "unit": "s" }
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
@@ -256,65 +233,18 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "topk(5, histogram_quantile(0.95, sum by (job, path, le) (rate(http_request_duration_seconds_bucket[5m]))))",
-          "legendFormat": "{{job}} {{path}}",
+          "expr": "histogram_quantile(0.95, sum by (job, le) (rate(http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{job}}",
           "refId": "A"
         }
       ]
     },
     {
       "id": 7,
-      "title": "Tasks Created / 5m",
-      "type": "stat",
-      "gridPos": { "x": 0, "y": 12, "w": 4, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": {
-        "defaults": { "unit": "short", "mappings": [] }
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
-        "colorMode": "value",
-        "graphMode": "area",
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(increase(tasks_total{status=\"created\"}[5m]))",
-          "legendFormat": "created",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 8,
-      "title": "Tasks Completed / 5m",
-      "type": "stat",
-      "gridPos": { "x": 4, "y": 12, "w": 4, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": {
-        "defaults": { "unit": "short", "mappings": [] }
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
-        "colorMode": "value",
-        "graphMode": "area",
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(increase(tasks_total{status=\"completed\"}[5m]))",
-          "legendFormat": "completed",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 9,
       "title": "Kafka Lag (max)",
+      "description": "Rising lag = pipeline slowdown or consumer crash",
       "type": "stat",
-      "gridPos": { "x": 8, "y": 12, "w": 4, "h": 4 },
+      "gridPos": { "x": 0, "y": 12, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -346,10 +276,11 @@
       ]
     },
     {
-      "id": 10,
+      "id": 8,
       "title": "Webhook Success Rate",
+      "description": "< 99% = check DLQ in Pipelines dashboard",
       "type": "stat",
-      "gridPos": { "x": 12, "y": 12, "w": 4, "h": 4 },
+      "gridPos": { "x": 6, "y": 12, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -381,10 +312,11 @@
       ]
     },
     {
-      "id": 11,
+      "id": 9,
       "title": "DLQ Size",
+      "description": "> 0 = undelivered webhooks piling up",
       "type": "stat",
-      "gridPos": { "x": 16, "y": 12, "w": 4, "h": 4 },
+      "gridPos": { "x": 12, "y": 12, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -409,17 +341,18 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "dlq_size",
+          "expr": "max(dlq_size)",
           "legendFormat": "dlq",
           "refId": "A"
         }
       ]
     },
     {
-      "id": 12,
-      "title": "Email Errors / 5m",
+      "id": 10,
+      "title": "Celery Queue",
+      "description": "Tasks waiting to run (cleanup, retry webhooks)",
       "type": "stat",
-      "gridPos": { "x": 20, "y": 12, "w": 4, "h": 4 },
+      "gridPos": { "x": 18, "y": 12, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -428,8 +361,8 @@
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 5 }
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 200 }
             ]
           },
           "mappings": []
@@ -444,8 +377,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(increase(emails_total{status!=\"success\"}[5m]))",
-          "legendFormat": "failed",
+          "expr": "max(celery_queue_size)",
+          "legendFormat": "queue",
           "refId": "A"
         }
       ]
