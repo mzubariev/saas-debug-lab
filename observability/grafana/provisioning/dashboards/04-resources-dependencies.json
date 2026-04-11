@@ -123,6 +123,7 @@
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "histogram_quantile(0.95, sum by (service, le) (rate(upstream_request_duration_seconds_bucket[5m])))",
           "legendFormat": "{{service}}",
+          "exemplar": true,
           "refId": "A"
         }
       ]
