@@ -8,17 +8,31 @@ datasources:
     url: http://prometheus:9090
     isDefault: true
     editable: true
+    jsonData:
+      # When Grafana encounters an exemplar with label "TraceID" on any histogram
+      # panel it will open the trace in Jaeger using the datasource below.
+      exemplarTraceIdDestinations:
+        - name: TraceID
+          datasourceUid: jaeger
+
   - name: Jaeger
     uid: jaeger
     type: jaeger
     access: proxy
     url: http://jaeger:16686
-    isDefault: true
+    isDefault: false
     editable: true
+
   - name: Elasticsearch
     uid: elasticsearch
     type: elasticsearch
     access: proxy
     url: http://elasticsearch:9200
-    isDefault: true
+    isDefault: false
     editable: true
+    jsonData:
+      index: "saas-debug-lab-app-*"
+      timeField: "@timestamp"
+      logMessageField: message
+      logLevelField: level
+      esVersion: "8.0.0"

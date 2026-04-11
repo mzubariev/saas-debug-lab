@@ -524,6 +524,12 @@ services:
     profiles: ["observability"]
     ports:
       - "9090:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--enable-feature=exemplar-storage"
     volumes:
       - ../observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - ../observability/prometheus/rules:/etc/prometheus/rules:ro
