@@ -1,58 +1,291 @@
 {
   "title": "4. Resources & Dependencies",
   "uid": "resources-deps-v2",
-  "tags": ["use", "deps"],
+  "tags": ["resources", "use", "deps"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "schemaVersion": 38,
+  "version": 1,
+  "editable": true,
+  "links": [
+    {
+      "title": "← Global Overview",
+      "type": "link",
+      "url": "/d/global-overview-v2",
+      "keepTime": true,
+      "icon": "external link"
+    },
+    {
+      "title": "← Service Drilldown",
+      "type": "link",
+      "url": "/d/service-drilldown-v2",
+      "keepTime": true,
+      "includeVars": true,
+      "icon": "external link"
+    },
+    {
+      "title": "→ Pipelines",
+      "type": "link",
+      "url": "/d/pipelines-v2",
+      "keepTime": true,
+      "icon": "external link"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "type": "query",
+        "label": "Service",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(process_resident_memory_bytes, job)",
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".+",
+        "refresh": 2,
+        "sort": 1,
+        "hide": 0
+      }
+    ]
+  },
   "panels": [
     {
-      "title": "CPU (cores)",
+      "id": 1,
+      "title": "CPU Usage (cores)",
+      "description": "Rate of cpu_seconds_total — equivalent to number of cores in use",
+      "type": "timeseries",
       "gridPos": { "x": 0, "y": 0, "w": 8, "h": 8 },
-      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["mean", "lastNotNull"] }
+      },
       "targets": [
         {
-          "expr": "rate(process_cpu_seconds_total[5m])"
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (job) (rate(process_cpu_seconds_total{job=~\"$job\"}[5m]))",
+          "legendFormat": "{{job}}",
+          "refId": "A"
         }
       ]
     },
     {
-      "title": "Memory",
+      "id": 2,
+      "title": "Resident Memory",
+      "description": "RSS per process (one line per container instance)",
+      "type": "timeseries",
       "gridPos": { "x": 8, "y": 0, "w": 8, "h": 8 },
-      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "bytes" }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+      },
       "targets": [
         {
-          "expr": "process_resident_memory_bytes"
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "process_resident_memory_bytes{job=~\"$job\"}",
+          "legendFormat": "{{job}} ({{instance}})",
+          "refId": "A"
         }
       ]
     },
     {
-      "title": "FD Usage",
+      "id": 3,
+      "title": "File Descriptor Usage Ratio",
+      "description": "open_fds / max_fds per process",
+      "type": "timeseries",
       "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 },
-      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.6 },
+              { "color": "red", "value": 0.8 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+      },
       "targets": [
         {
-          "expr": "process_open_fds / process_max_fds"
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "process_open_fds{job=~\"$job\"} / process_max_fds{job=~\"$job\"}",
+          "legendFormat": "{{job}} ({{instance}})",
+          "refId": "A"
         }
       ]
     },
     {
-      "title": "Upstream Error Rate",
+      "id": 4,
+      "title": "Upstream — Request Rate by Service",
+      "description": "Requests api-gateway forwards to each downstream service",
+      "type": "timeseries",
       "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
-      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps" }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["mean", "lastNotNull"] }
+      },
       "targets": [
         {
-          "expr": "sum(rate(upstream_requests_total{status=~\"5..\"}[5m])) by (service) / clamp_min(sum(rate(upstream_requests_total[5m])) by (service),1)"
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (service, status) (rate(upstream_requests_total[5m]))",
+          "legendFormat": "{{service}} — {{status}}",
+          "refId": "A"
         }
       ]
     },
     {
-      "title": "Upstream Latency p95",
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "id": 5,
+      "title": "Upstream — Error Rate by Service",
+      "description": "5xx + timeout + connection_error / total upstream calls",
       "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.01 },
+              { "color": "red", "value": 0.05 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+      },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(upstream_request_duration_seconds_bucket[5m])) by (service, le))"
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (service) (rate(upstream_requests_total{status=~\"5..|timeout|connection_error\"}[5m])) / clamp_min(sum by (service) (rate(upstream_requests_total[5m])),1)",
+          "legendFormat": "{{service}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Upstream — Latency p50 / p95 / p99",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum by (service, le) (rate(upstream_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50 {{service}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (service, le) (rate(upstream_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95 {{service}}",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum by (service, le) (rate(upstream_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99 {{service}}",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Task DB Operations — Duration p95 by Operation",
+      "description": "Latency of individual CRUD operations inside task-service",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (operation, le) (rate(task_processing_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95 {{operation}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Task Lifecycle Rate",
+      "description": "created / in_progress / completed events per second",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "cps" }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (status) (rate(tasks_total[5m]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "HTTP Response Size p95 by Service",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "bytes" }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (job, le) (rate(http_response_size_bytes_bucket{job=~\"$job\"}[5m])))",
+          "legendFormat": "p95 {{job}}",
+          "refId": "A"
         }
       ]
     }
-  ],
-  "schemaVersion": 38
+  ]
 }

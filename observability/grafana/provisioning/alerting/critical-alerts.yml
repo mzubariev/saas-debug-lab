@@ -15,8 +15,8 @@ groups:
         title: "Service Down (any instance)"
         condition: B
         for: 1m
-        noDataState: Alerting
-        execErrState: Alerting
+        noDataState: OK
+        execErrState: OK
         labels:
           severity: critical
 
@@ -49,6 +49,8 @@ groups:
         title: "HTTP Error Rate > 5%"
         condition: B
         for: 2m
+        noDataState: OK
+        execErrState: OK
         labels:
           severity: critical
 
@@ -88,6 +90,8 @@ groups:
         title: "Upstream Error Rate > 5%"
         condition: B
         for: 2m
+        noDataState: OK
+        execErrState: OK
         labels:
           severity: critical
 
@@ -127,6 +131,8 @@ groups:
         title: "Webhook Failure Rate > 5%"
         condition: B
         for: 2m
+        noDataState: OK
+        execErrState: OK
         labels:
           severity: critical
 
@@ -166,6 +172,8 @@ groups:
         title: "Kafka Processing Errors Detected"
         condition: B
         for: 2m
+        noDataState: OK
+        execErrState: OK
         labels:
           severity: critical
 
