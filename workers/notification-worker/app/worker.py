@@ -23,6 +23,7 @@ from saas_shared.prometheus_metrics import (
     kafka_partition_count,
     kafka_processing_duration_seconds,
     kafka_processing_errors_total,
+    otel_trace_id,
 )
 
 from .config import settings
@@ -252,9 +253,13 @@ async def consume() -> None:
                             scope.set_extra("kafka_offset", msg.offset)
                             sentry_sdk.capture_exception(exc)
 
-            kafka_processing_duration_seconds.labels(topic=msg.topic).observe(
-                time.perf_counter() - t0
-            )
+            elapsed = time.perf_counter() - t0
+            tid = otel_trace_id()
+            _exemplar = {"TraceID": tid} if tid else None
+            if _exemplar:
+                kafka_processing_duration_seconds.labels(topic=msg.topic).observe(elapsed, _exemplar)
+            else:
+                kafka_processing_duration_seconds.labels(topic=msg.topic).observe(elapsed)
             await _update_consumer_lag(consumer, msg)
     finally:
         await consumer.stop()

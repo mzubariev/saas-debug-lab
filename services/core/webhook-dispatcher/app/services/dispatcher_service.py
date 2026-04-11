@@ -15,6 +15,7 @@ from saas_shared.prometheus_metrics import (
     dlq_messages_total,
     kafka_messages_consumed_total,
     kafka_processing_errors_total,
+    otel_trace_id,
     webhook_delivery_duration_seconds,
     webhook_in_progress,
     webhook_requests_total,
@@ -65,6 +66,9 @@ async def deliver(
     """
     last_error: str = ""
     attempts_made: int = 0
+    # Capture once — the Kafka consumer span is active at function entry.
+    tid = otel_trace_id()
+    _exemplar = {"TraceID": tid} if tid else None
 
     webhook_in_progress.inc()
     try:
@@ -84,7 +88,8 @@ async def deliver(
                 resp.raise_for_status()
 
                 elapsed = time.perf_counter() - t0
-                webhook_delivery_duration_seconds.labels(status="success").observe(elapsed)
+                _obs = webhook_delivery_duration_seconds.labels(status="success")
+                _obs.observe(elapsed, _exemplar) if _exemplar else _obs.observe(elapsed)
                 webhook_requests_total.labels(
                     status="success", reason="", target=_TARGET
                 ).inc()
@@ -105,7 +110,8 @@ async def deliver(
 
                 if 400 <= status < 500:
                     reason = "4xx"
-                    webhook_delivery_duration_seconds.labels(status="4xx").observe(elapsed)
+                    _obs = webhook_delivery_duration_seconds.labels(status="4xx")
+                    _obs.observe(elapsed, _exemplar) if _exemplar else _obs.observe(elapsed)
                     webhook_requests_total.labels(
                         status="fail", reason=reason, target=_TARGET
                     ).inc()
@@ -120,7 +126,8 @@ async def deliver(
                     break  # client error — retrying won't help, go straight to DLQ
 
                 reason = "5xx"
-                webhook_delivery_duration_seconds.labels(status="5xx").observe(elapsed)
+                _obs = webhook_delivery_duration_seconds.labels(status="5xx")
+                _obs.observe(elapsed, _exemplar) if _exemplar else _obs.observe(elapsed)
                 webhook_requests_total.labels(
                     status="fail", reason=reason, target=_TARGET
                 ).inc()
@@ -141,7 +148,8 @@ async def deliver(
                 elapsed = time.perf_counter() - t0
                 last_error = str(exc)
                 reason = _webhook_reason(exc)  # "timeout" or "network"
-                webhook_delivery_duration_seconds.labels(status=reason).observe(elapsed)
+                _obs = webhook_delivery_duration_seconds.labels(status=reason)
+                _obs.observe(elapsed, _exemplar) if _exemplar else _obs.observe(elapsed)
                 webhook_requests_total.labels(
                     status="fail", reason=reason, target=_TARGET
                 ).inc()

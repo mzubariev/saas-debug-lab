@@ -7,6 +7,7 @@ from saas_shared.prometheus_metrics import (
     kafka_consumer_lag,
     kafka_partition_count,
     kafka_processing_duration_seconds,
+    otel_trace_id,
 )
 
 from .core.config import settings
@@ -57,8 +58,12 @@ async def run_consumer_loop(
 
     async for msg in consumer:
         t0 = time.perf_counter()
+        tid = otel_trace_id()  # capture while span is active, before hand-off
         await process_consumed_message(msg, http_client, producer)
-        kafka_processing_duration_seconds.labels(topic=msg.topic).observe(
-            time.perf_counter() - t0
-        )
+        elapsed = time.perf_counter() - t0
+        exemplar = {"TraceID": tid} if tid else None
+        if exemplar:
+            kafka_processing_duration_seconds.labels(topic=msg.topic).observe(elapsed, exemplar)
+        else:
+            kafka_processing_duration_seconds.labels(topic=msg.topic).observe(elapsed)
         await _update_consumer_lag(consumer, msg)

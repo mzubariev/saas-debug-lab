@@ -21,6 +21,13 @@ Path label strategy — normalised actual URL path (not route template):
 
   This produces identical, readable labels across all services for the same endpoint.
 
+Exemplars:
+  When an active OpenTelemetry span is present the two histograms
+  (``http_request_duration_seconds``, ``http_response_size_bytes``) attach an
+  exemplar ``{"TraceID": "<32-hex-trace-id>"}``.  Grafana reads these exemplar dots
+  and links them directly to the matching Jaeger trace via the datasource configured
+  in ``exemplarTraceIdDestinations``.
+
 Scrapes of ``/metrics`` are excluded to avoid self-noise.
 """
 from __future__ import annotations
@@ -38,6 +45,7 @@ from .prometheus_metrics import (
     http_requests_in_progress,
     http_requests_total,
     http_response_size_bytes,
+    otel_trace_id as _otel_trace_id,
 )
 
 _UUID_RE = re.compile(
@@ -79,11 +87,18 @@ class PrometheusHttpMetricsMiddleware(BaseHTTPMiddleware):
 
         start = time.perf_counter()
         status_label = "500"
+        # Capture trace ID before call_next — the span context is reliable here
+        # (inside BaseHTTPMiddleware.dispatch, before anyio task hand-off).
+        trace_id = _otel_trace_id()
+        exemplar = {"TraceID": trace_id} if trace_id else None
         try:
             response = await call_next(request)
             status_label = str(response.status_code)
             size = int(response.headers.get("content-length", 0))
-            http_response_size_bytes.labels(path=path).observe(size)
+            if exemplar:
+                http_response_size_bytes.labels(path=path).observe(size, exemplar)
+            else:
+                http_response_size_bytes.labels(path=path).observe(size)
             return response
         finally:
             elapsed = time.perf_counter() - start
@@ -92,7 +107,10 @@ class PrometheusHttpMetricsMiddleware(BaseHTTPMiddleware):
                 path=path,
                 status=status_label,
             ).inc()
-            http_request_duration_seconds.labels(path=path).observe(elapsed)
+            if exemplar:
+                http_request_duration_seconds.labels(path=path).observe(elapsed, exemplar)
+            else:
+                http_request_duration_seconds.labels(path=path).observe(elapsed)
             http_requests_in_progress.labels(path=path).dec()
 
 

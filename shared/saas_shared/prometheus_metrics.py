@@ -7,8 +7,28 @@ here exactly once per process.  Services and workers import what they need:
 
 IMPORTANT: never instantiate Prometheus instruments inside functions.
            Always import from this module at call sites.
+
+Exemplar helper
+---------------
+``otel_trace_id()`` returns the active OpenTelemetry trace ID as a 32-char hex
+string (or ``None`` when no span is active).  Pass it to histogram ``.observe()``
+calls so Grafana can link metric dots to the matching Jaeger trace:
+
+    tid = otel_trace_id()
+    exemplar = {"TraceID": tid} if tid else None
+    my_histogram.labels(...).observe(value, exemplar)  # exemplar=None is a no-op
 """
+from opentelemetry import trace as _otel_trace
 from prometheus_client import Counter, Gauge, Histogram
+
+
+def otel_trace_id() -> str | None:
+    """Return the active OTel trace ID as a 32-char hex string, or None."""
+    span = _otel_trace.get_current_span()
+    ctx = span.get_span_context()
+    if ctx.is_valid:
+        return format(ctx.trace_id, "032x")
+    return None
 
 # ── HTTP ──────────────────────────────────────────────────────────────────────
 
