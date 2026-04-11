@@ -33,20 +33,23 @@ Each event includes an "observability" context block with direct links to:
 """
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import sentry_sdk
 
 # ---------------------------------------------------------------------------
-# Observability tool base URLs — adjust if ports differ in your setup.
+# Observability tool base URLs.
+# Read from environment so a single change to infra/.env propagates everywhere.
+# Localhost defaults work for the standard docker-compose setup.
 # ---------------------------------------------------------------------------
-_JAEGER_BASE = "http://localhost:16686"
-_GRAFANA_BASE = "http://localhost:3000"
+_JAEGER_BASE = os.getenv("JAEGER_BASE_URL", "http://localhost:16686")
+_GRAFANA_BASE = os.getenv("GRAFANA_BASE_URL", "http://localhost:3000")
+_KIBANA_BASE = os.getenv("KIBANA_BASE_URL", "http://localhost:5601")
 
 # Kibana Discover settings — index pattern ID comes from Stack Management →
 # Index Patterns.  Columns match the pre-saved table layout.
-_KIBANA_BASE = "http://localhost:5601"
-_KIBANA_INDEX_ID = "3c09e76b-fb4c-4577-8649-493f2d63f589"
+_KIBANA_INDEX_ID = os.getenv("KIBANA_INDEX_ID", "3c09e76b-fb4c-4577-8649-493f2d63f589")
 # Rison-encoded column list (no spaces).  Edit here to change visible fields.
 _KIBANA_COLUMNS = (
     "service.name,event_name,level,status,"
