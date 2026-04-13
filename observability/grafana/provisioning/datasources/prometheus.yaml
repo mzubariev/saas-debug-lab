@@ -1,6 +1,7 @@
 apiVersion: 1
 
 datasources:
+  # ── Prometheus ─────────────────────────────────────────────────────────────
   - name: Prometheus
     uid: prometheus
     type: prometheus
@@ -9,12 +10,13 @@ datasources:
     isDefault: true
     editable: true
     jsonData:
-      # When Grafana encounters an exemplar with label "TraceID" on any histogram
-      # panel it will open the trace in Jaeger using the datasource below.
+      # Exemplar dots on timeseries panels: clicking a dot with label "trace_id"
+      # opens Grafana Explore pre-loaded with that trace in the Jaeger datasource.
       exemplarTraceIdDestinations:
-        - name: TraceID
+        - name: trace_id
           datasourceUid: jaeger
 
+  # ── Jaeger ─────────────────────────────────────────────────────────────────
   - name: Jaeger
     uid: jaeger
     type: jaeger
@@ -22,7 +24,24 @@ datasources:
     url: http://jaeger:16686
     isDefault: false
     editable: true
+    jsonData:
+      # Trace → Logs: clicking "Logs" inside a Jaeger trace opens Elasticsearch
+      # filtered to that exact trace_id.
+      tracesToLogsV2:
+        datasourceUid: elasticsearch
+        filterByTraceID: true
+        filterBySpanID: false
+        customQuery: false
+        spanStartTimeShift: 0
+        spanEndTimeShift: 0
+      # Trace → Metrics: clicking "Metrics" opens Prometheus around ±2 min
+      # of the span start time.
+      tracesToMetrics:
+        datasourceUid: prometheus
+        spanStartTimeShift: "-2m"
+        spanEndTimeShift: "2m"
 
+  # ── Elasticsearch ──────────────────────────────────────────────────────────
   - name: Elasticsearch
     uid: elasticsearch
     type: elasticsearch
@@ -36,13 +55,35 @@ datasources:
       logMessageField: message
       logLevelField: level
       esVersion: "8.0.0"
+      defaultQueryMode: logs
+
+      # Data links — shown next to trace_id.keyword in each expanded log row.
+      # Each entry renders as a separate clickable button in the log detail panel.
+      dataLinks:
+        # 1. Grafana Explore — opens built-in Jaeger trace timeline
+        - field: trace_id
+          url: "${__value.raw}"
+          datasourceUid: jaeger
+          urlDisplayLabel: "Explore trace (Grafana)"
+        # 2. Jaeger UI — opens the native Jaeger trace detail page
+        - field: trace_id
+          url: "${JAEGER_BASE_URL}/trace/${__value.raw}"
+          urlDisplayLabel: "Jaeger"
+        # 3. Kibana Discover — pre-filtered to this trace_id with preset columns
+        - field: trace_id
+          url: "${KIBANA_BASE_URL}/app/discover#/view/3ed629f0-365c-11f1-bbf7-3bf617a85e7c?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now-15m,to:now))&_a=(columns:!(log_source,service.name,event_name,level,status,upstream,message,exception,request_id,trace_id,'@timestamp'),filters:!(),grid:(columns:('@timestamp':(width:121),level:(width:75),log_source:(width:68),status:(width:66))),hideChart:!f,index:'3c09e76b-fb4c-4577-8649-493f2d63f589',interval:auto,query:(language:kuery,query:'trace_id:${__value.raw}'),sort:!(!('@timestamp',desc)))"
+          urlDisplayLabel: "Kibana"
+        # 4. Sentry — issues filtered by this otel_trace_id
+        - field: trace_id
+          url: "https://mykola-zubariev.sentry.io/issues/?project=4511098962837584&query=otel_trace_id%3A${__value.raw}%20is%3Aunresolved&referrer=issue-list&statsPeriod=14d"
+          urlDisplayLabel: "Sentry"
+
+      # Derived fields — regex/label match used to surface the trace_id Jaeger
+      # link in the legacy "log line details" view (kept for backward compat).
       derivedFields:
-        # matcherType: label means Grafana looks for a log field named
-        # "trace_id" rather than running a regex on the message text.
-        # The matched value is passed to the Jaeger datasource as a trace ID.
         - name: trace_id
           matcherType: label
           matcherRegex: trace_id
-          url: "${__value.raw}"
+          url: ""
           datasourceUid: jaeger
           urlDisplayLabel: "Open trace in Jaeger"

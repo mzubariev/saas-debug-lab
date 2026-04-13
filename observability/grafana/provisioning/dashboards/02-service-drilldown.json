@@ -410,6 +410,21 @@
           }
         ]
       },
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "type": "exclude",
+            "match": "any",
+            "filters": [
+              {
+                "fieldName": "traceName",
+                "config": { "id": "regex", "options": { "value": "health|metrics|readiness|liveness" } }
+              }
+            ]
+          }
+        }
+      ],
       "targets": [
         {
           "datasource": { "type": "jaeger", "uid": "jaeger" },

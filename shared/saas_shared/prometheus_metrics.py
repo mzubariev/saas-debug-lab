@@ -15,7 +15,7 @@ string (or ``None`` when no span is active).  Pass it to histogram ``.observe()`
 calls so Grafana can link metric dots to the matching Jaeger trace:
 
     tid = otel_trace_id()
-    exemplar = {"TraceID": tid} if tid else None
+    exemplar = {"trace_id": tid} if tid else None
     my_histogram.labels(...).observe(value, exemplar)  # exemplar=None is a no-op
 """
 from opentelemetry import trace as _otel_trace

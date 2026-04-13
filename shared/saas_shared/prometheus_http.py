@@ -24,7 +24,7 @@ Path label strategy — normalised actual URL path (not route template):
 Exemplars:
   When an active OpenTelemetry span is present the two histograms
   (``http_request_duration_seconds``, ``http_response_size_bytes``) attach an
-  exemplar ``{"TraceID": "<32-hex-trace-id>"}``.  Grafana reads these exemplar dots
+  exemplar ``{"trace_id": "<32-hex-trace-id>"}``.  Grafana reads these exemplar dots
   and links them directly to the matching Jaeger trace via the datasource configured
   in ``exemplarTraceIdDestinations``.
 
@@ -90,7 +90,7 @@ class PrometheusHttpMetricsMiddleware(BaseHTTPMiddleware):
         # Capture trace ID before call_next — the span context is reliable here
         # (inside BaseHTTPMiddleware.dispatch, before anyio task hand-off).
         trace_id = _otel_trace_id()
-        exemplar = {"TraceID": trace_id} if trace_id else None
+        exemplar = {"trace_id": trace_id} if trace_id else None
         try:
             response = await call_next(request)
             status_label = str(response.status_code)

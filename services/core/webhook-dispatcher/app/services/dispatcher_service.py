@@ -68,7 +68,7 @@ async def deliver(
     attempts_made: int = 0
     # Capture once — the Kafka consumer span is active at function entry.
     tid = otel_trace_id()
-    _exemplar = {"TraceID": tid} if tid else None
+    _exemplar = {"trace_id": tid} if tid else None
 
     webhook_in_progress.inc()
     try:
