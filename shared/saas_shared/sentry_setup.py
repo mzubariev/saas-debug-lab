@@ -49,7 +49,7 @@ _KIBANA_BASE = os.getenv("KIBANA_BASE_URL", "http://localhost:5601")
 
 # Kibana Discover settings — index pattern ID comes from Stack Management →
 # Index Patterns.  Columns match the pre-saved table layout.
-_KIBANA_INDEX_ID = os.getenv("KIBANA_INDEX_ID", "3c09e76b-fb4c-4577-8649-493f2d63f589")
+_KIBANA_INDEX_ID = os.getenv("KIBANA_INDEX_ID", "3ed629f0-365c-11f1-bbf7-3bf617a85e7c")
 # Rison-encoded column list (no spaces).  Edit here to change visible fields.
 _KIBANA_COLUMNS = (
     "service.name,event_name,level,status,"
