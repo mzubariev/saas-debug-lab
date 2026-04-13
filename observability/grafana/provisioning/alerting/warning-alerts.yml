@@ -21,7 +21,7 @@ groups:
           severity: warning
         annotations:
           summary: "{{ $labels.job }} P95 latency exceeded 1s"
-          dashboard: "${GRAFANA_BASE_URL}/d/service-drilldown-v2?var-job={{ $labels.job }}&from=now-1h&to=now"
+          dashboard: "${GRAFANA_BASE_URL}/d/service-drilldown-v2?var-job={{ $labels.job }}"
           runbook: "${GITHUB_REPO_URL}/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#2-high-api-latency"
 
         data:
@@ -63,7 +63,7 @@ groups:
           severity: warning
         annotations:
           summary: "No HTTP traffic detected for {{ $labels.job }}"
-          dashboard: "${GRAFANA_BASE_URL}/d/global-overview-v2?from=now-1h&to=now"
+          dashboard: "${GRAFANA_BASE_URL}/d/global-overview-v2"
           runbook: "${GITHUB_REPO_URL}/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
 
         data:
@@ -99,7 +99,7 @@ groups:
           severity: warning
         annotations:
           summary: "Kafka consumer lag in {{ $labels.job }} is above 60s — pipeline backing up"
-          dashboard: "${GRAFANA_BASE_URL}/d/pipelines-v2?from=now-1h&to=now"
+          dashboard: "${GRAFANA_BASE_URL}/d/pipelines-v2"
           runbook: "${GITHUB_REPO_URL}/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#4-kafka-lag-increasing"
 
         data:
@@ -138,7 +138,7 @@ groups:
           severity: warning
         annotations:
           summary: "Webhook DLQ is receiving new messages — deliveries permanently failing"
-          dashboard: "${GRAFANA_BASE_URL}/d/pipelines-v2?from=now-1h&to=now"
+          dashboard: "${GRAFANA_BASE_URL}/d/pipelines-v2"
           runbook: "${GITHUB_REPO_URL}/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#1-webhooks-not-delivered"
 
         data:
@@ -174,7 +174,7 @@ groups:
           severity: warning
         annotations:
           summary: "Celery queue backlog — tasks are accumulating faster than workers consume"
-          dashboard: "${GRAFANA_BASE_URL}/d/pipelines-v2?from=now-1h&to=now"
+          dashboard: "${GRAFANA_BASE_URL}/d/pipelines-v2"
           runbook: "${GITHUB_REPO_URL}/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
 
         data:
@@ -213,7 +213,7 @@ groups:
           severity: warning
         annotations:
           summary: "{{ $labels.job }} file descriptor usage above 80% — risk of connection exhaustion"
-          dashboard: "${GRAFANA_BASE_URL}/d/resources-deps-v2?var-job={{ $labels.job }}&from=now-1h&to=now"
+          dashboard: "${GRAFANA_BASE_URL}/d/resources-deps-v2?var-job={{ $labels.job }}"
           runbook: "${GITHUB_REPO_URL}/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
 
         data:
@@ -252,7 +252,7 @@ groups:
           severity: warning
         annotations:
           summary: "auth-service 401 Unauthorized rate exceeded 10% — possible credential storm or attack"
-          dashboard: "${GRAFANA_BASE_URL}/d/service-drilldown-v2?var-job=auth-service&from=now-1h&to=now"
+          dashboard: "${GRAFANA_BASE_URL}/d/service-drilldown-v2?var-job=auth-service"
           runbook: "${GITHUB_REPO_URL}/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
 
         data:
