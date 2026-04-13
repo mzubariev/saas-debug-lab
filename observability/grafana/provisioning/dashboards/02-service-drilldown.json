@@ -38,6 +38,14 @@
       "targetBlank": true,
       "icon": "external link",
       "tooltip": "Open Jaeger filtered to the selected service"
+    },
+    {
+      "title": "Sentry: issues for this service",
+      "type": "link",
+      "url": "https://mykola-zubariev.sentry.io/issues/?project=4511098962837584&query=tags%5Bservice%5D%3A${job}",
+      "targetBlank": true,
+      "icon": "external link",
+      "tooltip": "Open Sentry issues filtered to the selected service"
     }
   ],
   "templating": {
@@ -325,6 +333,89 @@
           "expr": "histogram_quantile(0.95, sum by (service, le) (rate(upstream_request_duration_seconds_bucket{job=~\"$job\"}[5m])))",
           "legendFormat": "{{service}}",
           "exemplar": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Logs — $job",
+      "description": "Application logs for the selected service within the dashboard time range. Filter further by level, trace_id, or event_name in the search bar.",
+      "type": "logs",
+      "gridPos": { "x": 0, "y": 28, "w": 24, "h": 10 },
+      "datasource": { "type": "elasticsearch", "uid": "elasticsearch" },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": { "type": "elasticsearch", "uid": "elasticsearch" },
+          "query": "service.name:\"$job\"",
+          "metrics": [
+            {
+              "id": "1",
+              "type": "logs",
+              "settings": { "limit": "500" }
+            }
+          ],
+          "timeField": "@timestamp",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Recent Traces — $job",
+      "description": "Trace search results. Click a Trace ID to open the full span timeline in Jaeger.",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 38, "w": 24, "h": 10 },
+      "datasource": { "type": "jaeger", "uid": "jaeger" },
+      "options": {
+        "cellHeight": "sm",
+        "footer": { "enablePagination": false },
+        "sortBy": [{ "displayName": "Start time", "desc": true }]
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "traceID" },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open in Jaeger",
+                    "url": "http://localhost:16686/trace/${__value.raw}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Start time" },
+            "properties": [{ "id": "unit", "value": "dateTimeAsMs" }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Duration" },
+            "properties": [{ "id": "unit", "value": "µs" }]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": { "type": "jaeger", "uid": "jaeger" },
+          "queryType": "search",
+          "service": "$job",
+          "limit": 20,
           "refId": "A"
         }
       ]

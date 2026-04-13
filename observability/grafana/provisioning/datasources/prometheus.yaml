@@ -31,8 +31,18 @@ datasources:
     isDefault: false
     editable: true
     jsonData:
-      index: "saas-debug-lab-app-*"
+      index: "saas-debug-lab-*"
       timeField: "@timestamp"
       logMessageField: message
       logLevelField: level
       esVersion: "8.0.0"
+      derivedFields:
+        # matcherType: label means Grafana looks for a log field named
+        # "trace_id" rather than running a regex on the message text.
+        # The matched value is passed to the Jaeger datasource as a trace ID.
+        - name: trace_id
+          matcherType: label
+          matcherRegex: trace_id
+          url: "${__value.raw}"
+          datasourceUid: jaeger
+          urlDisplayLabel: "Open trace in Jaeger"
