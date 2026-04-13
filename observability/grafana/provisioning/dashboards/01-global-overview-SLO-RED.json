@@ -197,7 +197,7 @@
       "id": 5,
       "title": "Error Rate by Service",
       "description": "Which service is failing? Select it in $job above, then click '→ Service Drilldown' to investigate.",
-      "type": "timeseries",
+      "type": "bargauge",
       "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
