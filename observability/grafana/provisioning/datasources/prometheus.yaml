@@ -31,7 +31,7 @@ datasources:
         datasourceUid: elasticsearch
         filterByTraceID: true
         filterBySpanID: false
-        customQuery: false
+        customQuery: "trace_id:${__value.raw}"
         spanStartTimeShift: 0
         spanEndTimeShift: 0
       # Trace → Metrics: clicking "Metrics" opens Prometheus around ±2 min
@@ -84,6 +84,6 @@ datasources:
         - name: trace_id
           matcherType: label
           matcherRegex: trace_id
-          url: ""
+          url: "${__value.raw}"
           datasourceUid: jaeger
           urlDisplayLabel: "Open trace in Jaeger"

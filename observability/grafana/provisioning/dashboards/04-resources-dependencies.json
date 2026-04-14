@@ -82,49 +82,64 @@
       ]
     },
     {
-      "id": 3,
-      "title": "Upstream Error Rate by Downstream Service",
-      "description": "Which service is returning errors to api-gateway?",
+      "id": 5,
+      "title": "Task Processing Latency p95 by Operation",
+      "description": "DB operation latency for task-service CRUD — spike = slow DB or lock contention",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": {
-        "defaults": { "unit": "percentunit" }
-      },
-      "options": {
-        "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (service) (rate(upstream_requests_total{status=~\"5..|timeout|connection_error\"}[5m])) / clamp_min(sum by (service) (rate(upstream_requests_total[5m])),1)",
-          "legendFormat": "{{service}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 4,
-      "title": "Upstream Latency p95 by Downstream Service",
-      "description": "Which downstream service is slow from api-gateway's perspective?",
-      "type": "timeseries",
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "s" }
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (service, le) (rate(upstream_request_duration_seconds_bucket[5m])))",
-          "legendFormat": "{{service}}",
+          "expr": "histogram_quantile(0.95, sum by (operation, le) (rate(task_processing_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{operation}}",
           "exemplar": true,
           "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Open File Descriptors by Service",
+      "description": "Approaching OS limit = connection/file handle leak; compare against process_max_fds",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "limit" },
+            "properties": [
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [8, 4] } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "process_open_fds{job=~\"$job\"}",
+          "legendFormat": "{{job}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "process_max_fds{job=~\"$job\"}",
+          "legendFormat": "limit",
+          "refId": "B"
         }
       ]
     }

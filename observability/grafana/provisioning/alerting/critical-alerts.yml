@@ -14,15 +14,15 @@ groups:
       - uid: service-down
         title: "Service Down (any instance)"
         condition: B
-        for: 1m
-        noDataState: OK
+        for: 2m
+        noDataState: Alerting
         execErrState: OK
         labels:
           severity: critical
         annotations:
           summary: "Service {{ $labels.job }} is not responding"
-          dashboard: "${GRAFANA_BASE_URL}/d/global-overview-v2"
-          runbook: "${GITHUB_REPO_URL}/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+          dashboard: "http://127.0.0.1:3000/d/global-overview-v2"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
 
         data:
           - refId: A
@@ -59,8 +59,8 @@ groups:
           severity: critical
         annotations:
           summary: "{{ $labels.job }} HTTP 5xx error rate exceeded 5%"
-          dashboard: "${GRAFANA_BASE_URL}/d/service-drilldown-v2?var-job={{ $labels.job }}"
-          runbook: "${GITHUB_REPO_URL}/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#2-high-api-latency"
+          dashboard: "http://127.0.0.1:3000/d/service-drilldown-v2?var-job={{ $labels.job }}"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#2-high-api-latency"
 
         data:
           - refId: A
@@ -104,8 +104,8 @@ groups:
           severity: critical
         annotations:
           summary: "Upstream calls to {{ $labels.service }} failing above 5%"
-          dashboard: "${GRAFANA_BASE_URL}/d/resources-deps-v2"
-          runbook: "${GITHUB_REPO_URL}/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#6-external-api-failures"
+          dashboard: "http://127.0.0.1:3000/d/resources-deps-v2"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#6-external-api-failures"
 
         data:
           - refId: A
@@ -149,8 +149,8 @@ groups:
           severity: critical
         annotations:
           summary: "Webhook delivery failure rate exceeded 5% — check DLQ"
-          dashboard: "${GRAFANA_BASE_URL}/d/pipelines-v2"
-          runbook: "${GITHUB_REPO_URL}/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#1-webhooks-not-delivered"
+          dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#1-webhooks-not-delivered"
 
         data:
           - refId: A
@@ -194,8 +194,8 @@ groups:
           severity: critical
         annotations:
           summary: "Kafka message processing errors detected in {{ $labels.job }}"
-          dashboard: "${GRAFANA_BASE_URL}/d/pipelines-v2"
-          runbook: "${GITHUB_REPO_URL}/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#4-kafka-lag-increasing"
+          dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#4-kafka-lag-increasing"
 
         data:
           - refId: A

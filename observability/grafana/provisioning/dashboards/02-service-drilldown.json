@@ -1,23 +1,29 @@
 {
   "title": "2. Service Drilldown",
   "uid": "service-drilldown-v2",
-  "tags": ["service", "drilldown"],
+  "tags": [
+    "service",
+    "drilldown"
+  ],
   "timezone": "browser",
   "refresh": "15s",
-  "time": { "from": "now-1h", "to": "now" },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "schemaVersion": 38,
   "version": 1,
   "editable": true,
   "links": [
     {
-      "title": "← System Health",
+      "title": "\u2190 System Health",
       "type": "link",
       "url": "/d/global-overview-v2",
       "keepTime": true,
       "icon": "external link"
     },
     {
-      "title": "→ Pipelines",
+      "title": "\u2192 Pipelines",
       "type": "link",
       "url": "/d/pipelines-v2",
       "keepTime": true,
@@ -54,7 +60,10 @@
         "name": "job",
         "type": "query",
         "label": "Service",
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
         "query": "label_values(http_requests_total, job)",
         "includeAll": false,
         "multi": false,
@@ -66,7 +75,10 @@
         "name": "path",
         "type": "query",
         "label": "Path",
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
         "query": "label_values(http_requests_total{job=~\"$job\"}, path)",
         "includeAll": true,
         "multi": true,
@@ -82,20 +94,38 @@
       "id": 1,
       "title": "RPS",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
-        "defaults": { "unit": "reqps", "mappings": [] }
+        "defaults": {
+          "unit": "reqps",
+          "mappings": []
+        }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "colorMode": "value",
         "graphMode": "area",
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum(rate(http_requests_total{job=~\"$job\",path=~\"$path\"}[5m]))",
           "legendFormat": "rps",
           "refId": "A"
@@ -106,31 +136,55 @@
       "id": 2,
       "title": "Error Rate",
       "type": "stat",
-      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.01 },
-              { "color": "red", "value": 0.05 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
             ]
           },
           "mappings": []
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "colorMode": "background",
         "graphMode": "area",
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum(rate(http_requests_total{job=~\"$job\",path=~\"$path\",status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total{job=~\"$job\",path=~\"$path\"}[5m])),1)",
           "legendFormat": "error rate",
           "refId": "A"
@@ -141,31 +195,55 @@
       "id": 3,
       "title": "P95 Latency",
       "type": "stat",
-      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "s",
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.5 },
-              { "color": "red", "value": 1.0 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1.0
+              }
             ]
           },
           "mappings": []
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "colorMode": "background",
         "graphMode": "area",
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=~\"$job\",path=~\"$path\"}[5m])))",
           "legendFormat": "p95",
           "refId": "A"
@@ -176,31 +254,55 @@
       "id": 4,
       "title": "In-flight",
       "type": "stat",
-      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 20 },
-              { "color": "red", "value": 50 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
             ]
           },
           "mappings": []
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "colorMode": "background",
         "graphMode": "area",
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum(http_requests_in_progress{job=~\"$job\",path=~\"$path\"})",
           "legendFormat": "in-flight",
           "refId": "A"
@@ -212,18 +314,40 @@
       "title": "Error Rate by Endpoint",
       "description": "Which specific path is returning errors?",
       "type": "bargauge",
-      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
-        "defaults": { "unit": "percentunit" }
+        "defaults": {
+          "unit": "percentunit"
+        }
       },
       "options": {
-        "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum by (path) (rate(http_requests_total{job=~\"$job\",path=~\"$path\",status=~\"5..\"}[5m])) / clamp_min(sum by (path) (rate(http_requests_total{job=~\"$job\",path=~\"$path\"}[5m])),1)",
           "legendFormat": "{{path}}",
           "refId": "A"
@@ -233,20 +357,43 @@
     {
       "id": 6,
       "title": "RPS by Endpoint",
-      "description": "Traffic distribution — where is the load?",
+      "description": "Traffic distribution \u2014 where is the load?",
       "type": "bargauge",
-      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
-        "defaults": { "unit": "reqps" }
+        "defaults": {
+          "unit": "reqps"
+        }
       },
       "options": {
-        "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["mean", "lastNotNull"] }
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "lastNotNull"
+          ]
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum by (path) (rate(http_requests_total{job=~\"$job\",path=~\"$path\"}[5m]))",
           "legendFormat": "{{path}}",
           "refId": "A"
@@ -256,34 +403,62 @@
     {
       "id": 7,
       "title": "Latency p50 / p95 / p99 by Endpoint",
-      "description": "All percentiles in one view — wide gap between p95 and p99 = occasional spikes",
+      "description": "All percentiles in one view \u2014 wide gap between p95 and p99 = occasional spikes",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
-        "defaults": { "unit": "s" }
+        "defaults": {
+          "unit": "s"
+        }
       },
       "options": {
-        "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "histogram_quantile(0.50, sum by (path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\",path=~\"$path\"}[5m])))",
           "legendFormat": "p50 {{path}}",
           "exemplar": true,
           "refId": "A"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "histogram_quantile(0.95, sum by (path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\",path=~\"$path\"}[5m])))",
           "legendFormat": "p95 {{path}}",
           "exemplar": true,
           "refId": "B"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "histogram_quantile(0.99, sum by (path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\",path=~\"$path\"}[5m])))",
           "legendFormat": "p99 {{path}}",
           "exemplar": true,
@@ -292,23 +467,54 @@
       ]
     },
     {
+      "id": 12,
+      "title": "↓ External Calls (from API Gateway)",
+      "description": "These panels are only populated when api-gateway is selected. All metrics are recorded inside api-gateway and reflect its outbound calls to downstream services.",
+      "type": "row",
+      "gridPos": { "x": 0, "y": 40, "w": 24, "h": 1 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
       "id": 8,
-      "title": "Upstream Calls by Service (api-gateway only)",
-      "description": "Only populated when api-gateway is selected. Shows latency and errors to each downstream service.",
+      "title": "Outbound Requests to Downstream Services",
+      "description": "Requests made by api-gateway to each downstream service, broken by HTTP status. Only populated when api-gateway is selected.",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
-        "defaults": { "unit": "reqps" }
+        "defaults": {
+          "unit": "reqps"
+        }
       },
       "options": {
-        "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
       },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (service, status) (rate(upstream_requests_total{job=~\"$job\"}[5m]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (service, status) (rate(upstream_requests_total{job=\"api-gateway\"}[5m]))",
           "legendFormat": "{{service}} {{status}}",
           "refId": "A"
         }
@@ -316,13 +522,57 @@
     },
     {
       "id": 9,
-      "title": "Upstream P95 Latency (api-gateway only)",
+      "title": "Downstream Error Rate (api-gateway view)",
+      "description": "Percentage of api-gateway's outbound calls to each downstream service that resulted in 5xx, timeout, or connection error.",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": {
-        "defaults": { "unit": "s" }
+      "gridPos": {
+        "x": 12,
+        "y": 41,
+        "w": 12,
+        "h": 8
       },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (service) (rate(upstream_requests_total{job=\"api-gateway\", status=~\"5..|timeout|connection_error\"}[5m])) / clamp_min(sum by (service) (rate(upstream_requests_total{job=\"api-gateway\"}[5m])), 1)",
+          "legendFormat": "{{service}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Downstream P95 Latency (api-gateway view)",
+      "description": "Round-trip latency at p95 as measured by api-gateway for each call to a downstream service. Spike = slow downstream DB, handler, or network.",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 49, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
@@ -330,7 +580,29 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (service, le) (rate(upstream_request_duration_seconds_bucket{job=~\"$job\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (service, le) (rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])))",
+          "legendFormat": "{{service}}",
+          "exemplar": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Downstream P99 Latency (api-gateway view)",
+      "description": "Tail (p99) round-trip latency as measured by api-gateway for each call to a downstream service. Useful for spotting intermittent slowness invisible at p95.",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 49, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum by (service, le) (rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])))",
           "legendFormat": "{{service}}",
           "exemplar": true,
           "refId": "A"
@@ -339,11 +611,19 @@
     },
     {
       "id": 10,
-      "title": "Logs — $job",
+      "title": "Logs \u2014 $job",
       "description": "Application logs for the selected service within the dashboard time range. Filter further by level, trace_id, or event_name in the search bar.",
       "type": "logs",
-      "gridPos": { "x": 0, "y": 28, "w": 24, "h": 10 },
-      "datasource": { "type": "elasticsearch", "uid": "elasticsearch" },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "elasticsearch",
+        "uid": "elasticsearch"
+      },
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": true,
@@ -352,41 +632,79 @@
         "showLabels": true,
         "showTime": true,
         "sortOrder": "Descending",
-        "wrapLogMessage": false
+        "wrapLogMessage": false,
+        "displayedFields": [
+          "trace_id",
+          "service.name",
+          "event_name",
+          "level",
+          "status",
+          "exception",
+          "message",
+          "upstream",
+          "request_id"
+        ]
       },
       "targets": [
         {
-          "datasource": { "type": "elasticsearch", "uid": "elasticsearch" },
+          "datasource": {
+            "type": "elasticsearch",
+            "uid": "elasticsearch"
+          },
           "query": "service.name:\"$job\"",
           "metrics": [
             {
               "id": "1",
               "type": "logs",
-              "settings": { "limit": "500" }
+              "settings": {
+                "limit": "500"
+              }
             }
           ],
           "timeField": "@timestamp",
           "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
     },
     {
       "id": 11,
-      "title": "Recent Traces — $job",
-      "description": "Trace search results. Click a Trace ID to open the full span timeline in Jaeger.",
+      "title": "Recent Traces \u2014 $job",
+      "description": "Click traceID to open in Jaeger UI or Grafana Explore. /health and /metrics traces are filtered out.",
       "type": "table",
-      "gridPos": { "x": 0, "y": 38, "w": 24, "h": 10 },
-      "datasource": { "type": "jaeger", "uid": "jaeger" },
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "jaeger",
+        "uid": "jaeger"
+      },
       "options": {
         "cellHeight": "sm",
-        "footer": { "enablePagination": false },
-        "sortBy": [{ "displayName": "Start time", "desc": true }]
+        "footer": {
+          "enablePagination": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Start time",
+            "desc": true
+          }
+        ]
       },
       "fieldConfig": {
         "defaults": {},
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "traceID" },
+            "matcher": {
+              "id": "byName",
+              "options": "traceID"
+            },
             "properties": [
               {
                 "id": "links",
@@ -401,12 +719,28 @@
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "Start time" },
-            "properties": [{ "id": "unit", "value": "dateTimeAsMs" }]
+            "matcher": {
+              "id": "byName",
+              "options": "Start time"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsMs"
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "Duration" },
-            "properties": [{ "id": "unit", "value": "µs" }]
+            "matcher": {
+              "id": "byName",
+              "options": "Duration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "\u00b5s"
+              }
+            ]
           }
         ]
       },
@@ -419,7 +753,21 @@
             "filters": [
               {
                 "fieldName": "traceName",
-                "config": { "id": "regex", "options": { "value": "health|metrics|readiness|liveness" } }
+                "config": {
+                  "id": "regex",
+                  "options": {
+                    "value": "health|metrics|readiness|liveness"
+                  }
+                }
+              },
+              {
+                "fieldName": "Trace name",
+                "config": {
+                  "id": "regex",
+                  "options": {
+                    "value": "health|metrics|readiness|liveness"
+                  }
+                }
               }
             ]
           }
@@ -427,7 +775,10 @@
       ],
       "targets": [
         {
-          "datasource": { "type": "jaeger", "uid": "jaeger" },
+          "datasource": {
+            "type": "jaeger",
+            "uid": "jaeger"
+          },
           "queryType": "search",
           "service": "$job",
           "limit": 20,

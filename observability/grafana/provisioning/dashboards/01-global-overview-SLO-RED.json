@@ -16,7 +16,7 @@
       "keepTime": true,
       "includeVars": true,
       "icon": "external link",
-      "tooltip": "Set $job above, then click to drill into that service"
+      "tooltip": "Set Service, then click to drill into that service"
     },
     {
       "title": "→ Pipelines",
@@ -25,6 +25,14 @@
       "keepTime": true,
       "icon": "external link",
       "tooltip": "Kafka · Webhooks · Celery"
+    },
+    {
+      "title": "→ Resources",
+      "type": "link",
+      "url": "/d/resources-deps-v2",
+      "keepTime": true,
+      "icon": "external link",
+      "tooltip": "Resources · Dependencies"
     },
     {
       "title": "Kibana Logs",
@@ -62,11 +70,51 @@
   },
   "panels": [
     {
+      "id": 11,
+      "title": "Services / Containers Availability",
+      "description": "1 tile per scrape target. Green = UP, Red = DOWN. Any red tile means Prometheus cannot reach that container.",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",   "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red"   } } },
+            { "type": "value", "options": { "1": { "text": "UP",   "color": "green" } } }
+          ]
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "horizontal"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "min by (job) (up)",
+          "legendFormat": "{{job}}",
+          "instant": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
       "id": 1,
       "title": "Availability",
       "description": "Non-5xx / total. Target ≥ 99.9%",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "gridPos": { "x": 0, "y": 4, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -102,7 +150,7 @@
       "title": "Error Rate",
       "description": "5xx / total. Alert if > 1%",
       "type": "stat",
-      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "gridPos": { "x": 6, "y": 4, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -137,7 +185,7 @@
       "id": 3,
       "title": "RPS",
       "type": "stat",
-      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "gridPos": { "x": 12, "y": 4, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "reqps", "mappings": [] }
@@ -162,7 +210,7 @@
       "title": "P95 Latency",
       "description": "Alert if > 1s",
       "type": "stat",
-      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "gridPos": { "x": 18, "y": 4, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -198,7 +246,7 @@
       "title": "Error Rate by Service",
       "description": "Which service is failing? Select it in $job above, then click '→ Service Drilldown' to investigate.",
       "type": "bargauge",
-      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "percentunit" }
@@ -221,7 +269,7 @@
       "title": "P95 Latency by Service",
       "description": "Which service is slow?",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "s" }
@@ -245,7 +293,7 @@
       "title": "Kafka Lag (max)",
       "description": "Rising lag = pipeline slowdown or consumer crash",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 12, "w": 6, "h": 4 },
+      "gridPos": { "x": 0, "y": 16, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -281,7 +329,7 @@
       "title": "Webhook Success Rate",
       "description": "< 99% = check DLQ in Pipelines dashboard",
       "type": "stat",
-      "gridPos": { "x": 6, "y": 12, "w": 6, "h": 4 },
+      "gridPos": { "x": 6, "y": 16, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -317,7 +365,7 @@
       "title": "DLQ Size",
       "description": "> 0 = undelivered webhooks piling up",
       "type": "stat",
-      "gridPos": { "x": 12, "y": 12, "w": 6, "h": 4 },
+      "gridPos": { "x": 12, "y": 16, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -353,7 +401,7 @@
       "title": "Celery Queue",
       "description": "Tasks waiting to run (cleanup, retry webhooks)",
       "type": "stat",
-      "gridPos": { "x": 18, "y": 12, "w": 6, "h": 4 },
+      "gridPos": { "x": 18, "y": 16, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
