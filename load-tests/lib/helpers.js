@@ -16,7 +16,10 @@ export const WEBHOOK_SIM_URL = __ENV.WEBHOOK_SIM_URL || 'http://localhost:8004'
 // ─── Trace correlation ─────────────────────────────────────────────────────────
 /** Unique id per request for log/trace correlation (gateway can forward as X-Request-ID). */
 export function requestId() {
-  return `k6-${__VU}-${__ITER}-${Date.now()}`
+  // __VU / __ITER exist only in the default function (per-VU iteration). setup/teardown/init do not define __ITER.
+  const vu = typeof __VU !== 'undefined' ? __VU : 'setup'
+  const iter = typeof __ITER !== 'undefined' ? __ITER : 0
+  return `k6-${vu}-${iter}-${Date.now()}`
 }
 
 /** Standard k6 HTTP tags: scenario name + logical endpoint (for thresholds & dashboards). */
