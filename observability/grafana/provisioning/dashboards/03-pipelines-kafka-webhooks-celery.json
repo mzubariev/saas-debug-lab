@@ -73,7 +73,7 @@
     },
     {
       "id": 3,
-      "title": "Webhook Success Rate",
+      "title": "Webhook Attempt Success Percentage",
       "description": "< 99% = retries failing. Check DLQ.",
       "type": "stat",
       "gridPos": { "x": 0, "y": 8, "w": 6, "h": 4 },
@@ -84,7 +84,8 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.949 },
               { "color": "yellow", "value": 0.95 },
               { "color": "green", "value": 0.99 }
             ]
@@ -101,7 +102,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(rate(webhook_requests_total{status=\"success\"}[5m])) / clamp_min(sum(rate(webhook_requests_total[5m])),1)",
+          "expr": "sum(increase(webhook_requests_total{status=\"success\"}[5m])) / clamp_min(sum(increase(webhook_requests_total[5m])), 1)",
           "legendFormat": "success rate",
           "refId": "A"
         }
@@ -223,7 +224,7 @@
       "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
-        "defaults": { "unit": "cps" }
+        "defaults": { "unit": "short" }
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
@@ -232,7 +233,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (status) (rate(webhook_requests_total[5m]))",
+          "expr": "sum by (status) (increase(webhook_requests_total[5m]))",
           "legendFormat": "{{status}}",
           "refId": "A"
         }

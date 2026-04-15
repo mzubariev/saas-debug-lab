@@ -126,7 +126,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(http_requests_total{job=~\"$job\",path=~\"$path\"}[5m]))",
+          "expr": "sum(rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m]))",
           "legendFormat": "rps",
           "refId": "A"
         }
@@ -185,7 +185,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(http_requests_total{job=~\"$job\",path=~\"$path\",status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total{job=~\"$job\",path=~\"$path\"}[5m])),1)",
+          "expr": "sum(rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])),1)",
           "legendFormat": "error rate",
           "refId": "A"
         }
@@ -244,7 +244,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=~\"$job\",path=~\"$path\"}[5m])))",
+          "expr": "max(histogram_quantile(0.95, sum by (path, le) (rate(http_request_duration_seconds_bucket{job=\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m]))))",
           "legendFormat": "p95",
           "refId": "A"
         }
@@ -303,7 +303,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(http_requests_in_progress{job=~\"$job\",path=~\"$path\"})",
+          "expr": "sum(http_requests_in_progress{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"})",
           "legendFormat": "in-flight",
           "refId": "A"
         }
@@ -348,7 +348,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (path) (rate(http_requests_total{job=~\"$job\",path=~\"$path\",status=~\"5..\"}[5m])) / clamp_min(sum by (path) (rate(http_requests_total{job=~\"$job\",path=~\"$path\"}[5m])),1)",
+          "expr": "sum by (path) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", status=~\"5..\"}[5m])) / clamp_min(sum by (path) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])),1)",
           "legendFormat": "{{path}}",
           "refId": "A"
         }
@@ -394,7 +394,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (path) (rate(http_requests_total{job=~\"$job\",path=~\"$path\"}[5m]))",
+          "expr": "sum by (path) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m]))",
           "legendFormat": "{{path}}",
           "refId": "A"
         }
@@ -439,7 +439,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.50, sum by (path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\",path=~\"$path\"}[5m])))",
+          "expr": "histogram_quantile(0.50, sum by (path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])))",
           "legendFormat": "p50 {{path}}",
           "exemplar": true,
           "refId": "A"
@@ -449,7 +449,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\",path=~\"$path\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])))",
           "legendFormat": "p95 {{path}}",
           "exemplar": true,
           "refId": "B"
@@ -459,7 +459,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum by (path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\",path=~\"$path\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])))",
           "legendFormat": "p99 {{path}}",
           "exemplar": true,
           "refId": "C"
@@ -514,7 +514,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (service, status) (rate(upstream_requests_total{job=\"api-gateway\"}[5m]))",
+          "expr": "sum by (service, status) (rate(upstream_requests_total{job=\"api-gateway\", path!~\"/metrics|/health\"}[5m]))",
           "legendFormat": "{{service}} {{status}}",
           "refId": "A"
         }
@@ -559,7 +559,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (service) (rate(upstream_requests_total{job=\"api-gateway\", status=~\"5..|timeout|connection_error\"}[5m])) / clamp_min(sum by (service) (rate(upstream_requests_total{job=\"api-gateway\"}[5m])), 1)",
+          "expr": "sum by (service) (rate(upstream_requests_total{job=\"api-gateway\", path!~\"/metrics|/health\", status=~\"5..|timeout|connection_error\"}[5m])) / clamp_min(sum by (service) (rate(upstream_requests_total{job=\"api-gateway\", path!~\"/metrics|/health\"}[5m])), 1)",
           "legendFormat": "{{service}}",
           "refId": "A"
         }
@@ -580,7 +580,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (service, le) (rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (service, le) (rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\", path!~\"/metrics|/health\"}[5m])))",
           "legendFormat": "{{service}}",
           "exemplar": true,
           "refId": "A"
@@ -602,7 +602,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.99, sum by (service, le) (rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (service, le) (rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\", path!~\"/metrics|/health\"}[5m])))",
           "legendFormat": "{{service}}",
           "exemplar": true,
           "refId": "A"
@@ -651,7 +651,7 @@
             "type": "elasticsearch",
             "uid": "elasticsearch"
           },
-          "query": "service.name:\"$job\"",
+          "query": "service.name:\"$job\" AND NOT url.path:(/health* or /metrics*)",
           "metrics": [
             {
               "id": "1",
