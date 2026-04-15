@@ -135,7 +135,7 @@ webhook_retries_total = Counter(
 
 dlq_size = Gauge(
     "dlq_size",
-    "Current estimated number of messages in the webhook DLQ topic.",
+    "Consumer-group lag on the webhook_dlq topic (messages pending for scheduler-worker), refreshed by scheduler-worker.",
 )
 
 dlq_messages_total = Counter(

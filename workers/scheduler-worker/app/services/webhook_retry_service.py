@@ -7,7 +7,8 @@ from kafka.errors import NoBrokersAvailable
 from saas_shared.kafka_envelope import parse_envelope_message
 from saas_shared.kafka_messaging import kafka_consume_span
 
-from saas_shared.prometheus_metrics import dlq_processed_total, kafka_messages_consumed_total
+from kafka import TopicPartition
+from saas_shared.prometheus_metrics import dlq_processed_total, dlq_size, kafka_messages_consumed_total
 
 from ..core.config import settings
 from ..infrastructure.http.client import post_json_sync
@@ -63,6 +64,12 @@ def process_dlq() -> dict:
         for msg in consumer:
             kafka_messages_consumed_total.labels(topic=msg.topic).inc()
             dlq_processed_total.inc()
+            try:
+                tp = TopicPartition(msg.topic, msg.partition)
+                end = consumer.end_offsets([tp])[tp]
+                dlq_size.set(max(0, end - (msg.offset + 1)))
+            except Exception:
+                pass
             _event_type, payload, envelope_trace_id = parse_envelope_message(msg.value)
             with kafka_consume_span(
                 msg.topic,

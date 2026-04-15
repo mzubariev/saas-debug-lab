@@ -56,6 +56,7 @@ def _on_task_postrun(
     state: str = "UNKNOWN",
     **kwargs,
 ) -> None:
+    """Celery invokes this after every task; not called by application code directly."""
     from saas_shared.prometheus_metrics import (
         celery_active_tasks,
         celery_queue_size,
@@ -83,6 +84,7 @@ def _on_task_postrun(
         r.close()
     except Exception:
         pass
+
 
 
 celery_app.conf.update(
