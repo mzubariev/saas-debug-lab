@@ -52,7 +52,7 @@ _KIBANA_BASE = os.getenv("KIBANA_BASE_URL", "http://localhost:5601")
 _KIBANA_INDEX_ID = os.getenv("KIBANA_INDEX_ID", "3ed629f0-365c-11f1-bbf7-3bf617a85e7c")
 # Rison-encoded column list (no spaces).  Edit here to change visible fields.
 _KIBANA_COLUMNS = (
-    "service.name,event_name,level,status,"
+    "service.name,event_name,method,path,level,status,"
     "upstream_service,message,exception,request_id,trace_id"
 )
 
