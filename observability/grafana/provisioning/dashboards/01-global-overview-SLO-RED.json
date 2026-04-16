@@ -290,8 +290,8 @@
     },
     {
       "id": 7,
-      "title": "Kafka Lag by Topic",
-      "description": "Total consumer lag per (consumer group, topic) pair, exported by kafka-exporter. Rising = pipeline backing up; sudden jump = consumer crashed. See Pipelines dashboard for full detail.",
+      "title": "Kafka Consumer Lag (total)",
+      "description": "Total consumer lag, exported by kafka-exporter. Rising = pipeline backing up; sudden jump = consumer crashed. See Pipelines dashboard for full detail.",
       "type": "stat",
       "gridPos": { "x": 0, "y": 24, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -318,8 +318,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (consumergroup, topic) (kafka_consumergroup_lag)",
-          "legendFormat": "{{topic}} / {{consumergroup}}",
+          "expr": "sum(kafka_consumergroup_lag)",
+          "legendFormat": "lag",
           "refId": "A"
         }
       ]
