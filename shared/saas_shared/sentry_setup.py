@@ -47,13 +47,11 @@ _JAEGER_BASE = os.getenv("JAEGER_BASE_URL", "http://localhost:16686")
 _GRAFANA_BASE = os.getenv("GRAFANA_BASE_URL", "http://localhost:3000")
 _KIBANA_BASE = os.getenv("KIBANA_BASE_URL", "http://localhost:5601")
 
-# Kibana Discover settings — index pattern ID comes from Stack Management →
-# Index Patterns.  Columns match the pre-saved table layout.
-_KIBANA_INDEX_ID = os.getenv("KIBANA_INDEX_ID", "3ed629f0-365c-11f1-bbf7-3bf617a85e7c")
+# Kibana Discover settings.
 # Rison-encoded column list (no spaces).  Edit here to change visible fields.
 _KIBANA_COLUMNS = (
-    "service.name,event_name,method,path,level,status,"
-    "upstream_service,message,exception,request_id,trace_id"
+    "'@timestamp',log_source,service.name,event_name,method,path"
+    "level,status,upstream,message,exception,trace_id,request_id"
 )
 
 # Set once by each setup_sentry_* function so link builders know the service name.
@@ -71,15 +69,13 @@ def _observability_context(trace_id: str) -> dict[str, str]:
     it as a collapsible "OBSERVABILITY" block with clickable URLs on every event.
 
     The Kibana URL uses the raw ``#/?_a=`` Discover format with explicit columns so
-    the table layout is always preserved — the saved-view URL form (`#/view/<id>`)
-    can lose column config when ``_a`` overrides it.
+    the table layout is always preserved.
     """
     kibana = (
         f"{_KIBANA_BASE}/app/discover#/"
         f"?_a=("
         f"columns:!({_KIBANA_COLUMNS})"
         f",filters:!()"
-        f",index:'{_KIBANA_INDEX_ID}'"
         f",interval:auto"
         f",query:(language:kuery,query:'trace_id:\"{trace_id}\"')"
         f",sort:!(!('@timestamp',desc))"

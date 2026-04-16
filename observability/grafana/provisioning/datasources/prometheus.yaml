@@ -71,7 +71,7 @@ datasources:
           urlDisplayLabel: "Jaeger"
         # 3. Kibana Discover — pre-filtered to this trace_id with preset columns
         - field: trace_id
-          url: "${KIBANA_BASE_URL}/app/discover#/view/3ed629f0-365c-11f1-bbf7-3bf617a85e7c?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now-15m,to:now))&_a=(columns:!('@timestamp',log_source,service.name,event_name,method,pathlevel,status,upstream,message,exception,trace_id,request_id),filters:!(),grid:(columns:('@timestamp':(width:121),level:(width:75),log_source:(width:68),status:(width:66))),hideChart:!f,index:'3c09e76b-fb4c-4577-8649-493f2d63f589',interval:auto,query:(language:kuery,query:'trace_id:${__value.raw}'),sort:!(!('@timestamp',desc)))"
+          url: "${KIBANA_BASE_URL}/app/discover#/?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now-15m,to:now))&_a=(columns:!('@timestamp',log_source,service.name,event_name,method,path,level,status,upstream,message,exception,trace_id,request_id),filters:!(),grid:(columns:('@timestamp':(width:121),level:(width:75),log_source:(width:68),status:(width:66))),hideChart:!f,interval:auto,query:(language:kuery,query:'trace_id:${__value.raw}'),sort:!(!('@timestamp',desc)))"
           urlDisplayLabel: "Kibana"
         # 4. Sentry — issues filtered by this otel_trace_id
         - field: trace_id
