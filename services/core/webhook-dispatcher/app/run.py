@@ -36,7 +36,7 @@ async def _async_main() -> None:
     )
 
     try:
-        await run_consumer_loop(consumer, producer, http_client, CONSUME_TOPICS)
+        await run_consumer_loop(consumer, producer, http_client)
     finally:
         await consumer.stop()
         await close_producer(producer)

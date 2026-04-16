@@ -3,7 +3,7 @@
 Single source of truth — every Counter, Histogram, and Gauge is registered
 here exactly once per process.  Services and workers import what they need:
 
-    from saas_shared.prometheus_metrics import http_requests_total, kafka_consumer_lag
+    from saas_shared.prometheus_metrics import http_requests_total, kafka_messages_consumed_total
 
 IMPORTANT: never instantiate Prometheus instruments inside functions.
            Always import from this module at call sites.
@@ -88,21 +88,9 @@ kafka_processing_duration_seconds = Histogram(
     buckets=(0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
 )
 
-kafka_consumer_lag = Gauge(
-    "kafka_consumer_lag",
-    "Estimated Kafka consumer lag (messages behind the latest offset).",
-    ["topic", "partition", "group"],
-)
-
 kafka_processing_errors_total = Counter(
     "kafka_processing_errors_total",
     "Kafka messages that failed processing (parse errors or handler exceptions).",
-    ["topic"],
-)
-
-kafka_partition_count = Gauge(
-    "kafka_partition_count",
-    "Number of partitions assigned to this consumer for a topic.",
     ["topic"],
 )
 
@@ -132,11 +120,6 @@ webhook_retries_total = Counter(
 )
 
 # ── DLQ ───────────────────────────────────────────────────────────────────────
-
-dlq_size = Gauge(
-    "dlq_size",
-    "Consumer-group lag on the webhook_dlq topic (messages pending for scheduler-worker), refreshed by scheduler-worker.",
-)
 
 dlq_messages_total = Counter(
     "dlq_messages_total",

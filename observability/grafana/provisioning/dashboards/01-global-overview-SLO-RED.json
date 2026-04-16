@@ -291,7 +291,7 @@
     {
       "id": 7,
       "title": "Kafka Lag by Topic",
-      "description": "Max consumer lag across partitions, per topic and consumer group. Rising = pipeline backing up; sudden jump = consumer crashed. See Pipelines dashboard for full detail.",
+      "description": "Total consumer lag per (consumer group, topic) pair, exported by kafka-exporter. Rising = pipeline backing up; sudden jump = consumer crashed. See Pipelines dashboard for full detail.",
       "type": "stat",
       "gridPos": { "x": 0, "y": 24, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -318,8 +318,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "max by (topic, group) (kafka_consumer_lag)",
-          "legendFormat": "{{topic}} / {{group}}",
+          "expr": "sum by (consumergroup, topic) (kafka_consumergroup_lag)",
+          "legendFormat": "{{topic}} / {{consumergroup}}",
           "refId": "A"
         }
       ]
@@ -363,7 +363,7 @@
     {
       "id": 9,
       "title": "DLQ Size",
-      "description": "> 0 = undelivered webhooks piling up",
+      "description": "Unprocessed messages in webhook_dlq for the scheduler-worker consumer group, as reported by kafka-exporter. > 0 = webhooks waiting for retry.",
       "type": "stat",
       "gridPos": { "x": 12, "y": 24, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -390,7 +390,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "max(dlq_size)",
+          "expr": "sum(kafka_consumergroup_lag{consumergroup=\"scheduler-worker\", topic=\"webhook_dlq\"})",
           "legendFormat": "dlq",
           "refId": "A"
         }

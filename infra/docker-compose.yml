@@ -89,6 +89,20 @@ services:
 # KAFKA UI
 ############################
 
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:latest
+    container_name: kafka-exporter
+    restart: unless-stopped
+    profiles: ["core"]
+    command:
+      - "--kafka.server=kafka:9092"
+      - "--web.listen-address=:9308"
+    ports:
+      - "9308:9308"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
   kafka-ui:
     image: provectuslabs/kafka-ui
     container_name: kafka-ui

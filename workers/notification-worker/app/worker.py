@@ -8,7 +8,6 @@ import aiosmtplib
 import sentry_sdk
 import structlog
 from aiokafka import AIOKafkaConsumer
-from aiokafka.structs import TopicPartition
 from prometheus_client import start_http_server
 from saas_shared.kafka_envelope import parse_envelope_message
 from saas_shared.kafka_messaging import kafka_consume_span, record_span_exception
@@ -18,9 +17,7 @@ from saas_shared.telemetry import setup_worker_telemetry
 from saas_shared.prometheus_metrics import (
     email_send_duration_seconds,
     emails_total,
-    kafka_consumer_lag,
     kafka_messages_consumed_total,
-    kafka_partition_count,
     kafka_processing_duration_seconds,
     kafka_processing_errors_total,
     otel_trace_id,
@@ -148,20 +145,6 @@ async def handle_event(event: dict) -> None:
             sentry_sdk.capture_exception(exc)
 
 
-async def _update_consumer_lag(consumer: AIOKafkaConsumer, msg) -> None:
-    tp = TopicPartition(msg.topic, msg.partition)
-    try:
-        end_offsets = await consumer.end_offsets([tp])
-        lag = max(0, end_offsets[tp] - (msg.offset + 1))
-        kafka_consumer_lag.labels(
-            topic=msg.topic,
-            partition=str(msg.partition),
-            group=GROUP_ID,
-        ).set(lag)
-    except Exception:
-        pass
-
-
 async def consume() -> None:
     consumer = AIOKafkaConsumer(
         TOPIC,
@@ -171,14 +154,6 @@ async def consume() -> None:
     )
 
     await consumer.start()
-
-    try:
-        partitions = consumer.partitions_for_topic(TOPIC)
-        if partitions:
-            kafka_partition_count.labels(topic=TOPIC).set(len(partitions))
-    except Exception:
-        pass
-
     logger.info("consumer_started", topic=TOPIC, group_id=GROUP_ID)
 
     try:
@@ -260,7 +235,6 @@ async def consume() -> None:
                 kafka_processing_duration_seconds.labels(topic=msg.topic).observe(elapsed, _exemplar)
             else:
                 kafka_processing_duration_seconds.labels(topic=msg.topic).observe(elapsed)
-            await _update_consumer_lag(consumer, msg)
     finally:
         await consumer.stop()
 

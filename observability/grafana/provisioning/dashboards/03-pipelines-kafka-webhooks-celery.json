@@ -28,7 +28,7 @@
     {
       "id": 1,
       "title": "Kafka Consumer Lag by Topic",
-      "description": "Rising = consumer is falling behind. Flat high = consumer crashed or is too slow.",
+      "description": "Total lag per (consumer group, topic) from kafka-exporter — continuously updated, not message-triggered. Rising = consumer falling behind. Flat high = consumer crashed or too slow.",
       "type": "bargauge",
       "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -42,8 +42,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "max by (topic, group) (kafka_consumer_lag)",
-          "legendFormat": "{{topic}} / {{group}}",
+          "expr": "sum by (consumergroup, topic) (kafka_consumergroup_lag)",
+          "legendFormat": "{{topic}} / {{consumergroup}}",
           "refId": "A"
         }
       ]
@@ -146,7 +146,7 @@
     {
       "id": 5,
       "title": "DLQ Size",
-      "description": "> 0 = undelivered messages accumulating",
+      "description": "Unprocessed messages in webhook_dlq for the scheduler-worker consumer group, as reported by kafka-exporter. > 0 = webhooks waiting for retry. Now continuously visible — no longer requires the retry job to be running.",
       "type": "stat",
       "gridPos": { "x": 12, "y": 8, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -173,7 +173,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "max(dlq_size)",
+          "expr": "sum(kafka_consumergroup_lag{consumergroup=\"scheduler-worker\", topic=\"webhook_dlq\"})",
           "legendFormat": "dlq",
           "refId": "A"
         }
