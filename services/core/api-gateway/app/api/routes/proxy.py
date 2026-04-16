@@ -61,14 +61,14 @@ async def _proxy(request: Request, url: str) -> Response:
             headers=headers,
         )
     except httpx.TimeoutException as exc:
-        upstream_requests_total.labels(service=service, status="timeout").inc()
+        upstream_requests_total.labels(service=service, status=504).inc()
         upstream_request_duration_seconds.labels(service=service).observe(
             time.perf_counter() - t0
         )
         logger.error("proxy_timeout", method=request.method, url=url)
-        raise HTTPException(status_code=504, detail="Upstream timeout") from exc
+        raise HTTPException(status_code=504, message="Upstream timeout") from exc
     except httpx.RequestError as exc:
-        upstream_requests_total.labels(service=service, status="connection_error").inc()
+        upstream_requests_total.labels(service=service, status=502).inc()
         upstream_request_duration_seconds.labels(service=service).observe(
             time.perf_counter() - t0
         )
@@ -78,7 +78,7 @@ async def _proxy(request: Request, url: str) -> Response:
             url=url,
             error=str(exc),
         )
-        raise HTTPException(status_code=502, detail="Upstream unavailable") from exc
+        raise HTTPException(status_code=502, message="Upstream unavailable") from exc
 
     elapsed = time.perf_counter() - t0
     status_label = str(resp.status_code)
