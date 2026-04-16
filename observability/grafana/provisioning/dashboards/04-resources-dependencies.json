@@ -37,22 +37,22 @@
   "panels": [
     {
       "id": 1,
-      "title": "CPU Usage by Service (cores)",
-      "description": "Unexpected spike = runaway loop or high load",
+      "title": "CPU Saturation by Service (% of machine cores)",
+      "description": "Fraction of total machine CPU capacity consumed per service (rate(process_cpu_seconds_total) / machine_cpu_cores). 1.0 = 100% of all available cores. machine_cpu_cores is exported by each service via saas_shared.",
       "type": "timeseries",
       "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
-        "defaults": { "unit": "short" }
+        "defaults": { "unit": "percentunit" }
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["mean", "lastNotNull"] }
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["mean", "last"] }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (job) (rate(process_cpu_seconds_total{job=~\"$job\"}[5m]))",
+          "expr": "sum by (job) (rate(process_cpu_seconds_total{job=~\"$job\"}[5m])) / on(job) group_left() machine_cpu_cores{job=~\"$job\"}",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -60,22 +60,22 @@
     },
     {
       "id": 2,
-      "title": "Resident Memory by Service",
-      "description": "Steady growth = memory leak",
+      "title": "Memory Usage (% of container limit)",
+      "description": "Resident memory as a fraction of the container memory limit (process_resident_memory_bytes / container_memory_limit_bytes). container_memory_limit_bytes is exported by each service via saas_shared (read from cgroups at startup). Shows 'No data' if no memory limit is set on the container.",
       "type": "timeseries",
       "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
-        "defaults": { "unit": "bytes" }
+        "defaults": { "unit": "percentunit" }
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last", "max"] }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "process_resident_memory_bytes{job=~\"$job\"}",
+          "expr": "process_resident_memory_bytes{job=~\"$job\"} / container_memory_limit_bytes{job=~\"$job\"}",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -86,14 +86,14 @@
       "title": "Task Processing Latency p95 by Operation",
       "description": "DB operation latency for task-service CRUD — spike = slow DB or lock contention",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "s" }
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last", "max"] }
       },
       "targets": [
         {
@@ -107,38 +107,40 @@
     },
     {
       "id": 6,
-      "title": "Open File Descriptors by Service",
-      "description": "Approaching OS limit = connection/file handle leak; compare against process_max_fds",
+      "title": "FD Usage (% of limit) by Service",
+      "description": "Fraction of OS file-descriptor limit in use. Approaching 1.0 = connection/handle leak. Absolute FD count shown on right axis for context.",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
-        "defaults": { "unit": "short" },
+        "defaults": { "unit": "percentunit" },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "limit" },
+            "matcher": { "id": "byFrameRefID", "options": "B" },
             "properties": [
-              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [8, 4] } },
-              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+              { "id": "unit", "value": "short" },
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [4, 4] } },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-blue" } }
             ]
           }
         ]
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last", "max"] }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "process_open_fds{job=~\"$job\"}",
-          "legendFormat": "{{job}}",
+          "expr": "process_open_fds{job=~\"$job\"} / process_max_fds{job=~\"$job\"}",
+          "legendFormat": "{{job}} FD%",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "process_max_fds{job=~\"$job\"}",
-          "legendFormat": "limit",
+          "expr": "process_open_fds{job=~\"$job\"}",
+          "legendFormat": "{{job}} (abs)",
           "refId": "B"
         }
       ]

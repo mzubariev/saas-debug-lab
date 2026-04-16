@@ -76,7 +76,7 @@
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": { "calcs": ["last"] },
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "value_and_name",
@@ -94,8 +94,8 @@
     },
     {
       "id": 2,
-      "title": "Error Rate",
-      "description": "5xx / total. Alert if > 1%",
+      "title": "Error Rate (All Services)",
+      "description": "5xx / total across all services. Yellow > 1%, red > 5%. Drill into 'Error Rate by Service' below to find the offender.",
       "type": "stat",
       "gridPos": { "x": 0, "y": 4, "w": 8, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -114,7 +114,7 @@
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": { "calcs": ["last"] },
         "colorMode": "background",
         "graphMode": "area",
         "textMode": "auto"
@@ -130,15 +130,24 @@
     },
     {
       "id": 3,
-      "title": "RPS",
+      "title": "RPS (All Services)",
+      "description": "Total HTTP requests per second across all services, excluding /metrics and /health. Drop toward 0 = no traffic or all services down.",
       "type": "stat",
       "gridPos": { "x": 8, "y": 4, "w": 8, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
-        "defaults": { "unit": "reqps", "mappings": [] }
+        "defaults": { "unit": "reqps", "mappings": [], "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 10 }
+            ]
+          }
+        }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": { "calcs": ["last"] },
         "colorMode": "value",
         "graphMode": "area",
         "textMode": "auto"
@@ -155,7 +164,7 @@
     {
       "id": 4,
       "title": "P95 Latency (Worst Service)",
-      "description": "Alert if > 1s",
+      "description": "Highest p95 latency across all services at this moment. Yellow > 500ms, red > 1s. Use 'P95 Latency by Service' below to identify which service is slow.",
       "type": "stat",
       "gridPos": { "x": 16, "y": 4, "w": 8, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -174,7 +183,7 @@
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": { "calcs": ["last"] },
         "colorMode": "background",
         "graphMode": "area",
         "textMode": "auto"
@@ -189,24 +198,68 @@
       ]
     },
     {
+      "id": 11,
+      "title": "Top 5 Failing Endpoints (global)",
+      "description": "The 5 highest-error-rate (job, method, path, status) combinations across the entire fleet right now. Click a bar to drill into that service.",
+      "type": "bargauge",
+      "gridPos": { "x": 0, "y": 8, "w": 24, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.01 },
+              { "color": "red",   "value": 0.1 }
+            ]
+          },
+          "links": [
+            {
+              "title": "→ Service Drilldown",
+              "url": "/d/service-drilldown-v2?var-job=${__field.labels.job}",
+              "targetBlank": false
+            }
+          ]
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["last"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "valueMode": "color",
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "topk(5, sum by (job, method, path, status) (rate(http_requests_total{status=~\"5..\", path!~\"/metrics|/health\"}[5m])))",
+          "legendFormat": "{{job}}  {{method}}  {{path}}  {{status}}",
+          "instant": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
       "id": 5,
       "title": "Error Rate by Service",
-      "description": "Which service is failing? Select it in $job above, then click '→ Service Drilldown' to investigate.",
-      "type": "bargauge",
-      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "description": "5xx error rate split by service and status code. Identify which service and which HTTP error type is spiking, then click '→ Service Drilldown' to investigate per-endpoint detail.",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "percentunit" }
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last"] }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (job) (rate(http_requests_total{status=~\"5..\", path!~\"/metrics|/health\"}[5m])) / clamp_min(sum by (job) (rate(http_requests_total{path!~\"/metrics|/health\"}[5m])),1)",
-          "legendFormat": "{{job}}",
+          "expr": "sum by (job, status) (rate(http_requests_total{status=~\"5..\", path!~\"/metrics|/health\"}[5m])) / on(job) group_left() clamp_min(sum by (job) (rate(http_requests_total{path!~\"/metrics|/health\"}[5m])), 1)",
+          "legendFormat": "{{job}} — {{status}}",
           "refId": "A"
         }
       ]
@@ -214,16 +267,16 @@
     {
       "id": 6,
       "title": "P95 Latency by Service",
-      "description": "Which service is slow?",
+      "description": "p95 request latency per service. A rising line = degraded performance. Click '→ Service Drilldown' to see per-endpoint breakdown and linked traces (exemplar dots).",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "s" }
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last"] }
       },
       "targets": [
         {
@@ -237,10 +290,10 @@
     },
     {
       "id": 7,
-      "title": "Kafka Lag (max)",
-      "description": "Rising lag = pipeline slowdown or consumer crash",
+      "title": "Kafka Lag by Topic",
+      "description": "Max consumer lag across partitions, per topic and consumer group. Rising = pipeline backing up; sudden jump = consumer crashed. See Pipelines dashboard for full detail.",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 16, "w": 6, "h": 4 },
+      "gridPos": { "x": 0, "y": 24, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -257,7 +310,7 @@
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": { "calcs": ["last"] },
         "colorMode": "background",
         "graphMode": "area",
         "textMode": "auto"
@@ -265,18 +318,18 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "max(kafka_consumer_lag)",
-          "legendFormat": "lag",
+          "expr": "max by (topic, group) (kafka_consumer_lag)",
+          "legendFormat": "{{topic}} / {{group}}",
           "refId": "A"
         }
       ]
     },
     {
       "id": 8,
-      "title": "Webhook Attempt Success Percentage",
-      "description": "< 99% = check DLQ in Pipelines dashboard",
+      "title": "Webhook Delivery Success Rate",
+      "description": "Of all webhook events that resolved (delivered OR permanently failed to DLQ), what fraction succeeded. Always 0–100%. < 99% = events are being permanently lost to the DLQ instead of being delivered.",
       "type": "stat",
-      "gridPos": { "x": 6, "y": 16, "w": 6, "h": 4 },
+      "gridPos": { "x": 6, "y": 24, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -284,17 +337,16 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 0.949 },
+              { "color": "red",    "value": null },
               { "color": "yellow", "value": 0.95 },
-              { "color": "green", "value": 0.99 }
+              { "color": "green",  "value": 0.99 }
             ]
           },
           "mappings": []
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": { "calcs": ["last"] },
         "colorMode": "background",
         "graphMode": "area",
         "textMode": "auto"
@@ -302,8 +354,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(increase(webhook_requests_total{status=\"success\"}[5m])) / clamp_min(sum(increase(webhook_requests_total[5m])), 1)",
-          "legendFormat": "success rate",
+          "expr": "sum(rate(webhook_requests_total{status=\"success\"}[5m])) / clamp_min(sum(rate(webhook_requests_total{status=\"success\"}[5m])) + sum(rate(dlq_messages_total[5m])), 1e-9)",
+          "legendFormat": "delivered / resolved",
           "refId": "A"
         }
       ]
@@ -313,7 +365,7 @@
       "title": "DLQ Size",
       "description": "> 0 = undelivered webhooks piling up",
       "type": "stat",
-      "gridPos": { "x": 12, "y": 16, "w": 6, "h": 4 },
+      "gridPos": { "x": 12, "y": 24, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -330,7 +382,7 @@
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": { "calcs": ["last"] },
         "colorMode": "background",
         "graphMode": "area",
         "textMode": "auto"
@@ -349,7 +401,7 @@
       "title": "Celery Queue",
       "description": "Tasks waiting to run (cleanup, retry webhooks)",
       "type": "stat",
-      "gridPos": { "x": 18, "y": 16, "w": 6, "h": 4 },
+      "gridPos": { "x": 18, "y": 24, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -366,7 +418,7 @@
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": { "calcs": ["last"] },
         "colorMode": "background",
         "graphMode": "area",
         "textMode": "auto"

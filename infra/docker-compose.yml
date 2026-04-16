@@ -121,6 +121,10 @@ services:
       - ../services/core/api-gateway/.env
     environment:
       SENTRY_DSN: ${SENTRY_DSN:-}
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     # Port 8000 is intentionally NOT exposed to the host.
     # All external traffic must enter through Nginx on :80.
     depends_on:
@@ -203,6 +207,10 @@ services:
       SENTRY_DSN: ${SENTRY_DSN:-}
     ports:
       - "8002:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     depends_on:
       postgres:
         condition: service_healthy
@@ -233,6 +241,10 @@ services:
       SENTRY_DSN: ${SENTRY_DSN:-}
     ports:
       - "8001:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 512m
     depends_on:
       postgres:
         condition: service_healthy
@@ -267,6 +279,10 @@ services:
       - ../services/external/external-service-simulator/.env
     ports:
       - "8004:8001"
+    deploy:
+      resources:
+        limits:
+          memory: 256m
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 10s
@@ -294,6 +310,10 @@ services:
       SENTRY_DSN: ${SENTRY_DSN:-}
     ports:
       - "8003:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 256m
     depends_on:
       kafka:
         condition: service_healthy
@@ -320,6 +340,10 @@ services:
     environment:
       SENTRY_DSN: ${SENTRY_DSN:-}
       METRICS_PORT: "9100"
+    deploy:
+      resources:
+        limits:
+          memory: 256m
     depends_on:
       kafka:
         condition: service_healthy
@@ -378,6 +402,10 @@ services:
     environment:
       SENTRY_DSN: ${SENTRY_DSN:-}
       METRICS_PORT: "9100"
+    deploy:
+      resources:
+        limits:
+          memory: 256m
     depends_on:
       redis:
         condition: service_healthy
@@ -433,6 +461,10 @@ services:
       SMTP_USE_STARTTLS: ${SMTP_USE_STARTTLS:-false}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    deploy:
+      resources:
+        limits:
+          memory: 256m
     depends_on:
       kafka:
         condition: service_healthy

@@ -104,7 +104,7 @@ groups:
           severity: critical
         annotations:
           summary: "Upstream calls to {{ $labels.service }} failing above 5%"
-          dashboard: "http://127.0.0.1:3000/d/resources-deps-v2"
+          dashboard: "http://127.0.0.1:3000/d/service-drilldown-v2?var-job=api-gateway"
           runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#6-external-api-failures"
 
         data:

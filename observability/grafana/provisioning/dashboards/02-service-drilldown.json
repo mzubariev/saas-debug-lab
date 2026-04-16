@@ -93,6 +93,7 @@
     {
       "id": 1,
       "title": "RPS",
+      "description": "Requests per second for the selected service and path filters. Sudden drop = traffic stopped or service unreachable.",
       "type": "stat",
       "gridPos": {
         "x": 0,
@@ -113,7 +114,7 @@
       "options": {
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "last"
           ]
         },
         "colorMode": "value",
@@ -135,6 +136,7 @@
     {
       "id": 2,
       "title": "Error Rate",
+      "description": "5xx / total for the selected service. Yellow > 1%, red > 5%. See 'Error Rate by Endpoint' below to find the exact failing path.",
       "type": "stat",
       "gridPos": {
         "x": 6,
@@ -172,7 +174,7 @@
       "options": {
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "last"
           ]
         },
         "colorMode": "background",
@@ -193,7 +195,8 @@
     },
     {
       "id": 3,
-      "title": "P95 Latency",
+      "title": "P95 Latency (Worst Endpoint)",
+      "description": "Highest p95 latency across all endpoints of this service. Yellow > 500ms, red > 1s. Use 'Latency p50/p95/p99 by Endpoint' below to isolate the slow path.",
       "type": "stat",
       "gridPos": {
         "x": 12,
@@ -231,7 +234,7 @@
       "options": {
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "last"
           ]
         },
         "colorMode": "background",
@@ -253,6 +256,7 @@
     {
       "id": 4,
       "title": "In-flight",
+      "description": "Concurrent requests currently being processed by this service. Sustained high value = slow handler or DB blocking. Yellow > 20, red > 50.",
       "type": "stat",
       "gridPos": {
         "x": 18,
@@ -290,7 +294,7 @@
       "options": {
         "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "last"
           ]
         },
         "colorMode": "background",
@@ -312,8 +316,8 @@
     {
       "id": 5,
       "title": "Error Rate by Endpoint",
-      "description": "Which specific path is returning errors?",
-      "type": "bargauge",
+      "description": "5xx error rate split by path and HTTP status code. Each line = one (path, status) combination. A spike tells you exactly which endpoint and which error type is failing.",
+      "type": "timeseries",
       "gridPos": {
         "x": 0,
         "y": 4,
@@ -338,7 +342,7 @@
           "displayMode": "list",
           "placement": "bottom",
           "calcs": [
-            "lastNotNull"
+            "last"
           ]
         }
       },
@@ -348,8 +352,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (path) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", status=~\"5..\"}[5m])) / clamp_min(sum by (path) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])),1)",
-          "legendFormat": "{{path}}",
+          "expr": "sum by (path, status) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", status=~\"5..\"}[5m])) / on(path) group_left() clamp_min(sum by (path) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])), 1)",
+          "legendFormat": "{{path}} — {{status}}",
           "refId": "A"
         }
       ]
@@ -384,7 +388,7 @@
           "placement": "bottom",
           "calcs": [
             "mean",
-            "lastNotNull"
+            "last"
           ]
         }
       },
@@ -429,7 +433,7 @@
           "displayMode": "list",
           "placement": "bottom",
           "calcs": [
-            "lastNotNull"
+            "last"
           ]
         }
       },
@@ -439,8 +443,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.50, sum by (path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])))",
-          "legendFormat": "p50 {{path}}",
+          "expr": "histogram_quantile(0.50, sum by (method, path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])))",
+          "legendFormat": "p50 {{method}} {{path}}",
           "exemplar": true,
           "refId": "A"
         },
@@ -449,8 +453,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])))",
-          "legendFormat": "p95 {{path}}",
+          "expr": "histogram_quantile(0.95, sum by (method, path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])))",
+          "legendFormat": "p95 {{method}} {{path}}",
           "exemplar": true,
           "refId": "B"
         },
@@ -459,8 +463,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum by (path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])))",
-          "legendFormat": "p99 {{path}}",
+          "expr": "histogram_quantile(0.99, sum by (method, path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])))",
+          "legendFormat": "p99 {{method}} {{path}}",
           "exemplar": true,
           "refId": "C"
         }
@@ -468,21 +472,21 @@
     },
     {
       "id": 12,
-      "title": "↓ External Calls (from API Gateway)",
-      "description": "These panels are only populated when api-gateway is selected. All metrics are recorded inside api-gateway and reflect its outbound calls to downstream services.",
+      "title": "↓ Outbound Requests (from API Gateway)",
+      "description": "All metrics are recorded inside api-gateway and reflect its outbound calls to upstream services.",
       "type": "row",
-      "gridPos": { "x": 0, "y": 40, "w": 24, "h": 1 },
+      "gridPos": { "x": 0, "y": 30, "w": 24, "h": 1 },
       "collapsed": false,
       "panels": []
     },
     {
       "id": 8,
-      "title": "Outbound Requests to Downstream Services",
-      "description": "Requests made by api-gateway to each downstream service, broken by HTTP status. Only populated when api-gateway is selected.",
+      "title": "RPS to Upstream Services by Status",
+      "description": "Requests per second made by api-gateway to each upstream service, broken down by HTTP status. upstream_requests_total has service and status labels only — no path granularity available here.",
       "type": "timeseries",
       "gridPos": {
         "x": 0,
-        "y": 41,
+        "y": 31,
         "w": 12,
         "h": 8
       },
@@ -504,7 +508,7 @@
           "displayMode": "list",
           "placement": "bottom",
           "calcs": [
-            "lastNotNull"
+            "last"
           ]
         }
       },
@@ -514,20 +518,20 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (service, status) (rate(upstream_requests_total{job=\"api-gateway\", path!~\"/metrics|/health\"}[5m]))",
-          "legendFormat": "{{service}} {{status}}",
+          "expr": "sum by (service, status) (rate(upstream_requests_total{job=\"api-gateway\"}[5m]))",
+          "legendFormat": "{{service}} — {{status}}",
           "refId": "A"
         }
       ]
     },
     {
       "id": 9,
-      "title": "Downstream Error Rate (api-gateway view)",
-      "description": "Percentage of api-gateway's outbound calls to each downstream service that resulted in 5xx, timeout, or connection error.",
+      "title": "Upstream Error Rate by Service & Status",
+      "description": "Percentage of api-gateway's outbound calls to each upstream service that resulted in 5xx, timeout, or connection error, broken down by error status. Note: upstream_requests_total has no path label — status is the finest available granularity.",
       "type": "timeseries",
       "gridPos": {
         "x": 12,
-        "y": 41,
+        "y": 31,
         "w": 12,
         "h": 8
       },
@@ -549,7 +553,7 @@
           "displayMode": "list",
           "placement": "bottom",
           "calcs": [
-            "lastNotNull"
+            "last"
           ]
         }
       },
@@ -559,28 +563,28 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (service) (rate(upstream_requests_total{job=\"api-gateway\", path!~\"/metrics|/health\", status=~\"5..|timeout|connection_error\"}[5m])) / clamp_min(sum by (service) (rate(upstream_requests_total{job=\"api-gateway\", path!~\"/metrics|/health\"}[5m])), 1)",
-          "legendFormat": "{{service}}",
+          "expr": "sum by (service, status) (rate(upstream_requests_total{job=\"api-gateway\", status=~\"5..|timeout|connection_error\"}[5m])) / on(service) group_left() clamp_min(sum by (service) (rate(upstream_requests_total{job=\"api-gateway\"}[5m])), 1)",
+          "legendFormat": "{{service}} — {{status}}",
           "refId": "A"
         }
       ]
     },
     {
       "id": 13,
-      "title": "Downstream P95 Latency (api-gateway view)",
-      "description": "Round-trip latency at p95 as measured by api-gateway for each call to a downstream service. Spike = slow downstream DB, handler, or network.",
+      "title": "Upstream P95 Latency",
+      "description": "Round-trip latency at p95 as measured by api-gateway for each call to an upstream service. Spike = slow DB, handler, or network congestion. Click exemplar dots to jump to the matching Jaeger trace.",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 49, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 39, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": { "defaults": { "unit": "s" } },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last"] }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (service, le) (rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\", path!~\"/metrics|/health\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (service, le) (rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])))",
           "legendFormat": "{{service}}",
           "exemplar": true,
           "refId": "A"
@@ -589,20 +593,20 @@
     },
     {
       "id": 14,
-      "title": "Downstream P99 Latency (api-gateway view)",
-      "description": "Tail (p99) round-trip latency as measured by api-gateway for each call to a downstream service. Useful for spotting intermittent slowness invisible at p95.",
+      "title": "Upstream P99 Latency",
+      "description": "Tail (p99) round-trip latency as measured by api-gateway for each call to an upstream service. Wide gap between p95 and p99 = intermittent spikes invisible at p95. Click exemplar dots to jump to the matching Jaeger trace.",
       "type": "timeseries",
-      "gridPos": { "x": 12, "y": 49, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 39, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": { "defaults": { "unit": "s" } },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last"] }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.99, sum by (service, le) (rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\", path!~\"/metrics|/health\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (service, le) (rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])))",
           "legendFormat": "{{service}}",
           "exemplar": true,
           "refId": "A"
@@ -637,12 +641,13 @@
           "trace_id",
           "service.name",
           "event_name",
+          "method",
+          "path",
           "level",
           "status",
-          "exception",
           "message",
-          "upstream",
-          "request_id"
+          "exception",
+          "upstream"
         ]
       },
       "targets": [

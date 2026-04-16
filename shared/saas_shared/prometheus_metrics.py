@@ -41,7 +41,7 @@ http_requests_total = Counter(
 http_request_duration_seconds = Histogram(
     "http_request_duration_seconds",
     "HTTP request latency in seconds.",
-    ["path"],
+    ["method", "path"],
     buckets=(0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0),
 )
 
@@ -206,3 +206,51 @@ celery_active_tasks = Gauge(
     "celery_active_tasks",
     "Number of Celery tasks currently executing.",
 )
+
+# ── Host / container resource limits ──────────────────────────────────────────
+# These two Gauges are set once at import time and let PromQL normalise
+# process_cpu_seconds_total and process_resident_memory_bytes to saturation
+# percentages without requiring an external cAdvisor / node_exporter.
+# Prometheus adds the ``job`` label automatically, so dashboard queries can
+# join on it:  process_resident_memory_bytes / container_memory_limit_bytes
+
+import os as _os
+
+
+def _cgroup_memory_limit_bytes() -> float:
+    """Return the container memory limit in bytes, or 0 if unlimited / unknown.
+
+    Supports cgroups v1 (memory.limit_in_bytes) and v2 (memory.max).
+    Returns 0 when running outside a container or when no limit is set so
+    callers can distinguish "not applicable" from a real limit.
+    """
+    _UNLIMITED_V1 = 9_223_372_036_854_771_712  # 2^63 - 4096 — Linux "no limit" sentinel
+    for path in (
+        "/sys/fs/cgroup/memory/memory.limit_in_bytes",  # cgroups v1
+        "/sys/fs/cgroup/memory.max",                     # cgroups v2
+    ):
+        try:
+            raw = open(path).read().strip()  # noqa: WPS515
+            if raw == "max":
+                return 0  # v2 unlimited
+            value = int(raw)
+            return 0 if value >= _UNLIMITED_V1 else float(value)
+        except (FileNotFoundError, ValueError, PermissionError):
+            continue
+    return 0
+
+
+machine_cpu_cores = Gauge(
+    "machine_cpu_cores",
+    "Number of logical CPU cores visible to this process (os.cpu_count()). "
+    "Used as the denominator for CPU saturation: rate(process_cpu_seconds_total) / machine_cpu_cores.",
+)
+machine_cpu_cores.set(float(_os.cpu_count() or 1))
+
+container_memory_limit_bytes = Gauge(
+    "container_memory_limit_bytes",
+    "Container memory limit in bytes read from cgroups at startup. "
+    "0 means no limit is configured or the metric is not applicable (e.g. macOS dev environment). "
+    "Used as the denominator for memory saturation: process_resident_memory_bytes / container_memory_limit_bytes.",
+)
+container_memory_limit_bytes.set(_cgroup_memory_limit_bytes())

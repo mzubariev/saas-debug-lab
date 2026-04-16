@@ -37,7 +37,7 @@
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last", "max"] }
       },
       "targets": [
         {
@@ -60,7 +60,7 @@
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["mean", "lastNotNull"] }
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["mean", "last"] }
       },
       "targets": [
         {
@@ -73,8 +73,8 @@
     },
     {
       "id": 3,
-      "title": "Webhook Attempt Success Percentage",
-      "description": "< 99% = retries failing. Check DLQ.",
+      "title": "Webhook Delivery Success Rate",
+      "description": "Of all webhook events that resolved (delivered OR permanently failed to DLQ), what fraction succeeded. Always 0–100%. < 99% = events are being permanently lost to the DLQ instead of being delivered.",
       "type": "stat",
       "gridPos": { "x": 0, "y": 8, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -84,17 +84,16 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 0.949 },
+              { "color": "red",    "value": null },
               { "color": "yellow", "value": 0.95 },
-              { "color": "green", "value": 0.99 }
+              { "color": "green",  "value": 0.99 }
             ]
           },
           "mappings": []
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": { "calcs": ["last"] },
         "colorMode": "background",
         "graphMode": "area",
         "textMode": "auto"
@@ -102,18 +101,54 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(increase(webhook_requests_total{status=\"success\"}[5m])) / clamp_min(sum(increase(webhook_requests_total[5m])), 1)",
-          "legendFormat": "success rate",
+          "expr": "sum(rate(webhook_requests_total{status=\"success\"}[5m])) / clamp_min(sum(rate(webhook_requests_total{status=\"success\"}[5m])) + sum(rate(dlq_messages_total[5m])), 1e-9)",
+          "legendFormat": "delivered / resolved",
           "refId": "A"
         }
       ]
     },
     {
       "id": 4,
+      "title": "Webhook Attempts / s",
+      "description": "Total webhook HTTP delivery attempts per second across all statuses (success + retries + failures). Drop to 0 = dispatcher stopped. See 'Webhook Pipeline Throughput' below for status breakdown.",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 8, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 50 }
+            ]
+          },
+          "mappings": []
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["last"] },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(webhook_requests_total[5m]))",
+          "legendFormat": "attempts/s",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
       "title": "DLQ Size",
       "description": "> 0 = undelivered messages accumulating",
       "type": "stat",
-      "gridPos": { "x": 6, "y": 8, "w": 6, "h": 4 },
+      "gridPos": { "x": 12, "y": 8, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -130,7 +165,7 @@
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": { "calcs": ["last"] },
         "colorMode": "background",
         "graphMode": "area",
         "textMode": "auto"
@@ -140,42 +175,6 @@
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "max(dlq_size)",
           "legendFormat": "dlq",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 5,
-      "title": "Webhook In-Flight",
-      "description": "Concurrent webhook delivery requests",
-      "type": "stat",
-      "gridPos": { "x": 12, "y": 8, "w": 6, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 10 },
-              { "color": "red", "value": 50 }
-            ]
-          },
-          "mappings": []
-        }
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
-        "colorMode": "background",
-        "graphMode": "area",
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "max(webhook_in_progress)",
-          "legendFormat": "in-flight",
           "refId": "A"
         }
       ]
@@ -202,7 +201,7 @@
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": { "calcs": ["last"] },
         "colorMode": "background",
         "graphMode": "area",
         "textMode": "auto"
@@ -218,24 +217,42 @@
     },
     {
       "id": 7,
-      "title": "Webhook Attempts by Status",
-      "description": "success vs fail. Rising fail line without DLQ growth = transient errors being retried.",
-      "type": "bargauge",
+      "title": "Webhook Pipeline Throughput",
+      "description": "Compare total attempts (all webhook HTTP calls) vs delivered (success) vs retried vs permanently failed (DLQ). Rising retried without DLQ growth = transient errors. Rising DLQ = permanent failures. Delivered << attempts = high retry rate or permanent failures.",
+      "type": "timeseries",
       "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
-        "defaults": { "unit": "short" }
+        "defaults": { "unit": "ops" }
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["mean", "last"] }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (status) (increase(webhook_requests_total[5m]))",
-          "legendFormat": "{{status}}",
+          "expr": "sum(rate(webhook_requests_total[5m]))",
+          "legendFormat": "total attempts",
           "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(webhook_requests_total{status=\"success\"}[5m]))",
+          "legendFormat": "delivered",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(webhook_retries_total[5m]))",
+          "legendFormat": "retried",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(dlq_messages_total[5m]))",
+          "legendFormat": "permanently failed (DLQ)",
+          "refId": "D"
         }
       ]
     },
@@ -251,7 +268,7 @@
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"] }
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last"] }
       },
       "targets": [
         {

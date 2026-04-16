@@ -223,11 +223,10 @@ groups:
             model:
               instant: true
               expr: |
-                avg by (job) (
-                  process_open_fds
+                max by (job) (
+                  process_open_fds{job!=""}
                   /
-                  process_max_fds
-                  * 100
+                  process_max_fds{job!=""}
                 )
 
           - refId: B
@@ -236,7 +235,121 @@ groups:
               type: threshold
               expression: A
               conditions:
-                - evaluator: { type: gt, params: [80] }
+                - evaluator: { type: gt, params: [0.8] }
+
+
+# ----------------------------
+# CPU SATURATION
+# ----------------------------
+      - uid: cpu-saturation
+        title: "CPU Saturation > 80%"
+        condition: B
+        for: 5m
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} CPU saturation above 80% of machine cores — runaway loop or overload"
+          dashboard: "http://127.0.0.1:3000/d/resources-deps-v2?var-job={{ $labels.job }}"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              instant: true
+              expr: |
+                sum by (job) (rate(process_cpu_seconds_total{job!=""}[5m]))
+                / on(job) group_left()
+                machine_cpu_cores{job!=""}
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.8] }
+
+
+# ----------------------------
+# MEMORY USAGE
+# ----------------------------
+      - uid: memory-usage
+        title: "Memory Usage > 85% of Limit"
+        condition: B
+        for: 5m
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} memory usage above 85% of container limit — OOM risk"
+          dashboard: "http://127.0.0.1:3000/d/resources-deps-v2?var-job={{ $labels.job }}"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              instant: true
+              expr: |
+                (
+                  process_resident_memory_bytes{job!=""}
+                  /
+                  container_memory_limit_bytes{job!=""}
+                )
+                and
+                container_memory_limit_bytes{job!=""} > 0
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.85] }
+
+
+# ----------------------------
+# TASK PROCESSING LATENCY
+# ----------------------------
+      - uid: task-processing-latency
+        title: "Task DB Operation P95 > 200ms"
+        condition: B
+        for: 3m
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: warning
+        annotations:
+          summary: "task-service DB operation p95 latency above 200ms — slow DB, lock contention, or index missing"
+          dashboard: "http://127.0.0.1:3000/d/resources-deps-v2"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              instant: true
+              expr: |
+                histogram_quantile(0.95,
+                  sum by (operation, le) (
+                    rate(task_processing_duration_seconds_bucket[5m])
+                  )
+                )
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.2] }
 
 
 # ----------------------------

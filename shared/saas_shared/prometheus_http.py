@@ -108,9 +108,9 @@ class PrometheusHttpMetricsMiddleware(BaseHTTPMiddleware):
                 status=status_label,
             ).inc()
             if exemplar:
-                http_request_duration_seconds.labels(path=path).observe(elapsed, exemplar)
+                http_request_duration_seconds.labels(method=request.method, path=path).observe(elapsed, exemplar)
             else:
-                http_request_duration_seconds.labels(path=path).observe(elapsed)
+                http_request_duration_seconds.labels(method=request.method, path=path).observe(elapsed)
             http_requests_in_progress.labels(path=path).dec()
 
 
