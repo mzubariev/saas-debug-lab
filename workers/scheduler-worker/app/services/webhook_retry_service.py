@@ -1,6 +1,5 @@
 import time
 
-import httpx
 import sentry_sdk
 import structlog
 from kafka.errors import NoBrokersAvailable
@@ -10,25 +9,35 @@ from saas_shared.kafka_messaging import kafka_consume_span
 from saas_shared.prometheus_metrics import dlq_processed_total, kafka_messages_consumed_total
 
 from ..core.config import settings
-from ..infrastructure.http.client import post_json_sync
 from ..infrastructure.kafka.consumer import create_webhook_dlq_consumer
 
 logger = structlog.get_logger()
 
+# Consumed per Beat tick (dispatch is fast; stay well within the 60 s window).
+_MAX_MESSAGES = 200
+# Hard wall-clock cap so the Beat task always returns before the next tick.
+_MAX_RUNTIME_SECONDS = 20
+
 
 def process_dlq() -> dict:
-    """
-    Drain all currently available messages from the webhook_dlq Kafka topic
-    and re-attempt delivery to WEBHOOK_URL.
+    """Read up to _MAX_MESSAGES from the webhook DLQ and dispatch one
+    ``retry_single_webhook`` Celery task per message (fan-out).
 
-    Uses a short-lived consumer with a 5-second drain timeout so the job
-    always terminates within a predictable window. Messages are committed
-    regardless of retry outcome — the DLQ is a best-effort second chance,
-    not an infinite retry loop. Persistent failures are logged as warnings
-    and visible in Flower / Kibana.
+    This function is the *producer* side — it commits Kafka offsets and enqueues
+    Celery tasks.  Actual HTTP delivery, retries, and back-off happen inside each
+    ``retry_single_webhook`` task running in a worker sub-process.
+
+    By keeping this function fast (no HTTP calls), it can safely consume up to
+    _MAX_MESSAGES messages per 60 s Beat tick without blocking the Beat scheduler.
+
+    Incident simulation:
+    - Stop external-service-simulator → retry_single_webhook tasks raise
+      httpx.RequestError, fill the Celery queue, celery_queue_size rises.
+    - Reduce worker --concurrency → queue depth grows faster than it drains.
+    - Set _MAX_MESSAGES low → DLQ lag grows even when workers are idle.
     """
     t0 = time.perf_counter()
-    logger.info("webhook_dlq_retry_job_started")
+    logger.info("webhook_dlq_fanout_started")
 
     try:
         consumer = create_webhook_dlq_consumer(
@@ -39,31 +48,39 @@ def process_dlq() -> dict:
         logger.error(
             "dlq_consumer_unavailable",
             error=str(exc),
-            duration_seconds=round(duration, 3)
+            duration_seconds=round(duration, 3),
         )
         with sentry_sdk.push_scope() as scope:
             scope.set_tag("task", "retry_failed_webhooks")
             scope.set_tag("error_type", "kafka_unavailable")
             scope.set_extra("kafka_servers", settings.kafka_bootstrap_servers)
             sentry_sdk.capture_exception(exc)
-        logger.info(
-            "webhook_dlq_retry_job_finished",
-            retried=0,
-            failed=0,
-            messages_processed=0,
-            duration_seconds=round(duration, 3),
-            error=str(exc),
-        )
-        return {"retried": 0, "failed": 0, "error": str(exc)}
+        return {"dispatched": 0, "error": str(exc)}
 
-    retried = 0
-    failed = 0
+    # Lazy import breaks the circular dependency:
+    #   webhook_tasks → webhook_retry_service (this module)
+    #   webhook_retry_service → webhook_tasks  ← only needed at call time
+    from app.tasks.webhook_tasks import retry_single_webhook  # noqa: PLC0415
+
+    dispatched = 0
 
     try:
         for msg in consumer:
+            if dispatched >= _MAX_MESSAGES:
+                break
+            if time.perf_counter() - t0 > _MAX_RUNTIME_SECONDS:
+                logger.warning(
+                    "dlq_fanout_runtime_cap_reached",
+                    dispatched=dispatched,
+                    elapsed_seconds=round(time.perf_counter() - t0, 2),
+                )
+                break
+
             kafka_messages_consumed_total.labels(topic=msg.topic).inc()
             dlq_processed_total.inc()
+
             _event_type, payload, envelope_trace_id = parse_envelope_message(msg.value)
+
             with kafka_consume_span(
                 msg.topic,
                 msg.partition,
@@ -71,57 +88,23 @@ def process_dlq() -> dict:
                 envelope_trace_id,
                 getattr(msg, "headers", None),
             ):
-                # Strip the "error" key appended by webhook-dispatcher before retrying.
                 clean_payload = {k: v for k, v in payload.items() if k != "error"}
 
-                try:
-                    resp = post_json_sync(
-                        settings.webhook_url,
-                        clean_payload,
-                        timeout=settings.webhook_timeout,
-                    )
-                    resp.raise_for_status()
+                retry_single_webhook.delay(
+                    payload=clean_payload,
+                    event_type=_event_type,
+                    task_id=payload.get("id"),
+                )
 
-                    logger.info(
-                        "dlq_webhook_retried",
-                        task_id=payload.get("id"),
-                        event_type=_event_type,
-                        status_code=resp.status_code,
-                        topic_offset=msg.offset,
-                    )
-                    retried += 1
-
-                except (httpx.RequestError, httpx.HTTPStatusError) as exc:
-                    logger.warning(
-                        "dlq_webhook_retry_failed",
-                        task_id=payload.get("id"),
-                        event_type=_event_type,
-                        error=str(exc),
-                        topic_offset=msg.offset
-                    )
-                    sentry_sdk.add_breadcrumb(
-                        category="dlq",
-                        message="DLQ webhook retry failed",
-                        level="warning",
-                        data={
-                            "task_id": payload.get("id"),
-                            "error": str(exc),
-                            "topic_offset": msg.offset,
-                            "webhook_url": settings.webhook_url,
-                        },
-                    )
-                    failed += 1
+            dispatched += 1
 
     finally:
         consumer.close()
 
     duration = time.perf_counter() - t0
-    processed = retried + failed
     logger.info(
-        "webhook_dlq_retry_job_finished",
-        retried=retried,
-        failed=failed,
-        messages_processed=processed,
+        "webhook_dlq_fanout_finished",
+        dispatched=dispatched,
         duration_seconds=round(duration, 3),
     )
-    return {"retried": retried, "failed": failed}
+    return {"dispatched": dispatched}

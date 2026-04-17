@@ -348,6 +348,42 @@ groups:
 
 
 # ----------------------------
+# DLQ RETRY FAILURE RATE
+# ----------------------------
+      - uid: dlq-retry-failures
+        title: "DLQ Retry Failure Rate > 30%"
+        condition: B
+        for: 5m
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 30% of DLQ retry deliveries are failing — external endpoint may be rejecting payloads"
+          dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#1-webhooks-not-delivered"
+
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              instant: true
+              expr: |
+                sum(rate(dlq_retry_result_total{result="failure"}[5m]))
+                /
+                clamp_min(sum(rate(dlq_retry_result_total[5m])), 1e-9)
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.3] }
+
+
+# ----------------------------
 # AUTH ERROR RATE
 # ----------------------------
       - uid: auth-401-spike

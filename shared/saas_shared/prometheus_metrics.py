@@ -128,7 +128,13 @@ dlq_messages_total = Counter(
 
 dlq_processed_total = Counter(
     "dlq_processed_total",
-    "Messages read from the webhook DLQ for retry.",
+    "Messages read from the webhook DLQ and dispatched as Celery retry tasks.",
+)
+
+dlq_retry_result_total = Counter(
+    "dlq_retry_result_total",
+    "Per-message DLQ delivery outcomes after all Celery retries.",
+    ["result"],  # "success" | "failure"
 )
 
 # ── Emails ────────────────────────────────────────────────────────────────────

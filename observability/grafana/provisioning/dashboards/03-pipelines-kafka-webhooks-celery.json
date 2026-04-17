@@ -145,7 +145,7 @@
     },
     {
       "id": 5,
-      "title": "DLQ Size",
+      "title": "DLQ Size (Kafka)",
       "description": "Unprocessed messages in webhook_dlq for the scheduler-worker consumer group, as reported by kafka-exporter. > 0 = webhooks waiting for retry. Now continuously visible — no longer requires the retry job to be running.",
       "type": "stat",
       "gridPos": { "x": 12, "y": 8, "w": 6, "h": 4 },
@@ -181,8 +181,8 @@
     },
     {
       "id": 6,
-      "title": "Celery Queue Size",
-      "description": "Tasks waiting to run (cleanup_old_tasks, retry_failed_webhooks). High = workers slow or dead.",
+      "title": "Celery Queue Size (Redis)",
+      "description": "Tasks waiting in the Redis broker queue. With the fan-out model, retry_single_webhook tasks are enqueued here (one per DLQ message). Rising queue = workers slow, dead, or endpoint down. Drains automatically once the endpoint recovers.",
       "type": "stat",
       "gridPos": { "x": 18, "y": 8, "w": 6, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -276,6 +276,151 @@
           "expr": "histogram_quantile(0.95, sum by (status, le) (rate(webhook_delivery_duration_seconds_bucket[5m])))",
           "legendFormat": "p95 {{status}}",
           "exemplar": true,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "↓ Celery Workers",
+      "type": "row",
+      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 1 },
+      "collapsed": false,
+      "datasource": null,
+      "targets": []
+    },
+    {
+      "id": 10,
+      "title": "Celery Queue Depth & Active Tasks",
+      "description": "celery_queue_size = tasks enqueued in Redis (retry_single_webhook + Beat tasks). celery_active_tasks = tasks currently executing. With --concurrency=2 --prefetch-multiplier=1 you will see queue depth grow when the endpoint is slow and drain when it recovers. This is the primary bottleneck visibility panel.",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 21, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "active tasks" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last", "max"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max(celery_queue_size)",
+          "legendFormat": "queue depth",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max(celery_active_tasks)",
+          "legendFormat": "active tasks",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Celery Task Duration p95",
+      "description": "p95 wall-clock time per task name from celery_task_duration_seconds. retry_single_webhook duration spikes when the external endpoint is slow (httpx timeout = settings.webhook_timeout). retry_failed_webhooks duration reflects how long it takes to dispatch all DLQ messages to Celery — should be sub-second. Sustained high duration + rising queue depth = bottleneck confirmed.",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 21, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last", "max"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (task_name, le) (rate(celery_task_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95 {{task_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "DLQ Messages Permanently Lost (1h)",
+      "description": "Total messages that exhausted all 5 Celery retries and were never delivered, in the last 1 hour. 0 = no data loss. > 0 = messages were permanently dropped — investigate why the endpoint was unreachable or rejecting. Value persists for 1 hour after an incident so you can see the blast radius even after the DLQ drains.",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 29, "w": 6, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red",    "value": 10 }
+            ]
+          },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "None lost", "color": "green", "index": 0 } } }
+          ]
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["last"] },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(increase(dlq_retry_result_total{result=\"failure\"}[1h]))",
+          "legendFormat": "lost",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "DLQ Retry Throughput",
+      "description": "rate(dlq_retry_result_total) split by result. success = delivered to external endpoint. failure = endpoint rejected (HTTPStatusError, permanent). A rising failure line with no success = external endpoint is down or rejecting all payloads. Note: httpx.RequestError retries do NOT appear here — they are internal Celery retries. Only final outcomes are counted.",
+      "type": "timeseries",
+      "gridPos": { "x": 6, "y": 29, "w": 18, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "ops" },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "failure" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "success" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["mean", "last"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (result) (rate(dlq_retry_result_total[5m]))",
+          "legendFormat": "{{result}}",
           "refId": "A"
         }
       ]

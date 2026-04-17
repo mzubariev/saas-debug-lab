@@ -182,6 +182,40 @@ groups:
 
 
 # ----------------------------
+# CELERY WORKER SILENCE
+# ----------------------------
+      - uid: celery-worker-silent
+        title: "Celery Worker Not Executing Tasks"
+        condition: B
+        for: 5m
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: critical
+        annotations:
+          summary: "No Celery tasks completed in 15 minutes — scheduler-worker may be dead or Beat is not firing"
+          dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 900, to: 0 }
+            model:
+              instant: true
+              expr: |
+                sum(increase(celery_tasks_total[15m]))
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+
+
+# ----------------------------
 # KAFKA PROCESSING ERRORS
 # ----------------------------
       - uid: kafka-processing-errors

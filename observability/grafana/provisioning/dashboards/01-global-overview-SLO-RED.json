@@ -362,7 +362,7 @@
     },
     {
       "id": 9,
-      "title": "DLQ Size",
+      "title": "DLQ Size (Kafka)",
       "description": "Unprocessed messages in webhook_dlq for the scheduler-worker consumer group, as reported by kafka-exporter. > 0 = webhooks waiting for retry.",
       "type": "stat",
       "gridPos": { "x": 12, "y": 24, "w": 6, "h": 4 },
@@ -398,7 +398,7 @@
     },
     {
       "id": 10,
-      "title": "Celery Queue",
+      "title": "Celery Queue Size (Redis)",
       "description": "Tasks waiting to run (cleanup, retry webhooks)",
       "type": "stat",
       "gridPos": { "x": 18, "y": 24, "w": 6, "h": 4 },
