@@ -27,9 +27,7 @@ from ..core.config import settings
 logger = structlog.get_logger()
 
 _TOPIC_EVENT_TYPE: dict[str, str] = {
-    "webhook_sent": "webhook.sent",
-    "webhook_failed": "webhook.failed",
-    "webhook_dlq": "webhook.dlq",
+    "webhook_dlq": "webhook.dlq"
 }
 
 _BACKOFF_BASE = 1.0  # seconds
@@ -100,7 +98,6 @@ async def deliver(
                     status_code=resp.status_code,
                     attempt=attempt,
                 )
-                await _produce(producer, "webhook_sent", payload)
                 return
 
             except httpx.HTTPStatusError as exc:
@@ -182,7 +179,6 @@ async def deliver(
         error=last_error,
     )
     dlq_messages_total.inc()
-    await _produce(producer, "webhook_failed", dlq_payload)
     await _produce(producer, "webhook_dlq", dlq_payload)
 
 
