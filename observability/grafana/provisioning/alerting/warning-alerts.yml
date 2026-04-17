@@ -348,6 +348,76 @@ groups:
 
 
 # ----------------------------
+# POSTGRES CONNECTIONS
+# ----------------------------
+      - uid: pg-connection-saturation
+        title: "DB Connections > 80% of max_connections"
+        condition: B
+        for: 3m
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connection count above 80% of max_connections — risk of 'too many connections' errors"
+          dashboard: "http://127.0.0.1:3000/d/resources-deps-v2"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              instant: true
+              expr: |
+                sum(pg_connections_by_state_count)
+                /
+                pg_settings_max_connections
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.8] }
+
+
+# ----------------------------
+# POSTGRES SLOW QUERIES
+# ----------------------------
+      - uid: pg-slow-queries
+        title: "Slow DB Queries Detected (> 1s)"
+        condition: B
+        for: 2m
+        noDataState: OK
+        execErrState: OK
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL has queries running for more than 1 second — possible missing index or lock contention"
+          dashboard: "http://127.0.0.1:3000/d/resources-deps-v2"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              instant: true
+              expr: |
+                pg_slow_queries_count
+
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+
+
+# ----------------------------
 # DLQ RETRY FAILURE RATE
 # ----------------------------
       - uid: dlq-retry-failures

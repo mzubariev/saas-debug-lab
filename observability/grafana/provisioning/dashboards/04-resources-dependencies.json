@@ -145,5 +145,186 @@
         }
       ]
     }
+  ,
+    {
+      "id": 7,
+      "title": "↓ PostgreSQL",
+      "type": "row",
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 1 },
+      "collapsed": false,
+      "datasource": null,
+      "targets": []
+    },
+    {
+      "id": 8,
+      "title": "DB Connections by State",
+      "description": "Connection count grouped by pg_stat_activity state. active = executing a query. idle = connected but doing nothing (connection pool overhead). idle in transaction = inside a BEGIN block but not executing — a sustained spike here means hung transactions and lock contention risk. max_connections (dashed) is the PostgreSQL cluster limit; hitting it causes 'too many connections' errors.",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 17, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "max_connections" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [6, 4] } },
+              { "id": "custom.lineWidth", "value": 1 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "active" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "idle in transaction" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last", "max"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "pg_connections_by_state_count",
+          "legendFormat": "{{state}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "pg_settings_max_connections",
+          "legendFormat": "max_connections",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Rows Returned / s",
+      "description": "rate(pg_stat_database_tup_returned) = rows produced by sequential scans. rate(pg_stat_database_tup_fetched) = rows fetched via index scans. A high seq-scan row rate with a low index-fetch rate indicates missing indexes. Both drop to zero = no queries running.",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 17, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["mean", "last"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(pg_stat_database_tup_returned{datname!~\"template.*|postgres\"}[5m])",
+          "legendFormat": "seq scan rows / s",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(pg_stat_database_tup_fetched{datname!~\"template.*|postgres\"}[5m])",
+          "legendFormat": "index rows / s",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Query Latency p50 / p95 / p99",
+      "description": "Percentiles of per-query mean execution time from pg_stat_statements (queries with > 5 calls). p50 = typical query, p95/p99 = tail latency. Spike = slow query introduced or table grew without index update. Requires pg_stat_statements extension (enabled via shared_preload_libraries). If this panel shows No Data, run: docker exec postgres psql -U $POSTGRES_USER -d $POSTGRES_DB -c 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements;'",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 25, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "s" },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "p99" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "p95" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "p50" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last", "max"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "pg_query_latency_percentiles_p50_seconds",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "pg_query_latency_percentiles_p95_seconds",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "pg_query_latency_percentiles_p99_seconds",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Slow Queries (running > 1 s)",
+      "description": "Number of queries currently executing for more than 1 second, sampled every 30 s. 0 = normal. A sustained non-zero value = long-running query blocking other transactions (lock contention) or missing index on a large table. Correlate with 'idle in transaction' connections in the panel above and with 'Task Processing Latency p95' in this dashboard.",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 25, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red",    "value": 3 }
+            ]
+          },
+          "custom": {
+            "thresholdsStyle": { "mode": "line+area" }
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last", "max"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "pg_slow_queries_count",
+          "legendFormat": "slow queries",
+          "refId": "A"
+        }
+      ]
+    }
   ]
 }

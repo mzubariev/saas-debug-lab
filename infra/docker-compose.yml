@@ -11,6 +11,13 @@ services:
     container_name: postgres
     restart: unless-stopped
     profiles: ["core"]
+    # Enable pg_stat_statements so postgres-exporter can expose per-query latency.
+    # track=all includes utility statements (VACUUM, ANALYZE, etc.).
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.track=all
+      -c pg_stat_statements.max=10000
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -19,11 +26,30 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Creates the pg_stat_statements extension on first initialisation.
+      # For existing volumes run manually — see infra/postgres/init.sql header.
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/01_pg_stat_statements.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: postgres-exporter
+    restart: unless-stopped
+    profiles: ["core"]
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      PG_EXPORTER_EXTEND_QUERY_PATH: "/etc/postgres-exporter/queries.yaml"
+    volumes:
+      - ../observability/postgres-exporter/queries.yaml:/etc/postgres-exporter/queries.yaml:ro
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 ############################
 # REDIS

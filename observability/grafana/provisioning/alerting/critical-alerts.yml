@@ -33,7 +33,7 @@ groups:
               expr: |
                 min by (job) (
                   up{
-                    job=~"api-gateway|task-service|auth-service|webhook-dispatcher|notification-worker|scheduler-worker|external-service-simulator"
+                    job=~"api-gateway|task-service|auth-service|webhook-dispatcher|notification-worker|scheduler-worker|external-service-simulator|postgres-exporter"
                   }
                 )
 
