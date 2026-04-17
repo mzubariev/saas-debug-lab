@@ -443,7 +443,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.50, sum by (method, path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])))",
+          "expr": "histogram_quantile(0.50, sum by (method, path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", method!~\"/OPTIONS/\"}[5m])))",
           "legendFormat": "p50 {{method}} {{path}}",
           "exemplar": true,
           "refId": "A"
@@ -453,7 +453,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (method, path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (method, path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", method!~\"/OPTIONS/\"}[5m])))",
           "legendFormat": "p95 {{method}} {{path}}",
           "exemplar": true,
           "refId": "B"
@@ -463,7 +463,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum by (method, path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (method, path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", method!~\"/OPTIONS/\"}[5m])))",
           "legendFormat": "p99 {{method}} {{path}}",
           "exemplar": true,
           "refId": "C"

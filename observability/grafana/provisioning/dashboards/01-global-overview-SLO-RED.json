@@ -57,7 +57,7 @@
       "title": "Services / Containers Availability",
       "description": "1 tile per scrape target. Green = UP, Red = DOWN. Any red tile means Prometheus cannot reach that container.",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 4 },
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 6 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
