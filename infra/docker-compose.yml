@@ -448,6 +448,8 @@ services:
     environment:
       SENTRY_DSN: ${SENTRY_DSN:-}
       METRICS_PORT: "9100"
+      # Merge Celery prefork Counter/Histogram samples into one /metrics endpoint.
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc_scheduler
     deploy:
       resources:
         limits:

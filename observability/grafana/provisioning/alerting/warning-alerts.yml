@@ -322,6 +322,7 @@ groups:
           severity: warning
         annotations:
           summary: "task-service DB operation p95 latency above 200ms — slow DB, lock contention, or index missing"
+          description: "PromQL threshold is 0.2 (seconds) = 200ms. Uses task_processing_duration_seconds (app histogram), not postgres pg_stat_statements."
           dashboard: "http://127.0.0.1:3000/d/resources-deps-v2"
           runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
 

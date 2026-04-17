@@ -193,7 +193,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "No Celery tasks completed in 15 minutes — scheduler-worker may be dead or Beat is not firing"
+          summary: "No Celery task throughput for 15m while scheduler-worker is UP — Beat may be stuck or workers not consuming the queue"
           dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
           runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
 
@@ -204,7 +204,10 @@ groups:
             model:
               instant: true
               expr: |
-                sum(increase(celery_tasks_total[15m]))
+                (
+                  sum by (job) (rate(celery_tasks_total{job="scheduler-worker"}[10m])) < bool 0.0001
+                )
+                unless on (job) (up{job="scheduler-worker"} == 0)
 
           - refId: B
             datasourceUid: "__expr__"
@@ -212,7 +215,7 @@ groups:
               type: threshold
               expression: A
               conditions:
-                - evaluator: { type: lt, params: [1] }
+                - evaluator: { type: eq, params: [1] }
 
 
 # ----------------------------

@@ -1,8 +1,24 @@
+"""Celery worker + Beat for scheduler-worker.
+
+Prometheus multiprocess: with ``--concurrency`` > 1 each forked child has its own
+in-memory registry; only one process can bind ``METRICS_PORT``. We set
+``PROMETHEUS_MULTIPROC_DIR`` (see docker-compose) so Counter / Histogram updates
+are merged on scrape, and only the first child to acquire a file lock exports
+``/metrics`` via ``MultiProcessCollector``.
+"""
+import os
+
+# Must be set before *any* Counter / Histogram from saas_shared is imported.
+os.environ.setdefault(
+    "PROMETHEUS_MULTIPROC_DIR", "/tmp/prometheus_multiproc_scheduler"
+)
+os.makedirs(os.environ["PROMETHEUS_MULTIPROC_DIR"], exist_ok=True)
+
 import time
 from threading import local
 
 from celery import Celery
-from celery.signals import task_postrun, task_prerun, worker_process_init
+from celery.signals import task_postrun, task_prerun, worker_process_init, worker_process_shutdown
 from opentelemetry.instrumentation.celery import CeleryInstrumentor
 from prometheus_client import start_http_server
 from saas_shared.logging import setup_logging
@@ -107,6 +123,47 @@ celery_app.conf.update(
 )
 
 
+def _start_prometheus_http_if_leader() -> None:
+    """Exactly one prefork child binds METRICS_PORT and serves merged multiproc metrics."""
+    mp_dir = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
+    if not mp_dir:
+        start_http_server(settings.metrics_port)
+        return
+
+    lock_path = os.path.join(mp_dir, "metrics_http.lock")
+    try:
+        import fcntl
+    except ImportError:
+        start_http_server(settings.metrics_port)
+        return
+
+    lock_f = open(lock_path, "a+", encoding="utf-8")
+    try:
+        fcntl.flock(lock_f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        lock_f.close()
+        return
+
+    from prometheus_client import CollectorRegistry, multiprocess
+    from prometheus_client import exposition
+
+    registry = CollectorRegistry()
+    multiprocess.MultiProcessCollector(registry)
+    exposition.start_http_server(settings.metrics_port, registry=registry)
+    # Hold the lock for the lifetime of this process so no second child binds.
+
+
+@worker_process_shutdown.connect
+def _prometheus_mark_worker_dead(**kwargs) -> None:
+    mp_dir = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
+    if not mp_dir:
+        return
+    from prometheus_client import multiprocess
+
+    # Runs in the exiting prefork child — always use this process's PID.
+    multiprocess.mark_process_dead(os.getpid())
+
+
 @worker_process_init.connect
 def init_worker_process(**kwargs) -> None:
     """Configure structlog, OpenTelemetry, and Sentry in each forked worker process."""
@@ -119,4 +176,4 @@ def init_worker_process(**kwargs) -> None:
     from ..infrastructure.db.session import get_sync_engine
 
     instrument_sqlalchemy_sync_engine(get_sync_engine(settings.postgres_dsn))
-    start_http_server(settings.metrics_port)
+    _start_prometheus_http_if_leader()
