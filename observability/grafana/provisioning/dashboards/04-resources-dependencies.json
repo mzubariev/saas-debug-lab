@@ -38,7 +38,7 @@
     {
       "id": 1,
       "title": "CPU Saturation by Service (% of machine cores)",
-      "description": "Fraction of total machine CPU capacity consumed per service (rate(process_cpu_seconds_total) / machine_cpu_cores). 1.0 = 100% of all available cores. machine_cpu_cores is exported by each service via saas_shared.",
+      "description": "Fraction of total machine CPU capacity consumed per service (rate(process_cpu_seconds_total) / machine_cpu_cores). 1.0 = 100% of all available cores. Denominator uses max by (job) so multiproc workers (e.g. Celery prefork) do not duplicate machine_cpu_cores per pid.",
       "type": "timeseries",
       "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -52,7 +52,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (job) (rate(process_cpu_seconds_total{job=~\"$job\"}[5m])) / on(job) group_left() machine_cpu_cores{job=~\"$job\"}",
+          "expr": "sum by (job) (rate(process_cpu_seconds_total{job=~\"$job\"}[5m])) / on(job) group_left() max by (job) (machine_cpu_cores{job=~\"$job\"})",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -61,7 +61,7 @@
     {
       "id": 2,
       "title": "Memory Usage (% of container limit)",
-      "description": "Resident memory as a fraction of the container memory limit (process_resident_memory_bytes / container_memory_limit_bytes). container_memory_limit_bytes is exported by each service via saas_shared (read from cgroups at startup). Shows 'No data' if no memory limit is set on the container.",
+      "description": "Resident memory as a fraction of the container memory limit. Numerator sums RSS by job (multiproc workers); denominator is max by (job) of container_memory_limit_bytes (same limit per container). Shows 'No data' if no memory limit is set on the container.",
       "type": "timeseries",
       "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -75,7 +75,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "process_resident_memory_bytes{job=~\"$job\"} / container_memory_limit_bytes{job=~\"$job\"}",
+          "expr": "sum by (job) (process_resident_memory_bytes{job=~\"$job\"}) / on(job) group_left() max by (job) (container_memory_limit_bytes{job=~\"$job\"})",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -223,13 +223,13 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "rate(pg_stat_database_tup_returned{datname!~\"template.*|postgres\"}[5m])",
+          "expr": "sum by (datname) (rate(pg_stat_database_tup_returned{datname!~\"template.*|postgres\"}[5m]))",
           "legendFormat": "seq scan rows / s",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "rate(pg_stat_database_tup_fetched{datname!~\"template.*|postgres\"}[5m])",
+          "expr": "sum by (datname) (rate(pg_stat_database_tup_fetched{datname!~\"template.*|postgres\"}[5m]))",
           "legendFormat": "index rows / s",
           "refId": "B"
         }

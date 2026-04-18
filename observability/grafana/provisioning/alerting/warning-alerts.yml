@@ -258,7 +258,7 @@ groups:
               expr: |
                 sum by (job) (rate(process_cpu_seconds_total{job!=""}[5m]))
                 / on(job) group_left()
-                machine_cpu_cores{job!=""}
+                max by (job) (machine_cpu_cores{job!=""})
 
           - refId: B
             datasourceUid: "__expr__"
@@ -293,12 +293,13 @@ groups:
               instant: true
               expr: |
                 (
-                  process_resident_memory_bytes{job!=""}
+                  sum by (job) (process_resident_memory_bytes{job!=""})
                   /
-                  container_memory_limit_bytes{job!=""}
+                  on(job) group_left()
+                  max by (job) (container_memory_limit_bytes{job!=""})
                 )
                 and
-                container_memory_limit_bytes{job!=""} > 0
+                max by (job) (container_memory_limit_bytes{job!=""}) > 0
 
           - refId: B
             datasourceUid: "__expr__"
