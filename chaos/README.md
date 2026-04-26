@@ -1,7 +1,7 @@
 # Chaos engineering (lab)
 
 Small **primitives** (atomic faults) and **scenarios** (composed flows) for observability training.  
-Aligned with `docs/FAILURE_PRIMITIVES.md`and `docs/SCENARIO_MAPPING.md`.
+Aligned with [Failure primitives](../docs/incidents-playbooks/4_FAILURE_PRIMITIVES.md), [Incident patterns](../docs/incidents-playbooks/2_INCIDENT_PATTERNS.md), and [Debugging scenarios](../docs/incidents-playbooks/DEBUGGING_SCENARIOS.md).
 
 ## Rules
 
@@ -23,7 +23,7 @@ Aligned with `docs/FAILURE_PRIMITIVES.md`and `docs/SCENARIO_MAPPING.md`.
 ## Scenarios → docs mapping
 
 
-| Scenario          | SCENARIO_MAPPING.md                                  | Primitives used                                                      |
+| Scenario          | docs/incidents-playbooks/ (patterns + scenarios)     | Primitives used                                                      |
 | ----------------- | ---------------------------------------------------- | -------------------------------------------------------------------- |
 | `kafka_lag`       | Kafka lag increasing / Background processing stopped | Stop Consumer (pause dispatcher) + Traffic Spike (`make load-spike`) |
 | `webhook_failure` | Tasks created but webhooks not delivered             | External API Failure (simulator `fail_rate=1.0` on one request)      |
@@ -57,15 +57,15 @@ curl -sS -X DELETE "http://localhost:8474/proxies/mailhog-smtp/toxics/latency"
 ## Primitives reference
 
 
-| Script                 | FAILURE_PRIMITIVES concept      |
-| ---------------------- | ------------------------------- |
-| `kill_service.sh`      | Kill Service                    |
-| `restart_service.sh`   | Recovery / restart              |
-| `kafka_down.sh`        | Messaging / dependency down     |
-| `redis_down.sh`        | Cache down                      |
-| `slow_db.sh`           | Slow Query Injection            |
+| Script                 | FAILURE_PRIMITIVES concept               |
+| ---------------------- | ---------------------------------------- |
+| `kill_service.sh`      | Kill Service                             |
+| `restart_service.sh`   | Recovery / restart                       |
+| `kafka_down.sh`        | Messaging / dependency down              |
+| `redis_down.sh`        | Cache down                               |
+| `slow_db.sh`           | Slow Query Injection                     |
 | `inject_latency.sh`    | Add Latency (external-service-simulator) |
-| `toxiproxy_latency.sh` | Add Latency (SMTP proxy path)   |
+| `toxiproxy_latency.sh` | Add Latency (SMTP proxy path)            |
 
 
 ### `slow_db.sh` environment
@@ -95,5 +95,5 @@ Matches `infra/.env` Postgres settings if exported:
 1. Start stack: `docker compose --profile core up -d` (under `infra/`).
 2. Optional baseline load: `make load-baseline`.
 3. Trigger chaos: `make chaos-random`.
-4. Observe Grafana / Kibana / Jaeger / Kafka UI as in `docs/DEBUGGING_SCENARIOS.md`.
+4. Observe Grafana / Kibana / Jaeger / Kafka UI as in `[docs/incidents-playbooks/DEBUGGING_SCENARIOS.md](../docs/incidents-playbooks/DEBUGGING_SCENARIOS.md)`.
 

@@ -55,7 +55,7 @@ cd infra
 docker compose --profile core up -d
 ```
 
-This starts Nginx, api-gateway, auth-service, task-service, webhook-receiver, webhook-dispatcher, external-service-simulator, workers (notification-worker, **scheduler-worker**), Flower, Kafka, Redis, Postgres, frontend, Kafka UI, MailHog, Toxiproxy, and a one-shot **`migrations`** container (`alembic upgrade head` for `users` + `tasks`) before auth-service and task-service start.
+This starts Nginx, api-gateway, auth-service, task-service, webhook-receiver, webhook-dispatcher, external-service-simulator, workers (notification-worker, **scheduler-worker**), Flower, Kafka (+ **kafka-exporter**), Redis, Postgres (+ **postgres-exporter**), frontend, Kafka UI, MailHog, Toxiproxy, and a one-shot **`migrations`** container (`alembic upgrade head` for `users` + `tasks`) before auth-service and task-service start.
 
 **Database:** set `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` in **`infra/.env`** — the same file is used by the Postgres service and the `migrations` job.
 
@@ -81,7 +81,7 @@ Wait until containers are healthy (`docker compose ps`).
 All HTTP API traffic from the host goes through **Nginx on port 80**:
 
 - **Base URL:** `http://localhost`
-- **Health (via gateway):** `GET http://localhost/health` (and service-specific `/health` routes behind the gateway as documented in [`docs/SERVICE_MAP.md`](docs/SERVICE_MAP.md))
+- **Health (via gateway):** `GET http://localhost/health` (and service-specific `/health` routes behind the gateway as documented in [`docs/system-architechture/SERVICE_MAP.md`](docs/system-architechture/SERVICE_MAP.md))
 
 Default **JWT login** (after seeding, step 5):
 
@@ -142,6 +142,9 @@ cd infra && docker compose --profile core up -d --build frontend
 | Jaeger                            | `http://localhost:16686`                                   |
 | Prometheus                        | `http://localhost:9090`                                    |
 | Grafana                           | `http://localhost:3000`                                    |
+| Pyroscope                         | `http://localhost:4040`                                    |
+| Postgres exporter                 | `http://localhost:9187/metrics`                            |
+| Kafka exporter                    | `http://localhost:9308/metrics`                            |
 | Kibana                            | `http://localhost:5601`                                    |
 
 
@@ -210,14 +213,14 @@ The system follows a microservices architecture with synchronous and asynchronou
 - **scheduler-worker** — Celery + Beat: DLQ replay, old-task cleanup; **Flower** on port 5555
 - **Postgres**, **Redis**, **Kafka** — data, cache, events
 
-For ports, envelopes, and request diagrams, see [`docs/SERVICE_MAP.md`](docs/SERVICE_MAP.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Repository layout: [`docs/FILE_STRUCTURE.md`](docs/FILE_STRUCTURE.md).
+For ports, envelopes, and request diagrams, see [`docs/system-architechture/SERVICE_MAP.md`](docs/system-architechture/SERVICE_MAP.md) and [`docs/system-architechture/ARCHITECTURE.md`](docs/system-architechture/ARCHITECTURE.md). Repository layout: [`docs/system-architechture/FILE_STRUCTURE.md`](docs/system-architechture/FILE_STRUCTURE.md).
 
 ---
 
 ## Observability stack
 
 - **Logging** — structured JSON (structlog); **Fluent Bit → Elasticsearch → Kibana**
-- **Metrics** — **Prometheus** scrapes FastAPI services (`/metrics`), **external-service-simulator**, and worker Prometheus servers on port **9100** (webhook-dispatcher, notification-worker, scheduler-worker); **Grafana**
+- **Metrics** — **Prometheus** scrapes FastAPI services (`/metrics`), **external-service-simulator**, worker endpoints on **9100** (webhook-dispatcher, notification-worker, scheduler-worker), **kafka-exporter** (:9308), and **postgres-exporter** (:9187). **Grafana** loads provisioned dashboards and alert rules from `observability/grafana/provisioning/`.
 - **Tracing** — **OpenTelemetry** → **Collector** → **Jaeger** (with the `observability` profile) in services and the frontend (`frontend/src/telemetry.ts`). **Datadog APM** is a separate compose path only ([`infra/docker-compose.datadog.yml`](infra/docker-compose.datadog.yml)).
 - **Errors (optional)** — **Sentry** across FastAPI apps, workers, and the React SPA when `SENTRY_DSN` / `VITE_SENTRY_DSN` are set; shared initialisation lives in `shared/saas_shared/sentry_setup.py`
 
@@ -232,21 +235,21 @@ For ports, envelopes, and request diagrams, see [`docs/SERVICE_MAP.md`](docs/SER
 
 ## Failure simulation
 
-- **Concepts:** [`docs/FAILURE_PRIMITIVES.md`](docs/FAILURE_PRIMITIVES.md), [`docs/SCENARIO_MAPPING.md`](docs/SCENARIO_MAPPING.md)
+- **Concepts:** [Failure primitives](docs/incidents-playbooks/4_FAILURE_PRIMITIVES.md), [Incident patterns](docs/incidents-playbooks/2_INCIDENT_PATTERNS.md), [Debugging scenarios](docs/incidents-playbooks/DEBUGGING_SCENARIOS.md)
 - **Automation:** `**chaos/`** primitives and scenarios (`chaos/README.md`, `Makefile` targets `chaos-*`, `break-*`, `slow-db`)
 - **Load + chaos:** run `make load-spike` or other `load-*` targets while executing scenarios
 
 ---
 
-## Debugging scenarios
+## Investigation documentation
 
-Guided exercises and playbooks live under `docs/` (numbered filenames — see [`docs/FILE_STRUCTURE.md`](docs/FILE_STRUCTURE.md)). Highlights: [`docs/DEBUGGING_SCENARIOS.md`](docs/DEBUGGING_SCENARIOS.md), [`docs/TROUBLESHOOTING_GUIDE.md`](docs/TROUBLESHOOTING_GUIDE.md), [`docs/INCIDENT_ENTRY_POINTS.md`](docs/INCIDENT_ENTRY_POINTS.md), [`docs/INCIDENT_PLAYBOOKS.md`](docs/INCIDENT_PLAYBOOKS.md), [`docs/SCENARIO_PLAYBOOK_MAPPING.md`](docs/SCENARIO_PLAYBOOK_MAPPING.md).
+Guided exercises and playbooks live under [`docs/incidents-playbooks/`](docs/incidents-playbooks/) (see also [`docs/system-architechture/FILE_STRUCTURE.md`](docs/system-architechture/FILE_STRUCTURE.md)). Highlights: [Debugging scenarios](docs/incidents-playbooks/DEBUGGING_SCENARIOS.md), [Incident entry points](docs/incidents-playbooks/1_INCIDENT_ENTRY_POINTS.md), [Incident patterns](docs/incidents-playbooks/2_INCIDENT_PATTERNS.md), [Incident playbooks](docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md), [Failure primitives](docs/incidents-playbooks/4_FAILURE_PRIMITIVES.md).
 
 ---
 
 ## Learning artifacts
 
-- Incident-style playbooks and step-by-step labs in `docs/`
+- Incident-style playbooks and step-by-step labs under [`docs/incidents-playbooks/`](docs/incidents-playbooks/) and stack reference under [`docs/system-architechture/`](docs/system-architechture/)
 - **Load tests:** `load-tests/README.md`
 - **Chaos:** `chaos/README.md`
 

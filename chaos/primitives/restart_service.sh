@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Failure primitive: restart / recovery (see docs/FAILURE_PRIMITIVES.md — Restart Loop context)
+# Failure primitive: restart / recovery (see docs/incidents-playbooks/4_FAILURE_PRIMITIVES.md#restart-loop)
 set -euo pipefail
 
 SERVICE="${1:-}"

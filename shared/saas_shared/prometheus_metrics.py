@@ -58,16 +58,16 @@ http_response_size_bytes = Histogram(
     buckets=(64, 256, 1_024, 4_096, 16_384, 65_536, 262_144, 1_048_576),
 )
 
-# ── Upstream (api-gateway outbound calls) ─────────────────────────────────────
+# ── Downstream (api-gateway outbound calls) ─────────────────────────────────────
 
-upstream_requests_total = Counter(
-    "upstream_requests_total",
+downstream_requests_total = Counter(
+    "downstream_requests_total",
     "Requests forwarded to downstream services.",
     ["service", "status"],
 )
 
-upstream_request_duration_seconds = Histogram(
-    "upstream_request_duration_seconds",
+downstream_request_duration_seconds = Histogram(
+    "downstream_request_duration_seconds",
     "Latency of downstream (proxied) HTTP requests in seconds.",
     ["service"],
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),

@@ -2,7 +2,9 @@
 
 k6-based load tests that exercise every layer of the stack: Nginx rate limiting,
 Redis cache, Postgres connection pool, Kafka event throughput, and the webhook
-retry pipeline.
+retry pipeline. With **`core` + `observability`** up, you can correlate runs with
+Prometheus (including **kafka-exporter** and **postgres-exporter** scrapes), Grafana,
+and Jaeger as described in [`docs/system-architechture/ARCHITECTURE.md`](../docs/system-architechture/ARCHITECTURE.md).
 
 ---
 
@@ -191,7 +193,7 @@ k6 run -e VUS=30 load-tests/scripts/concurrency.js
 | k6 output | `lifecycle_completed` vs `lifecycle_failed` — failures indicate state machine or DB issues |
 | Redis Insight `localhost:5540` | `tasks:list` key TTL resets on every create; watch hit/miss counters |
 | Kafka UI `localhost:8080` | Consumer group `webhook-dispatcher` lag should stay < 100 messages |
-| Prometheus `localhost:9090` | `http_requests_total{service="task-service"}` rate, `http_request_duration_seconds` histogram |
+| Prometheus `localhost:9090` | `http_requests_total{job="task-service"}` rate, `http_request_duration_seconds` histogram |
 
 **Expected thresholds** — test PASSES if:
 - `http_req_failed rate < 5%`
@@ -304,7 +306,7 @@ k6 run -e BASE_URL=http://localhost:18000 load-tests/scripts/slow_clients.js
 | k6 output | `nginx_504_timeouts` — increases only when Toxiproxy latency is active |
 | Nginx logs | `docker logs nginx --follow` — upstream timed out, 504 |
 | Postgres | `docker exec postgres psql -U admin saas -c "SELECT state, count(*) FROM pg_stat_activity GROUP BY state;"` |
-| Prometheus | `pg_stat_activity_count{state="idle"}` creeping up under slow browser load |
+| Prometheus | `pg_connections_by_state_count{state="idle"}` (postgres-exporter custom query) creeping up under slow browser load |
 | k6 output | `last_think_time_ms` gauge showing distribution of think times |
 
 **Expected thresholds** — test PASSES if:

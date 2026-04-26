@@ -22,7 +22,7 @@ groups:
         annotations:
           summary: "{{ $labels.job }} P95 latency exceeded 1s"
           dashboard: "http://127.0.0.1:3000/d/service-drilldown-v2?var-job={{ $labels.job }}"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#2-high-api-latency"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md#1-high-api-latency"
 
         data:
           - refId: A
@@ -64,7 +64,7 @@ groups:
         annotations:
           summary: "No HTTP traffic detected for {{ $labels.job }}"
           dashboard: "http://127.0.0.1:3000/d/global-overview-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md"
 
         data:
           - refId: A
@@ -100,7 +100,7 @@ groups:
         annotations:
           summary: "Kafka consumer group {{ $labels.consumergroup }} is {{ $value }} messages behind on {{ $labels.topic }} — pipeline backing up"
           dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#4-kafka-lag-increasing"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md#2-kafka-lag-increasing--background-jobs-slow"
 
         data:
           - refId: A
@@ -134,7 +134,7 @@ groups:
         annotations:
           summary: "Webhook DLQ is receiving new messages — deliveries permanently failing"
           dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#1-webhooks-not-delivered"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md#3-webhooks-not-delivered--external-integration"
 
         data:
           - refId: A
@@ -170,7 +170,7 @@ groups:
         annotations:
           summary: "Celery queue backlog — tasks are accumulating faster than workers consume"
           dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md"
 
         data:
           - refId: A
@@ -209,7 +209,7 @@ groups:
         annotations:
           summary: "{{ $labels.job }} file descriptor usage above 80% — risk of connection exhaustion"
           dashboard: "http://127.0.0.1:3000/d/resources-deps-v2?var-job={{ $labels.job }}"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md"
 
         data:
           - refId: A
@@ -247,7 +247,7 @@ groups:
         annotations:
           summary: "{{ $labels.job }} CPU saturation above 80% of machine cores — runaway loop or overload"
           dashboard: "http://127.0.0.1:3000/d/resources-deps-v2?var-job={{ $labels.job }}"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md"
 
         data:
           - refId: A
@@ -283,7 +283,7 @@ groups:
         annotations:
           summary: "{{ $labels.job }} memory usage above 85% of container limit — OOM risk"
           dashboard: "http://127.0.0.1:3000/d/resources-deps-v2?var-job={{ $labels.job }}"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md"
 
         data:
           - refId: A
@@ -325,7 +325,7 @@ groups:
           summary: "task-service DB operation p95 latency above 200ms — slow DB, lock contention, or index missing"
           description: "PromQL threshold is 0.2 (seconds) = 200ms. Uses task_processing_duration_seconds (app histogram)."
           dashboard: "http://127.0.0.1:3000/d/resources-deps-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md"
 
         data:
           - refId: A
@@ -363,7 +363,7 @@ groups:
         annotations:
           summary: "PostgreSQL connection count above 80% of max_connections — risk of 'too many connections' errors"
           dashboard: "http://127.0.0.1:3000/d/resources-deps-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md"
 
         data:
           - refId: A
@@ -399,7 +399,7 @@ groups:
         annotations:
           summary: "PostgreSQL has queries running for more than 1 second — possible missing index or lock contention"
           dashboard: "http://127.0.0.1:3000/d/resources-deps-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md"
 
         data:
           - refId: A
@@ -433,7 +433,7 @@ groups:
         annotations:
           summary: "More than 30% of DLQ retry deliveries are failing — external endpoint may be rejecting payloads"
           dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#1-webhooks-not-delivered"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md#3-webhooks-not-delivered--external-integration"
 
         data:
           - refId: A
@@ -469,7 +469,7 @@ groups:
         annotations:
           summary: "auth-service 401 Unauthorized rate exceeded 10% — possible credential storm or attack"
           dashboard: "http://127.0.0.1:3000/d/service-drilldown-v2?var-job=auth-service"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md"
 
         data:
           - refId: A
@@ -480,7 +480,7 @@ groups:
               expr: |
                 (
                   sum by (job) (
-                    rate(upstream_requests_total{
+                    rate(downstream_requests_total{
                       service="auth-service",
                       status="401"
                     }[5m])
@@ -488,7 +488,7 @@ groups:
                   /
                   clamp_min(
                     sum by (job) (
-                      rate(upstream_requests_total{
+                      rate(downstream_requests_total{
                         service="auth-service"
                       }[5m])
                     ),

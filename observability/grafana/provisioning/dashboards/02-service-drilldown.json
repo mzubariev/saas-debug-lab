@@ -473,7 +473,7 @@
     {
       "id": 12,
       "title": "↓ Outbound Requests (from API Gateway)",
-      "description": "All metrics are recorded inside api-gateway and reflect its outbound calls to upstream services.",
+      "description": "All metrics are recorded inside api-gateway and reflect its outbound calls to downstream services.",
       "type": "row",
       "gridPos": { "x": 0, "y": 30, "w": 24, "h": 1 },
       "collapsed": false,
@@ -481,8 +481,8 @@
     },
     {
       "id": 8,
-      "title": "RPS to Upstream Services by Status",
-      "description": "Requests per second made by api-gateway to each upstream service, broken down by HTTP status. upstream_requests_total has service and status labels only — no path granularity available here.",
+      "title": "RPS to Downstream Services by Status",
+      "description": "Requests per second made by api-gateway to each downstream service, broken down by HTTP status. downstream_requests_total has service and status labels only — no path granularity available here.",
       "type": "timeseries",
       "gridPos": {
         "x": 0,
@@ -518,7 +518,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (service, status) (rate(upstream_requests_total{job=\"api-gateway\"}[5m]))",
+          "expr": "sum by (service, status) (rate(downstream_requests_total{job=\"api-gateway\"}[5m]))",
           "legendFormat": "{{service}} — {{status}}",
           "refId": "A"
         }
@@ -526,8 +526,8 @@
     },
     {
       "id": 9,
-      "title": "Upstream Error Rate by Service & Status",
-      "description": "Percentage of api-gateway's outbound calls to each upstream service that resulted in 5xx, timeout, or connection error, broken down by error status. Note: upstream_requests_total has no path label — status is the finest available granularity.",
+      "title": "Downstream Error Rate by Service & Status",
+      "description": "Percentage of api-gateway's outbound calls to each downstream service that resulted in 5xx, timeout, or connection error, broken down by error status. Note: downstream_requests_total has no path label — status is the finest available granularity.",
       "type": "timeseries",
       "gridPos": {
         "x": 12,
@@ -563,7 +563,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (service, status) (rate(upstream_requests_total{job=\"api-gateway\", status=~\"5..|timeout|connection_error\"}[5m])) / on(service) group_left() clamp_min(sum by (service) (rate(upstream_requests_total{job=\"api-gateway\"}[5m])), 1)",
+          "expr": "sum by (service, status) (rate(downstream_requests_total{job=\"api-gateway\", status=~\"5..|timeout|connection_error\"}[5m])) / on(service) group_left() clamp_min(sum by (service) (rate(downstream_requests_total{job=\"api-gateway\"}[5m])), 1)",
           "legendFormat": "{{service}} — {{status}}",
           "refId": "A"
         }
@@ -571,8 +571,8 @@
     },
     {
       "id": 13,
-      "title": "Upstream P95 Latency",
-      "description": "Round-trip latency at p95 as measured by api-gateway for each call to an upstream service. Spike = slow DB, handler, or network congestion. Click exemplar dots to jump to the matching Jaeger trace.",
+      "title": "Downstream P95 Latency",
+      "description": "Round-trip latency at p95 as measured by api-gateway for each call to an downstream service. Spike = slow DB, handler, or network congestion. Click exemplar dots to jump to the matching Jaeger trace.",
       "type": "timeseries",
       "gridPos": { "x": 0, "y": 39, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -584,7 +584,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (service, le) (rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (service, le) (rate(downstream_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])))",
           "legendFormat": "{{service}}",
           "exemplar": true,
           "refId": "A"
@@ -593,8 +593,8 @@
     },
     {
       "id": 14,
-      "title": "Upstream P99 Latency",
-      "description": "Tail (p99) round-trip latency as measured by api-gateway for each call to an upstream service. Wide gap between p95 and p99 = intermittent spikes invisible at p95. Click exemplar dots to jump to the matching Jaeger trace.",
+      "title": "Downstream P99 Latency",
+      "description": "Tail (p99) round-trip latency as measured by api-gateway for each call to an downstream service. Wide gap between p95 and p99 = intermittent spikes invisible at p95. Click exemplar dots to jump to the matching Jaeger trace.",
       "type": "timeseries",
       "gridPos": { "x": 12, "y": 39, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -606,7 +606,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.99, sum by (service, le) (rate(upstream_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (service, le) (rate(downstream_request_duration_seconds_bucket{job=\"api-gateway\"}[5m])))",
           "legendFormat": "{{service}}",
           "exemplar": true,
           "refId": "A"
@@ -647,7 +647,7 @@
           "status",
           "message",
           "exception",
-          "upstream"
+          "downstream"
         ]
       },
       "targets": [

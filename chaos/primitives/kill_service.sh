@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Failure primitive: Kill Service (see docs/FAILURE_PRIMITIVES.md)
+# Failure primitive: Kill Service (see docs/incidents-playbooks/4_FAILURE_PRIMITIVES.md#kill-service)
 set -euo pipefail
 
 SERVICE="${1:-}"

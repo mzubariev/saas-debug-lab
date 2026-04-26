@@ -22,7 +22,7 @@ groups:
         annotations:
           summary: "Service {{ $labels.job }} is not responding"
           dashboard: "http://127.0.0.1:3000/d/global-overview-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md"
 
         data:
           - refId: A
@@ -60,7 +60,7 @@ groups:
         annotations:
           summary: "{{ $labels.job }} HTTP 5xx error rate exceeded 5%"
           dashboard: "http://127.0.0.1:3000/d/service-drilldown-v2?var-job={{ $labels.job }}"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#2-high-api-latency"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md#1-high-api-latency"
 
         data:
           - refId: A
@@ -92,10 +92,10 @@ groups:
 
 
 # ----------------------------
-# UPSTREAM ERROR RATE
+# DOWNSTREAM ERROR RATE
 # ----------------------------
-      - uid: upstream-error-rate
-        title: "Upstream Error Rate > 5%"
+      - uid: downstream-error-rate
+        title: "Downstream Error Rate > 5%"
         condition: B
         for: 2m
         noDataState: OK
@@ -103,9 +103,9 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Upstream calls to {{ $labels.service }} failing above 5%"
+          summary: "Downstream calls to {{ $labels.service }} failing above 5%"
           dashboard: "http://127.0.0.1:3000/d/service-drilldown-v2?var-job=api-gateway"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#6-external-api-failures"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md#3-webhooks-not-delivered--external-integration"
 
         data:
           - refId: A
@@ -116,12 +116,12 @@ groups:
               expr: |
                 (
                   sum by (service) (
-                    rate(upstream_requests_total{status=~"5.."}[5m])
+                    rate(downstream_requests_total{status=~"5.."}[5m])
                   )
                   /
                   clamp_min(
                     sum by (service) (
-                      rate(upstream_requests_total[5m])
+                      rate(downstream_requests_total[5m])
                     ),
                     0.001
                   )
@@ -150,7 +150,7 @@ groups:
         annotations:
           summary: "Webhook delivery failure rate exceeded 5% — check DLQ"
           dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#1-webhooks-not-delivered"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md#3-webhooks-not-delivered--external-integration"
 
         data:
           - refId: A
@@ -195,7 +195,7 @@ groups:
         annotations:
           summary: "No Celery task throughput for 15m while scheduler-worker is UP — Beat may be stuck or workers not consuming the queue"
           dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md"
 
         data:
           - refId: A
@@ -232,7 +232,7 @@ groups:
         annotations:
           summary: "Kafka message processing errors detected in {{ $labels.job }}"
           dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/6_2_INCIDENT_PLAYBOOKS.md#4-kafka-lag-increasing"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md#2-kafka-lag-increasing--background-jobs-slow"
 
         data:
           - refId: A

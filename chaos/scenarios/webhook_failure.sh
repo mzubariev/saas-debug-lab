@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Scenario: External webhook endpoint failing (maps to docs/SCENARIO_MAPPING.md —
-#   Tasks created but webhooks not delivered → External API Failure)
+# Scenario: External webhook endpoint failing (see docs/incidents-playbooks/DEBUGGING_SCENARIOS.md,
+#   docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md#3-webhooks-not-delivered--external-integration)
 #
 # Sends a single request to external-service-simulator with fail_rate=1.0 (that call always fails).
 # For sustained high fail rate during load tests, restart external-service-simulator with

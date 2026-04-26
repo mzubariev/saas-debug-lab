@@ -5,7 +5,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 
-from saas_shared.prometheus_metrics import upstream_request_duration_seconds, upstream_requests_total
+from saas_shared.prometheus_metrics import downstream_request_duration_seconds, downstream_requests_total
 
 from ...core.config import settings
 from ...dependencies import verify_token
@@ -16,7 +16,7 @@ router = APIRouter()
 logger = structlog.get_logger()
 
 
-# Headers that must NOT be forwarded verbatim to upstream services.
+# Headers that must NOT be forwarded verbatim to downstream services.
 # - "host": must match the upstream hostname, not the client's original Host.
 # - "sentry-trace" / "baggage": the HttpxIntegration re-injects these on every
 #   outbound call using the *gateway's own* active span as the parent, so that
@@ -24,10 +24,10 @@ logger = structlog.get_logger()
 #   Forwarding the browser's raw values would create duplicate / mismatched spans.
 # - "traceparent" / "tracestate": do not forward the browser's values. The gateway's
 #   active OTEL span is the correct parent; HTTPXClientInstrumentor injects fresh W3C
-#   headers on each outbound call so upstreams see gateway → service (not browser → service).
+#   headers on each outbound call so downstreams see gateway → service (not browser → service).
 _EXCLUDED_PROXY_HEADERS = frozenset({"host", "sentry-trace", "baggage", "traceparent", "tracestate"})
 
-# Map upstream base URL prefix → stable service label for Prometheus.
+# Map downstream base URL prefix → stable service label for Prometheus.
 _SERVICE_LABELS: dict[str, str] = {
     settings.auth_service_url: "auth-service",
     settings.task_service_url: "task-service",
@@ -61,15 +61,15 @@ async def _proxy(request: Request, url: str) -> Response:
             headers=headers,
         )
     except httpx.TimeoutException as exc:
-        upstream_requests_total.labels(service=service, status=504).inc()
-        upstream_request_duration_seconds.labels(service=service).observe(
+        downstream_requests_total.labels(service=service, status=504).inc()
+        downstream_request_duration_seconds.labels(service=service).observe(
             time.perf_counter() - t0
         )
         logger.error("proxy_timeout", method=request.method, url=url)
-        raise HTTPException(status_code=504, detail="Upstream timeout") from exc
+        raise HTTPException(status_code=504, detail="Downstream timeout") from exc
     except httpx.RequestError as exc:
-        upstream_requests_total.labels(service=service, status=502).inc()
-        upstream_request_duration_seconds.labels(service=service).observe(
+        downstream_requests_total.labels(service=service, status=502).inc()
+        downstream_request_duration_seconds.labels(service=service).observe(
             time.perf_counter() - t0
         )
         logger.error(
@@ -78,12 +78,12 @@ async def _proxy(request: Request, url: str) -> Response:
             url=url,
             error=str(exc),
         )
-        raise HTTPException(status_code=502, detail="Upstream unavailable") from exc
+        raise HTTPException(status_code=502, detail="Downstream unavailable") from exc
 
     elapsed = time.perf_counter() - t0
     status_label = str(resp.status_code)
-    upstream_requests_total.labels(service=service, status=status_label).inc()
-    upstream_request_duration_seconds.labels(service=service).observe(elapsed)
+    downstream_requests_total.labels(service=service, status=status_label).inc()
+    downstream_request_duration_seconds.labels(service=service).observe(elapsed)
 
     log = logger.warning if resp.status_code >= 400 else logger.info
     log(
@@ -91,8 +91,8 @@ async def _proxy(request: Request, url: str) -> Response:
         method=request.method,
         path=str(request.url.path),
         status=resp.status_code,
-        upstream=url,
-        upstream_service=service,
+        downstream=url,
+        downstream_service=service,
     )
 
     return Response(

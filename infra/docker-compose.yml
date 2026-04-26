@@ -557,7 +557,7 @@ services:
     image: redis/redisinsight:latest
     container_name: redis-insight
     restart: unless-stopped
-    profiles: ["observability"]
+    profiles: ["core"]
     ports:
       - "5540:5540"
     depends_on:

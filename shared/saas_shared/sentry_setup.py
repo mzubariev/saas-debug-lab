@@ -51,7 +51,7 @@ _KIBANA_BASE = os.getenv("KIBANA_BASE_URL", "http://localhost:5601")
 # Rison-encoded column list (no spaces).  Edit here to change visible fields.
 _KIBANA_COLUMNS = (
     "'@timestamp',log_source,service.name,event_name,method,path"
-    "level,status,upstream,message,exception,trace_id,request_id"
+    "level,status,downstream,message,exception,trace_id,request_id"
 )
 
 # Set once by each setup_sentry_* function so link builders know the service name.
