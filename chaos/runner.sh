@@ -11,7 +11,7 @@ SCENARIO="${1:-}"
 
 if [[ -z "$SCENARIO" ]]; then
   echo "Usage: $0 <scenario_name>" >&2
-  echo "Examples: $0 kafka_lag | webhook_failure | db_slowdown" >&2
+  echo "Examples: $0 kafka_lag | cache_stampede | retry_storm | db_pool_exhaustion | …" >&2
   exit 1
 fi
 

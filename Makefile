@@ -3,6 +3,7 @@
 
 .PHONY: load-baseline load-chaos load-spike load-retry-storm load-concurrency load-slow-clients
 .PHONY: break-kafka break-redis slow-db kill-worker chaos-scenario chaos-random
+.PHONY: cache-stampede kafka-backlog retry-storm
 
 load-baseline:
 	k6 run load-tests/scripts/baseline.js
@@ -35,6 +36,15 @@ slow-db:
 
 kill-worker:
 	docker stop notification-worker
+
+cache-stampede:
+	bash chaos/scenarios/cache_stampede.sh
+
+kafka-backlog:
+	bash chaos/scenarios/kafka_backlog.sh
+
+retry-storm:
+	bash chaos/scenarios/retry_storm.sh
 
 chaos-scenario:
 	@test -n "$(SCENARIO)" || (echo "Usage: make chaos-scenario SCENARIO=kafka_lag" >&2; exit 1)

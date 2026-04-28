@@ -317,6 +317,10 @@ services:
     profiles: ["core"]
     env_file:
       - ../services/external/external-service-simulator/.env
+    environment:
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      # Chaos / load tests: host override (e.g. EXTERNAL_SIMULATOR_DEFAULT_FAIL_RATE=0.95 docker compose up …)
+      DEFAULT_FAIL_RATE: ${EXTERNAL_SIMULATOR_DEFAULT_FAIL_RATE:-0.0}
     ports:
       - "8004:8001"
     deploy:
