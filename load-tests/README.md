@@ -321,7 +321,7 @@ k6 run -e BASE_URL=http://localhost:18000 load-tests/scripts/slow_clients.js
 | Environment variable | Default | Description |
 |---|---|---|
 | `BASE_URL` | `http://localhost` | Nginx entry point for all API calls |
-| `WEBHOOK_SIM_URL` | `http://localhost:8004` | Direct access to external-service-simulator |
+| `WEBHOOK_SIM_URL` | `http://localhost:8000` | Direct access to external-service-simulator |
 | `VUS` | `20` | VU count override for `concurrency.js` |
 | `FAIL_RATE` | `0.9` | Failure rate passed to `retry_storm.js` simulator baseline |
 | `DEBUG_VU` | unset | Set to `1` to print `VU` / `ITER` in `chaos_mode.js` |

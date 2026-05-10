@@ -11,7 +11,7 @@ import { check } from 'k6'
 // Override via k6 env:
 //   k6 run -e BASE_URL=http://localhost scripts/spike_traffic.js
 export const BASE_URL = __ENV.BASE_URL || 'http://localhost'
-export const WEBHOOK_SIM_URL = __ENV.WEBHOOK_SIM_URL || 'http://localhost:8004'
+export const WEBHOOK_SIM_URL = __ENV.WEBHOOK_SIM_URL || 'http://nginx/external'
 
 // ─── Trace correlation ─────────────────────────────────────────────────────────
 /** Unique id per request for log/trace correlation (gateway can forward as X-Request-ID). */

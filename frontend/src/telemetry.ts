@@ -1,7 +1,7 @@
 /**
  * OpenTelemetry Web SDK — W3C trace context on fetch/XHR, OTLP HTTP → Collector (:4318) → Jaeger.
  *
- * Default URL is `http://localhost:4318/v1/traces` (Collector maps host ports; CORS allowed in
+ * Default URL is `http://localhost/otel/v1/traces` (Collector maps host ports; CORS allowed in
  * `observability/otel-collector/otel-collector-config.yaml`). Override with
  * `VITE_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`.
  */
@@ -21,7 +21,7 @@ function resolveOtlpTracesUrl(): string {
     | string
     | undefined
   if (fromEnv) return fromEnv
-  return "http://localhost:4318/v1/traces"
+  return "http://localhost/otel/v1/traces"
 }
 
 /**

@@ -13,4 +13,4 @@ RUN pip install -e "/app/shared[services]"
 
 COPY services/external/external-service-simulator/app ./app
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload", "--no-access-log"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--no-access-log"]

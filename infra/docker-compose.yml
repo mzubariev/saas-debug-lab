@@ -22,8 +22,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Creates the pg_stat_statements extension on first initialisation.
@@ -45,8 +43,6 @@ services:
       PG_EXPORTER_EXTEND_QUERY_PATH: "/etc/postgres-exporter/queries.yaml"
     volumes:
       - ../observability/postgres-exporter/queries.yaml:/etc/postgres-exporter/queries.yaml:ro
-    ports:
-      - "9187:9187"
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,8 +56,6 @@ services:
     container_name: redis
     restart: unless-stopped
     profiles: ["core"]
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -95,9 +89,6 @@ services:
     depends_on:
       zookeeper:
         condition: service_healthy
-    ports:
-      - "9092:9092"
-      - "9093:9093"
     environment:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
@@ -123,8 +114,6 @@ services:
     command:
       - "--kafka.server=kafka:9092"
       - "--web.listen-address=:9308"
-    ports:
-      - "9308:9308"
     depends_on:
       kafka:
         condition: service_healthy
@@ -245,8 +234,6 @@ services:
       - ../services/core/auth-service/.env
     environment:
       SENTRY_DSN: ${SENTRY_DSN:-}
-    ports:
-      - "8002:8000"
     deploy:
       resources:
         limits:
@@ -279,8 +266,6 @@ services:
       - ../services/core/task-service/.env
     environment:
       SENTRY_DSN: ${SENTRY_DSN:-}
-    ports:
-      - "8001:8000"
     deploy:
       resources:
         limits:
@@ -322,13 +307,13 @@ services:
       # Chaos / load tests: host override (e.g. EXTERNAL_SIMULATOR_DEFAULT_FAIL_RATE=0.95 docker compose up …)
       DEFAULT_FAIL_RATE: ${EXTERNAL_SIMULATOR_DEFAULT_FAIL_RATE:-0.0}
     ports:
-      - "8004:8001"
+      - "8000:8000"
     deploy:
       resources:
         limits:
           memory: 256m
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -352,8 +337,6 @@ services:
       - ../services/core/webhook-receiver/.env
     environment:
       SENTRY_DSN: ${SENTRY_DSN:-}
-    ports:
-      - "8003:8000"
     deploy:
       resources:
         limits:
@@ -421,7 +404,6 @@ services:
       - ./toxiproxy/toxiproxy.json:/etc/toxiproxy.json:ro
     ports:
       - "8474:8474"   # Management API — inject/remove toxics here
-      - "11025:11025" # mailhog-smtp proxy (notification-worker → this → mailhog:1025)
     depends_on:
       mailhog:
         condition: service_started
@@ -594,9 +576,6 @@ services:
     depends_on:
       - jaeger
     command: ["--config=/etc/otelcol/config.yaml"]
-    ports:
-      - "4317:4317"
-      - "4318:4318"
     volumes:
       - ../observability/otel-collector/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
 
@@ -676,8 +655,6 @@ services:
     environment:
       discovery.type: single-node
       xpack.security.enabled: "false"
-    ports:
-      - "9200:9200"
 
 ############################
 # KIBANA
@@ -702,7 +679,7 @@ services:
     container_name: pyroscope
     command: server
     restart: unless-stopped
-    profiles: ["observability"]
+    profiles: ["pyroscope"]
     ports:
       - "4040:4040"
     depends_on:
