@@ -1,7 +1,7 @@
 # Chaos engineering (lab)
 
 Small **primitives** (atomic faults) and **scenarios** (composed flows) for observability training.  
-Aligned with [Failure primitives](../docs/incidents-playbooks/4_FAILURE_PRIMITIVES.md), [Incident patterns](../docs/incidents-playbooks/2_INCIDENT_PATTERNS.md), and [Debugging scenarios](../docs/incidents-playbooks/DEBUGGING_SCENARIOS.md).
+Aligned with [Failure primitives](../docs/incidents-playbooks/PROD_INCIDENTS.md), [Incident patterns](../docs/incidents-playbooks/1_INCIDENT_PATTERNS.md), and [Debugging scenarios](../docs/incidents-playbooks/DEBUGGING_SCENARIOS.md).
 
 ## Rules
 
@@ -80,7 +80,7 @@ curl -sS -X DELETE "http://localhost:8474/proxies/mailhog-smtp/toxics/latency"
 ## Primitives reference
 
 
-| Script                 | FAILURE_PRIMITIVES concept               |
+| Script                 | PROD_INCIDENTS concept               |
 | ---------------------- | ---------------------------------------- |
 | `kill_service.sh`      | Kill Service                             |
 | `restart_service.sh`   | Recovery / restart                       |

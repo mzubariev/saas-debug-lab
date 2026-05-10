@@ -22,7 +22,7 @@ groups:
         annotations:
           summary: "Service {{ $labels.job }} is not responding"
           dashboard: "http://127.0.0.1:3000/d/global-overview-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/2_INCIDENT_PLAYBOOKS.md"
 
         data:
           - refId: A
@@ -60,7 +60,7 @@ groups:
         annotations:
           summary: "{{ $labels.job }} HTTP 5xx error rate exceeded 5%"
           dashboard: "http://127.0.0.1:3000/d/service-drilldown-v2?var-job={{ $labels.job }}"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md#1-high-api-latency"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/2_INCIDENT_PLAYBOOKS.md#1-high-api-latency"
 
         data:
           - refId: A
@@ -105,7 +105,7 @@ groups:
         annotations:
           summary: "Downstream calls to {{ $labels.service }} failing above 5%"
           dashboard: "http://127.0.0.1:3000/d/service-drilldown-v2?var-job=api-gateway"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md#3-webhooks-not-delivered--external-integration"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/2_INCIDENT_PLAYBOOKS.md#3-webhooks-not-delivered--external-integration"
 
         data:
           - refId: A
@@ -150,7 +150,7 @@ groups:
         annotations:
           summary: "Webhook delivery failure rate exceeded 5% — check DLQ"
           dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md#3-webhooks-not-delivered--external-integration"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/2_INCIDENT_PLAYBOOKS.md#3-webhooks-not-delivered--external-integration"
 
         data:
           - refId: A
@@ -195,7 +195,7 @@ groups:
         annotations:
           summary: "No Celery task throughput for 15m while scheduler-worker is UP — Beat may be stuck or workers not consuming the queue"
           dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/2_INCIDENT_PLAYBOOKS.md"
 
         data:
           - refId: A
@@ -232,7 +232,7 @@ groups:
         annotations:
           summary: "Kafka message processing errors detected in {{ $labels.job }}"
           dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md#2-kafka-lag-increasing--background-jobs-slow"
+          runbook: "https://github.com/YOUR_GITHUB_REPO/blob/main/docs/incidents-playbooks/2_INCIDENT_PLAYBOOKS.md#2-kafka-lag-increasing--background-jobs-slow"
 
         data:
           - refId: A

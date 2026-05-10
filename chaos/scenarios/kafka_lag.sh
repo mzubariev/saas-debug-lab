@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Scenario: Kafka lag / consumer backlog (see docs/incidents-playbooks/2_INCIDENT_PATTERNS.md#2-message-not-processed and playbooks § Kafka lag)
+# Scenario: Kafka lag / consumer backlog (see docs/incidents-playbooks/1_INCIDENT_PATTERNS.md#2-message-not-processed and playbooks § Kafka lag)
 #
 # Pauses webhook-dispatcher so consumers stop processing; traffic spike produces backlog.
 #

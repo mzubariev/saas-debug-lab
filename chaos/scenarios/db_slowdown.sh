@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Scenario: Slow DB / API latency (see docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md#1-high-api-latency)
+# Scenario: Slow DB / API latency (see docs/incidents-playbooks/2_INCIDENT_PLAYBOOKS.md#1-high-api-latency)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

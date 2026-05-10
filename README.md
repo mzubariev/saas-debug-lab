@@ -44,7 +44,7 @@ Edit `**infra/.env**` and set at least:
 | `POSTGRES_DB`       | Database name (lab examples use `saas`)      |
 
 
-Keep these values consistent with the `**DATABASE_URL**` you use for seeding (step 5). Optional: `SENTRY_DSN`. For **Datadog APM**, set `DD_API_KEY` (and optionally `DD_SITE`, `DD_ENV`, `DD_VERSION`) when using [`infra/docker-compose.datadog.yml`](infra/docker-compose.datadog.yml) — see **Tracing modes** below.
+Keep these values consistent with the `**DATABASE_URL**` you use for seeding (step 5). Optional: `SENTRY_DSN`. For **Datadog APM**, set `DD_API_KEY` (and optionally `DD_SITE`, `DD_ENV`, `DD_VERSION`) when using `[infra/docker-compose.datadog.yml](infra/docker-compose.datadog.yml)` — see **Tracing modes** below.
 
 ### 3. Start the stack
 
@@ -55,9 +55,9 @@ cd infra
 docker compose --profile core up -d
 ```
 
-This starts Nginx, api-gateway, auth-service, task-service, webhook-receiver, webhook-dispatcher, external-service-simulator, workers (notification-worker, **scheduler-worker**), Flower, Kafka (+ **kafka-exporter**), Redis, Postgres (+ **postgres-exporter**), frontend, Kafka UI, MailHog, Toxiproxy, and a one-shot **`migrations`** container (`alembic upgrade head` for `users` + `tasks`) before auth-service and task-service start.
+This starts Nginx, api-gateway, auth-service, task-service, webhook-receiver, webhook-dispatcher, external-service-simulator, workers (notification-worker, **scheduler-worker**), Flower, Kafka (+ **kafka-exporter**), Redis, Postgres (+ **postgres-exporter**), frontend, Kafka UI, MailHog, Toxiproxy, and a one-shot `**migrations`** container (`alembic upgrade head` for `users` + `tasks`) before auth-service and task-service start.
 
-**Database:** set `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` in **`infra/.env`** — the same file is used by the Postgres service and the `migrations` job.
+**Database:** set `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` in `**infra/.env`** — the same file is used by the Postgres service and the `migrations` job.
 
 **Optional — full observability** (Jaeger, OpenTelemetry Collector, Prometheus, Grafana, Elasticsearch, Kibana, Fluent Bit, Redis Insight):
 
@@ -67,12 +67,14 @@ docker compose --profile core --profile observability up -d
 
 **Tracing modes** (pick **one** — do not combine `observability` with the Datadog override):
 
-| Mode | Command (from `infra/`) |
-|------|-------------------------|
-| **OpenTelemetry → Collector → Jaeger** | `docker compose --profile core --profile observability up -d` |
+
+| Mode                                                      | Command (from `infra/`)                                                                                     |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **OpenTelemetry → Collector → Jaeger**                    | `docker compose --profile core --profile observability up -d`                                               |
 | **Datadog APM** (`ddtrace-run` only; no Jaeger/Collector) | `docker compose -f docker-compose.yml -f docker-compose.datadog.yml --profile core --profile datadog up -d` |
 
-For Datadog, set `DD_API_KEY` in **`infra/.env`**. Switching modes is done **only** via compose files, never by mixing env vars.
+
+For Datadog, set `DD_API_KEY` in `**infra/.env`**. Switching modes is done **only** via compose files, never by mixing env vars.
 
 Wait until containers are healthy (`docker compose ps`).
 
@@ -81,7 +83,7 @@ Wait until containers are healthy (`docker compose ps`).
 All HTTP API traffic from the host goes through **Nginx on port 80**:
 
 - **Base URL:** `http://localhost`
-- **Health (via gateway):** `GET http://localhost/health` (and service-specific `/health` routes behind the gateway as documented in [`docs/system-architechture/SERVICE_MAP.md`](docs/system-architechture/SERVICE_MAP.md))
+- **Health (via gateway):** `GET http://localhost/health` (and service-specific `/health` routes behind the gateway as documented in `[docs/system-architechture/SERVICE_MAP.md](docs/system-architechture/SERVICE_MAP.md)`)
 
 Default **JWT login** (after seeding, step 5):
 
@@ -132,20 +134,18 @@ cd infra && docker compose --profile core up -d --build frontend
 ### 7. Quick verification
 
 
-| Check                             | URL / command                                              |
-| --------------------------------- | ---------------------------------------------------------- |
-| Kanban / UI                       | `http://localhost:5173` — log in with `admin` / `admin123` |
-| Kafka UI                          | `http://localhost:8080`                                    |
-| Redis Insight                     | `http://localhost:5540`                                    |
-| Flower (Celery)                   | `http://localhost:5555`                                    |
-| MailHog                           | `http://localhost:8025`                                    |
-| Jaeger                            | `http://localhost:16686`                                   |
-| Prometheus                        | `http://localhost:9090`                                    |
-| Grafana                           | `http://localhost:3000`                                    |
-| Pyroscope                         | `http://localhost:4040`                                    |
-| Postgres exporter                 | `http://localhost:9187/metrics`                            |
-| Kafka exporter                    | `http://localhost:9308/metrics`                            |
-| Kibana                            | `http://localhost:5601`                                    |
+| Check             | URL / command                                              |
+| ----------------- | ---------------------------------------------------------- |
+| Kanban / UI       | `http://localhost:5173` — log in with `admin` / `admin123` |
+| Kafka UI          | `http://localhost:8080`                                    |
+| Redis Insight     | `http://localhost:5540`                                    |
+| Flower (Celery)   | `http://localhost:5555`                                    |
+| MailHog           | `http://localhost:8025`                                    |
+| Jaeger            | `http://localhost:16686`                                   |
+| Prometheus        | `http://localhost:9090`                                    |
+| Grafana           | `http://localhost:3000`                                    |
+| Pyroscope         | `http://localhost:4040`                                    |
+| Kibana            | `http://localhost:5601`                                    |
 
 
 ### 8. Load tests (k6)
@@ -213,7 +213,7 @@ The system follows a microservices architecture with synchronous and asynchronou
 - **scheduler-worker** — Celery + Beat: DLQ replay, old-task cleanup; **Flower** on port 5555
 - **Postgres**, **Redis**, **Kafka** — data, cache, events
 
-For ports, envelopes, and request diagrams, see [`docs/system-architechture/SERVICE_MAP.md`](docs/system-architechture/SERVICE_MAP.md) and [`docs/system-architechture/ARCHITECTURE.md`](docs/system-architechture/ARCHITECTURE.md). Repository layout: [`docs/system-architechture/FILE_STRUCTURE.md`](docs/system-architechture/FILE_STRUCTURE.md).
+For ports, envelopes, and request diagrams, see `[docs/system-architechture/SERVICE_MAP.md](docs/system-architechture/SERVICE_MAP.md)` and `[docs/system-architechture/ARCHITECTURE.md](docs/system-architechture/ARCHITECTURE.md)`. Repository layout: `[docs/system-architechture/FILE_STRUCTURE.md](docs/system-architechture/FILE_STRUCTURE.md)`.
 
 ---
 
@@ -221,35 +221,35 @@ For ports, envelopes, and request diagrams, see [`docs/system-architechture/SERV
 
 - **Logging** — structured JSON (structlog); **Fluent Bit → Elasticsearch → Kibana**
 - **Metrics** — **Prometheus** scrapes FastAPI services (`/metrics`), **external-service-simulator**, worker endpoints on **9100** (webhook-dispatcher, notification-worker, scheduler-worker), **kafka-exporter** (:9308), and **postgres-exporter** (:9187). **Grafana** loads provisioned dashboards and alert rules from `observability/grafana/provisioning/`.
-- **Tracing** — **OpenTelemetry** → **Collector** → **Jaeger** (with the `observability` profile) in services and the frontend (`frontend/src/telemetry.ts`). **Datadog APM** is a separate compose path only ([`infra/docker-compose.datadog.yml`](infra/docker-compose.datadog.yml)).
+- **Tracing** — **OpenTelemetry** → **Collector** → **Jaeger** (with the `observability` profile) in services and the frontend (`frontend/src/telemetry.ts`). **Datadog APM** is a separate compose path only (`[infra/docker-compose.datadog.yml](infra/docker-compose.datadog.yml)`).
 - **Errors (optional)** — **Sentry** across FastAPI apps, workers, and the React SPA when `SENTRY_DSN` / `VITE_SENTRY_DSN` are set; shared initialisation lives in `shared/saas_shared/sentry_setup.py`
 
 ### Tracing modes (one primary tracer per process)
 
-- **OpenTelemetry + Jaeger** — Base compose + **`observability`** profile. Apps export OTLP to `otel-collector:4317`; OTEL auto-instrumentation (FastAPI, httpx, Redis, SQLAlchemy), W3C Kafka headers, semantic Kafka spans (`saas_shared.kafka_messaging`). `DD_TRACE_ENABLED` is not set.
-- **Datadog APM** — Base compose + **`docker-compose.datadog.yml`** + **`datadog`** profile. `ddtrace-run` on service commands; OTEL SDK registration in app code is **skipped** (`DD_TRACE_ENABLED=true` is set only by that override file). Do **not** start Jaeger or the OTel Collector in this mode.
+- **OpenTelemetry + Jaeger** — Base compose + `**observability`** profile. Apps export OTLP to `otel-collector:4317`; OTEL auto-instrumentation (FastAPI, httpx, Redis, SQLAlchemy), W3C Kafka headers, semantic Kafka spans (`saas_shared.kafka_messaging`). `DD_TRACE_ENABLED` is not set.
+- **Datadog APM** — Base compose + `**docker-compose.datadog.yml`** + `**datadog`** profile. `ddtrace-run` on service commands; OTEL SDK registration in app code is **skipped** (`DD_TRACE_ENABLED=true` is set only by that override file). Do **not** start Jaeger or the OTel Collector in this mode.
 
-**End-to-end check (OpenTelemetry):** Log in on the UI → create a task → follow one **`trace_id`** in JSON logs (Kibana) and the same trace in Jaeger: expect spans for nginx ingress (via gateway), HTTP client hops, Postgres (SQLAlchemy), Kafka produce/consume (named + semantic attributes), worker processing, and outbound webhook HTTP.
+**End-to-end check (OpenTelemetry):** Log in on the UI → create a task → follow one `**trace_id`** in JSON logs (Kibana) and the same trace in Jaeger: expect spans for nginx ingress (via gateway), HTTP client hops, Postgres (SQLAlchemy), Kafka produce/consume (named + semantic attributes), worker processing, and outbound webhook HTTP.
 
 ---
 
 ## Failure simulation
 
-- **Concepts:** [Failure primitives](docs/incidents-playbooks/4_FAILURE_PRIMITIVES.md), [Incident patterns](docs/incidents-playbooks/2_INCIDENT_PATTERNS.md), [Debugging scenarios](docs/incidents-playbooks/DEBUGGING_SCENARIOS.md)
-- **Automation:** `**chaos/`** primitives and scenarios (`chaos/README.md`, `Makefile` targets `chaos-*`, `break-*`, `slow-db`)
-- **Load + chaos:** run `make load-spike` or other `load-*` targets while executing scenarios
+- **Concepts:** [Failure primitives](docs/incidents-playbooks/PROD_INCIDENTS.md), [Incident patterns](docs/incidents-playbooks/1_INCIDENT_PATTERNS.md), [Debugging scenarios](docs/incidents-playbooks/DEBUGGING_SCENARIOS.md)
+- **Automation:** `**chaos/`** primitives and scenarios (`chaos/README.md`, `Makefile` targets `chaos-`*, `break-`*, `slow-db`)
+- **Load + chaos:** run `make load-spike` or other `load-`* targets while executing scenarios
 
 ---
 
 ## Investigation documentation
 
-Guided exercises and playbooks live under [`docs/incidents-playbooks/`](docs/incidents-playbooks/) (see also [`docs/system-architechture/FILE_STRUCTURE.md`](docs/system-architechture/FILE_STRUCTURE.md)). Highlights: [Debugging scenarios](docs/incidents-playbooks/DEBUGGING_SCENARIOS.md), [Incident entry points](docs/incidents-playbooks/1_INCIDENT_ENTRY_POINTS.md), [Incident patterns](docs/incidents-playbooks/2_INCIDENT_PATTERNS.md), [Incident playbooks](docs/incidents-playbooks/3_INCIDENT_PLAYBOOKS.md), [Failure primitives](docs/incidents-playbooks/4_FAILURE_PRIMITIVES.md).
+Guided exercises and playbooks live under `[docs/incidents-playbooks/](docs/incidents-playbooks/)` (see also `[docs/system-architechture/FILE_STRUCTURE.md](docs/system-architechture/FILE_STRUCTURE.md)`). Highlights: [Debugging scenarios](docs/incidents-playbooks/DEBUGGING_SCENARIOS.md), [Incident patterns](docs/incidents-playbooks/1_INCIDENT_PATTERNS.md), [Incident playbooks](docs/incidents-playbooks/2_INCIDENT_PLAYBOOKS.md), [Failure primitives](docs/incidents-playbooks/PROD_INCIDENTS.md).
 
 ---
 
 ## Learning artifacts
 
-- Incident-style playbooks and step-by-step labs under [`docs/incidents-playbooks/`](docs/incidents-playbooks/) and stack reference under [`docs/system-architechture/`](docs/system-architechture/)
+- Incident-style playbooks and step-by-step labs under `[docs/incidents-playbooks/](docs/incidents-playbooks/)` and stack reference under `[docs/system-architechture/](docs/system-architechture/)`
 - **Load tests:** `load-tests/README.md`
 - **Chaos:** `chaos/README.md`
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Failure primitive: Slow Query Injection (Postgres pg_sleep) — see docs/incidents-playbooks/4_FAILURE_PRIMITIVES.md#slow-query-injection
+# Failure primitive: Slow Query Injection (Postgres pg_sleep) — see docs/incidents-playbooks/PROD_INCIDENTS.md#slow-query-injection
 #
 # Env (optional, defaults match lab seed scripts):
 #   POSTGRES_CONTAINER  default: postgres
