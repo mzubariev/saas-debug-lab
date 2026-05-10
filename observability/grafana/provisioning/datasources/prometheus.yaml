@@ -75,7 +75,7 @@ datasources:
           urlDisplayLabel: "Kibana"
         # 4. Sentry — issues filtered by this otel_trace_id
         - field: trace_id
-          url: "https://mykola-zubariev.sentry.io/issues/?project=4511098962837584&query=otel_trace_id%3A${__value.raw}%20is%3Aunresolved&referrer=issue-list&statsPeriod=14d"
+          url: "https://nz-n3.sentry.io/issues/?project=4511340984795216&query=otel_trace_id%3A${__value.raw}%20is%3Aunresolved&referrer=issue-list&statsPeriod=14d"
           urlDisplayLabel: "Sentry"
 
       # Derived fields — regex/label match used to surface the trace_id Jaeger
