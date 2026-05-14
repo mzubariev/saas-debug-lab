@@ -115,9 +115,9 @@ celery_app.conf.update(
             "task": "app.tasks.webhook_tasks.retry_failed_webhooks",
             "schedule": 60.0,
         },
-        "cleanup-old-tasks-hourly": {
+        "cleanup-old-tasks-every-5m": {
             "task": "app.tasks.cleanup_tasks.cleanup_old_tasks",
-            "schedule": 3600.0,
+            "schedule": 300.0,
         },
     },
 )

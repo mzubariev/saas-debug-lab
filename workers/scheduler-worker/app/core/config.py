@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 
     # Tasks completed more than this many minutes ago will be deleted by
     # cleanup_old_tasks. Set to 0 to disable deletion.
-    cleanup_completed_tasks_minutes: int = 15
+    cleanup_completed_tasks_minutes: int = 5
 
     @computed_field
     @property
