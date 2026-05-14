@@ -22,6 +22,14 @@
       "url": "/d/service-drilldown-v2",
       "keepTime": true,
       "icon": "external link"
+    },
+    {
+      "title": "→ Resources",
+      "type": "link",
+      "url": "/d/resources-deps-v2",
+      "keepTime": true,
+      "icon": "external link",
+      "tooltip": "Resources · Dependencies"
     }
   ],
   "panels": [
@@ -29,7 +37,7 @@
       "id": 1,
       "title": "Kafka Consumer Lag by Topic",
       "description": "Total lag per (consumer group, topic) from kafka-exporter — continuously updated, not message-triggered. Rising = consumer falling behind. Flat high = consumer crashed or too slow.",
-      "type": "bargauge",
+      "type": "timeseries",
       "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
@@ -43,7 +51,7 @@
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "sum by (consumergroup, topic) (kafka_consumergroup_lag)",
-          "legendFormat": "{{topic}} / {{consumergroup}}",
+          "legendFormat": "{{consumergroup}} - {{topic}}",
           "refId": "A"
         }
       ]

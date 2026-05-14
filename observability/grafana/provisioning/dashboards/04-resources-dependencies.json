@@ -15,6 +15,23 @@
       "url": "/d/global-overview-v2",
       "keepTime": true,
       "icon": "external link"
+    },
+    {
+      "title": "→ Service Drilldown",
+      "type": "link",
+      "url": "/d/service-drilldown-v2?var-job=api-gateway",
+      "keepTime": true,
+      "includeVars": true,
+      "icon": "external link",
+      "tooltip": "Service Drilldown"
+    },
+    {
+      "title": "→ Pipelines",
+      "type": "link",
+      "url": "/d/pipelines-v2",
+      "keepTime": true,
+      "icon": "external link",
+      "tooltip": "Kafka · Webhooks · Celery"
     }
   ],
   "templating": {

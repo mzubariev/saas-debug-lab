@@ -30,6 +30,14 @@
       "icon": "external link"
     },
     {
+      "title": "→ Resources",
+      "type": "link",
+      "url": "/d/resources-deps-v2",
+      "keepTime": true,
+      "icon": "external link",
+      "tooltip": "Resources · Dependencies"
+    },
+    {
       "title": "Kibana: logs for this service",
       "type": "link",
       "url": "http://localhost:5601/app/discover#/?_a=(query:(language:kuery,query:'service.name:\"${job}\"'))",
@@ -136,7 +144,7 @@
     {
       "id": 2,
       "title": "Error Rate",
-      "description": "5xx / total for the selected service. Yellow > 1%, red > 5%. See 'Error Rate by Endpoint' below to find the exact failing path.",
+      "description": "5xx+4xx / total for the selected service. Yellow > 1%, red > 5%. See 'Error Rate by Endpoint' below to find the exact failing path.",
       "type": "stat",
       "gridPos": {
         "x": 6,
@@ -187,7 +195,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])),1)",
+          "expr": "sum(rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", status=~\"4..|5..\"}[5m])) / clamp_min(sum(rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])),1)",
           "legendFormat": "error rate",
           "refId": "A"
         }
@@ -315,56 +323,11 @@
     },
     {
       "id": 5,
-      "title": "Error Rate by Endpoint",
-      "description": "5xx error rate split by path and HTTP status code. Each line = one (path, status) combination. A spike tells you exactly which endpoint and which error type is failing.",
+      "title": "RPS by Endpoint",
+      "description": "Traffic distribution \u2014 where is the load?",
       "type": "timeseries",
       "gridPos": {
         "x": 0,
-        "y": 4,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit"
-        }
-      },
-      "options": {
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        },
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": [
-            "last"
-          ]
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "sum by (path, status) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", status=~\"5..\"}[5m])) / on(path) group_left() clamp_min(sum by (path) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])), 1)",
-          "legendFormat": "{{path}} — {{status}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 6,
-      "title": "RPS by Endpoint",
-      "description": "Traffic distribution \u2014 where is the load?",
-      "type": "bargauge",
-      "gridPos": {
-        "x": 12,
         "y": 4,
         "w": 12,
         "h": 8
@@ -400,6 +363,51 @@
           },
           "expr": "sum by (path) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m]))",
           "legendFormat": "{{path}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Error Rate by Endpoint",
+      "description": "5xx+4xx error rate split by path and HTTP status code. Each line = one (path, status) combination. A spike tells you exactly which endpoint and which error type is failing.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "last"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (path, status) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", status=~\"4..|5..\"}[5m])) / on(path) group_left() clamp_min(sum by (path) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])), 1)",
+          "legendFormat": "{{path}} — {{status}}",
           "refId": "A"
         }
       ]
@@ -527,7 +535,7 @@
     {
       "id": 9,
       "title": "Downstream Error Rate by Service & Status",
-      "description": "Percentage of api-gateway's outbound calls to each downstream service that resulted in 5xx, timeout, or connection error, broken down by error status. Note: downstream_requests_total has no path label — status is the finest available granularity.",
+      "description": "Percentage of api-gateway's outbound calls to each downstream service that resulted in 5xx+4xx, timeout, or connection error, broken down by error status. Note: downstream_requests_total has no path label — status is the finest available granularity.",
       "type": "timeseries",
       "gridPos": {
         "x": 12,
@@ -563,7 +571,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (service, status) (rate(downstream_requests_total{job=\"api-gateway\", status=~\"5..|timeout|connection_error\"}[5m])) / on(service) group_left() clamp_min(sum by (service) (rate(downstream_requests_total{job=\"api-gateway\"}[5m])), 1)",
+          "expr": "sum by (service, status) (rate(downstream_requests_total{job=\"api-gateway\", status=~\"4..|5..|timeout|connection_error\"}[5m])) / on(service) group_left() clamp_min(sum by (service) (rate(downstream_requests_total{job=\"api-gateway\"}[5m])), 1)",
           "legendFormat": "{{service}} — {{status}}",
           "refId": "A"
         }

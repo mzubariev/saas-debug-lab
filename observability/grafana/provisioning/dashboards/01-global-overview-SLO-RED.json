@@ -49,6 +49,14 @@
       "targetBlank": true,
       "icon": "external link",
       "tooltip": "Open Jaeger"
+    },
+    {
+      "title": "Sentry issues",
+      "type": "link",
+      "url": "https://nz-n3.sentry.io/issues/?project=4511340984795216",
+      "targetBlank": true,
+      "icon": "external link",
+      "tooltip": "Open Sentry issues filtered to the selected service"
     }
   ],
   "panels": [
@@ -94,10 +102,43 @@
     },
     {
       "id": 2,
-      "title": "Error Rate (All Services)",
-      "description": "5xx / total across all services. Yellow > 1%, red > 5%. Drill into 'Error Rate by Service' below to find the offender.",
+      "title": "RPS (All Services)",
+      "description": "Total HTTP requests per second across all services, excluding /metrics and /health. Drop toward 0 = no traffic or all services down.",
       "type": "stat",
       "gridPos": { "x": 0, "y": 4, "w": 8, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "mappings": [], "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 10 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["last"] },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(http_requests_total{path!~\"/metrics|/health\"}[5m]))",
+          "legendFormat": "rps",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Error Rate (All Services)",
+      "description": "5xx+4xx / total across all services. Yellow > 1%, red > 5%. Drill into 'Error Rate by Service' below to find the offender.",
+      "type": "stat",
+      "gridPos": { "x": 8, "y": 4, "w": 8, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -122,41 +163,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(rate(http_requests_total{status=~\"5..\", path!~\"/metrics|/health\"}[5m])) / clamp_min(sum(rate(http_requests_total{path!~\"/metrics|/health\"}[5m])),1)",
+          "expr": "sum(rate(http_requests_total{status=~\"4..|5..\", path!~\"/metrics|/health\"}[5m])) / clamp_min(sum(rate(http_requests_total{path!~\"/metrics|/health\"}[5m])),1)",
           "legendFormat": "error rate",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "id": 3,
-      "title": "RPS (All Services)",
-      "description": "Total HTTP requests per second across all services, excluding /metrics and /health. Drop toward 0 = no traffic or all services down.",
-      "type": "stat",
-      "gridPos": { "x": 8, "y": 4, "w": 8, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": {
-        "defaults": { "unit": "reqps", "mappings": [], "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": 0 },
-              { "color": "yellow", "value": 1 },
-              { "color": "green", "value": 10 }
-            ]
-          }
-        }
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["last"] },
-        "colorMode": "value",
-        "graphMode": "area",
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(rate(http_requests_total{path!~\"/metrics|/health\"}[5m]))",
-          "legendFormat": "rps",
           "refId": "A"
         }
       ]
@@ -234,7 +242,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "topk(5, sum by (job, method, path, status) (rate(http_requests_total{status=~\"5..\", path!~\"/metrics|/health\"}[5m])))",
+          "expr": "topk(5, sum by (job, method, path, status) (rate(http_requests_total{status=~\"4..|5..\", path!~\"/metrics|/health\"}[5m])))",
           "legendFormat": "{{job}}  {{method}}  {{path}}  {{status}}",
           "instant": true,
           "refId": "A"
@@ -244,7 +252,7 @@
     {
       "id": 5,
       "title": "Error Rate by Service",
-      "description": "5xx error rate split by service and status code. Identify which service and which HTTP error type is spiking, then click '→ Service Drilldown' to investigate per-endpoint detail.",
+      "description": "5xx+4xx error rate split by service and status code. Identify which service and which HTTP error type is spiking, then click '→ Service Drilldown' to investigate per-endpoint detail.",
       "type": "timeseries",
       "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -258,7 +266,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (job, status) (rate(http_requests_total{status=~\"5..\", path!~\"/metrics|/health\"}[5m])) / on(job) group_left() clamp_min(sum by (job) (rate(http_requests_total{path!~\"/metrics|/health\"}[5m])), 1)",
+          "expr": "sum by (job, status) (rate(http_requests_total{status=~\"4..|5..\", path!~\"/metrics|/health\"}[5m])) / on(job) group_left() clamp_min(sum by (job) (rate(http_requests_total{path!~\"/metrics|/health\"}[5m])), 1)",
           "legendFormat": "{{job}} — {{status}}",
           "refId": "A"
         }
@@ -337,7 +345,7 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red",    "value": null },
+              { "color": "red",  "value": null },
               { "color": "yellow", "value": 0.95 },
               { "color": "green",  "value": 0.99 }
             ]
