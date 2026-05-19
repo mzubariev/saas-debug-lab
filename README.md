@@ -144,8 +144,8 @@ cd infra && docker compose --profile core up -d --build frontend
 | Jaeger            | `http://localhost:16686`                                   |
 | Prometheus        | `http://localhost:9090`                                    |
 | Grafana           | `http://localhost:3000`                                    |
-| Pyroscope         | `http://localhost:4040`                                    |
 | Kibana            | `http://localhost:5601`                                    |
+| Pyroscope         | `http://localhost:4040`                                    |
 
 
 ### 8. Load tests (k6)

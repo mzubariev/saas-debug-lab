@@ -144,7 +144,7 @@
     {
       "id": 2,
       "title": "Error Rate",
-      "description": "5xx+4xx / total for the selected service. Yellow > 1%, red > 5%. See 'Error Rate by Endpoint' below to find the exact failing path.",
+      "description": "5xx / total for the selected service. Yellow > 1%, red > 5%. See 'Error Rate by Endpoint' below to find the exact failing path.",
       "type": "stat",
       "gridPos": {
         "x": 6,
@@ -195,7 +195,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", status=~\"4..|5..\"}[5m])) / clamp_min(sum(rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])),1)",
+          "expr": "sum(rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])),1)",
           "legendFormat": "error rate",
           "refId": "A"
         }
@@ -347,7 +347,7 @@
           "sort": "desc"
         },
         "legend": {
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "calcs": [
             "mean",
@@ -370,7 +370,7 @@
     {
       "id": 6,
       "title": "Error Rate by Endpoint",
-      "description": "5xx+4xx error rate split by path and HTTP status code. Each line = one (path, status) combination. A spike tells you exactly which endpoint and which error type is failing.",
+      "description": "5xx error rate split by path, method and HTTP status code. Each line = one (path, status) combination. A spike tells you exactly which endpoint and which error type is failing.",
       "type": "timeseries",
       "gridPos": {
         "x": 12,
@@ -393,7 +393,7 @@
           "sort": "desc"
         },
         "legend": {
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "calcs": [
             "last"
@@ -406,8 +406,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (path, status) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", status=~\"4..|5..\"}[5m])) / on(path) group_left() clamp_min(sum by (path) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])), 1)",
-          "legendFormat": "{{path}} — {{status}}",
+          "expr": "sum by (method, path, status) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", status=~\"5..\"}[5m])) / on(method, path) group_left() clamp_min(sum by (method, path) (rate(http_requests_total{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\"}[5m])), 1)",
+          "legendFormat": "{{method}} — {{path}} — {{status}}",
           "refId": "A"
         }
       ]
@@ -438,7 +438,7 @@
           "sort": "desc"
         },
         "legend": {
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "calcs": [
             "last"
@@ -451,7 +451,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.50, sum by (method, path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", method!~\"/OPTIONS/\"}[5m])))",
+          "expr": "histogram_quantile(0.50, sum by (method, path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", method!~\"OPTIONS\"}[5m])))",
           "legendFormat": "p50 {{method}} {{path}}",
           "exemplar": true,
           "refId": "A"
@@ -461,7 +461,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (method, path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", method!~\"/OPTIONS/\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (method, path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", method!~\"OPTIONS\"}[5m])))",
           "legendFormat": "p95 {{method}} {{path}}",
           "exemplar": true,
           "refId": "B"
@@ -471,7 +471,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.99, sum by (method, path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", method!~\"/OPTIONS/\"}[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (method, path, le) (rate(http_request_duration_seconds_bucket{job=~\"$job\", path=~\"$path\", path!~\"/metrics|/health\", method!~\"OPTIONS\"}[5m])))",
           "legendFormat": "p99 {{method}} {{path}}",
           "exemplar": true,
           "refId": "C"
@@ -489,8 +489,8 @@
     },
     {
       "id": 8,
-      "title": "RPS to Downstream Services by Status",
-      "description": "Requests per second made by api-gateway to each downstream service, broken down by HTTP status. downstream_requests_total has service and status labels only — no path granularity available here.",
+      "title": "RPS to Downstream Services",
+      "description": "Requests per second made by api-gateway to each downstream service.",
       "type": "timeseries",
       "gridPos": {
         "x": 0,
@@ -513,7 +513,7 @@
           "sort": "desc"
         },
         "legend": {
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "calcs": [
             "last"
@@ -526,8 +526,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (service, status) (rate(downstream_requests_total{job=\"api-gateway\"}[5m]))",
-          "legendFormat": "{{service}} — {{status}}",
+          "expr": "sum by (service) (rate(downstream_requests_total{job=\"api-gateway\"}[5m]))",
+          "legendFormat": "{{service}}",
           "refId": "A"
         }
       ]
@@ -535,7 +535,7 @@
     {
       "id": 9,
       "title": "Downstream Error Rate by Service & Status",
-      "description": "Percentage of api-gateway's outbound calls to each downstream service that resulted in 5xx+4xx, timeout, or connection error, broken down by error status. Note: downstream_requests_total has no path label — status is the finest available granularity.",
+      "description": "Percentage of api-gateway's outbound calls to each downstream service that resulted in 5xx+4xx, broken down by error status. Note: downstream_requests_total has no path label — status is the finest available granularity.",
       "type": "timeseries",
       "gridPos": {
         "x": 12,
@@ -558,7 +558,7 @@
           "sort": "desc"
         },
         "legend": {
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "calcs": [
             "last"
@@ -571,7 +571,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (service, status) (rate(downstream_requests_total{job=\"api-gateway\", status=~\"4..|5..|timeout|connection_error\"}[5m])) / on(service) group_left() clamp_min(sum by (service) (rate(downstream_requests_total{job=\"api-gateway\"}[5m])), 1)",
+          "expr": "sum by (service, status) (rate(downstream_requests_total{job=\"api-gateway\", status=~\"4..|5..\"}[5m])) / on(service) group_left() clamp_min(sum by (service) (rate(downstream_requests_total{job=\"api-gateway\"}[5m])), 1)",
           "legendFormat": "{{service}} — {{status}}",
           "refId": "A"
         }
@@ -587,7 +587,7 @@
       "fieldConfig": { "defaults": { "unit": "s" } },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last"] }
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["last"] }
       },
       "targets": [
         {
@@ -609,7 +609,7 @@
       "fieldConfig": { "defaults": { "unit": "s" } },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["last"] }
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["last"] }
       },
       "targets": [
         {

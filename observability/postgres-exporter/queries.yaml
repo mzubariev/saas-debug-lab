@@ -41,42 +41,40 @@ pg_slow_queries:
         description: "Queries currently executing for more than 1 second"
 
 # ---------------------------------------------------------------------------
-# Query latency percentiles from pg_stat_statements.
-# Requires:
-#   1. PostgreSQL started with shared_preload_libraries = 'pg_stat_statements'
-#   2. CREATE EXTENSION pg_stat_statements (see infra/postgres/init.sql)
-#
-# percentile_disc(x) WITHIN GROUP (ORDER BY mean_exec_time) calculates the
-# x-th percentile across all unique query fingerprints' mean execution times.
-# This is "p95 of average query latencies" — a good proxy for tail latency.
-#
-# If pg_stat_statements is not available this query will return an error and
-# the exporter will expose an error metric; the other queries are unaffected.
+# PostgreSQL cache hit ratio.
+# Shows how much data is served from shared_buffers instead of disk reads.
+# Low values may indicate memory pressure, inefficient queries, missing indexes,
+# or poor cache locality.
 # ---------------------------------------------------------------------------
-pg_query_latency_percentiles:
+pg_cache_hit_ratio:
   query: |
     SELECT
       COALESCE(
-        percentile_disc(0.50) WITHIN GROUP (ORDER BY mean_exec_time), 0
-      ) / 1000.0 AS p50_seconds,
-      COALESCE(
-        percentile_disc(0.95) WITHIN GROUP (ORDER BY mean_exec_time), 0
-      ) / 1000.0 AS p95_seconds,
-      COALESCE(
-        percentile_disc(0.99) WITHIN GROUP (ORDER BY mean_exec_time), 0
-      ) / 1000.0 AS p99_seconds
-    FROM pg_stat_statements
-    JOIN pg_database d ON d.oid = dbid
-    WHERE d.datname = current_database()
-      AND calls > 5
+        SUM(blks_hit)::float /
+        NULLIF(SUM(blks_hit) + SUM(blks_read), 0),
+        1
+      ) AS ratio
+    FROM pg_stat_database
+    WHERE datname = current_database()
   master: true
   metrics:
-    - p50_seconds:
+    - ratio:
         usage: GAUGE
-        description: "p50 of per-query mean execution times (seconds)"
-    - p95_seconds:
-        usage: GAUGE
-        description: "p95 of per-query mean execution times (seconds)"
-    - p99_seconds:
-        usage: GAUGE
-        description: "p99 of per-query mean execution times (seconds)"
+        description: "PostgreSQL shared buffer cache hit ratio"
+
+# ---------------------------------------------------------------------------
+# PostgreSQL deadlocks.
+# Any sustained increase usually indicates transaction ordering issues,
+# lock contention, or application-level concurrency problems.
+# ---------------------------------------------------------------------------
+pg_deadlocks:
+  query: |
+    SELECT
+      deadlocks AS count
+    FROM pg_stat_database
+    WHERE datname = current_database()
+  master: true
+  metrics:
+    - count:
+        usage: COUNTER
+        description: "Total number of detected deadlocks"
