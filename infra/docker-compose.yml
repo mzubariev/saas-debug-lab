@@ -439,7 +439,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256m
+          memory: 384m
     depends_on:
       redis:
         condition: service_healthy
