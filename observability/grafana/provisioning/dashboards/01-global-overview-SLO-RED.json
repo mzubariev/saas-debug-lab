@@ -53,7 +53,7 @@
     {
       "title": "Sentry issues",
       "type": "link",
-      "url": "https://nz-n3.sentry.io/issues/?project=4511340984795216",
+      "url": "https://nz-j9.sentry.io/issues/?project=4511529052667984",
       "targetBlank": true,
       "icon": "external link",
       "tooltip": "Open Sentry issues filtered to the selected service"

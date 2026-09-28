@@ -56,7 +56,7 @@
     {
       "title": "Sentry: issues for this service",
       "type": "link",
-      "url": "https://nz-n3.sentry.io/issues/?project=4511340984795216&query=tags%5Bservice%5D%3A${job}",
+      "url": "https://nz-j9.sentry.io/issues/?project=4511529052667984&query=tags%5Bservice%5D%3A${job}",
       "targetBlank": true,
       "icon": "external link",
       "tooltip": "Open Sentry issues filtered to the selected service"
