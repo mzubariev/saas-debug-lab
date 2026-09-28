@@ -44,8 +44,8 @@ def retry_failed_webhooks(self) -> dict:
     # target endpoint is a permanent rejection; retrying would not help.
     autoretry_for=(httpx.RequestError,),
     retry_backoff=True,
-    retry_backoff_max=300,      # cap back-off at 5 min; total window ~20 min across 10 retries
-    max_retries=10,
+    retry_backoff_max=300,      # cap back-off at 5 min; total window ~20 min across 5 retries
+    max_retries=5,
     # Keep the message unacked until the task succeeds (or exhausts retries).
     # If the worker process crashes mid-execution the broker re-delivers the task.
     acks_late=True,
