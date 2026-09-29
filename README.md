@@ -17,6 +17,8 @@ From a product perspective, the application itself is intentionally simple: a ta
 
 ---
 
+
+
 ## Getting started (clone → run locally)
 
 Follow these steps on macOS or Linux with **Docker** and **Docker Compose** installed.
@@ -27,6 +29,8 @@ Follow these steps on macOS or Linux with **Docker** and **Docker Compose** inst
 git clone <repository-url> saas-debug-lab
 cd saas-debug-lab
 ```
+
+
 
 ### 2. Configure environment
 
@@ -131,21 +135,25 @@ Rebuild or restart frontend if you change `frontend/.env`:
 cd infra && docker compose --profile core up -d --build frontend
 ```
 
+
+
 ### 7. Quick verification
 
 
-| Check             | URL / command                                              |
-| ----------------- | ---------------------------------------------------------- |
-| Kanban / UI       | `http://localhost:5173` — log in with `admin` / `admin123` |
-| Kafka UI          | `http://localhost:8080`                                    |
-| Redis Insight     | `http://localhost:5540`                                    |
-| Flower (Celery)   | `http://localhost:5555`                                    |
-| MailHog           | `http://localhost:8025`                                    |
-| Jaeger            | `http://localhost:16686`                                   |
-| Prometheus        | `http://localhost:9090`                                    |
-| Grafana           | `http://localhost:3000`                                    |
-| Kibana            | `http://localhost:5601`                                    |
-| Pyroscope         | `http://localhost:4040`                                    |
+| Check           | URL / command                                              |
+| --------------- | ---------------------------------------------------------- |
+| Kanban / UI     | `http://localhost:5173` — log in with `admin` / `admin123` |
+| Kafka UI        | `http://localhost:8080`                                    |
+| Redis Insight   | `http://localhost:5540`                                    |
+| Flower (Celery) | `http://localhost:5555`                                    |
+| MailHog         | `http://localhost:8025`                                    |
+| Jaeger          | `http://localhost:16686`                                   |
+| Prometheus      | `http://localhost:9090`                                    |
+| Grafana         | `http://localhost:3000`                                    |
+| Kibana          | `http://localhost:5601`                                    |
+| Pyroscope       | `http://localhost:4040`                                    |
+
+
 
 
 ### 8. Load tests (k6)
@@ -181,6 +189,8 @@ If you used the Datadog override, use the same `-f` files and `--profile` flags 
 
 ---
 
+
+
 ## Objectives
 
 The primary objective is to build practical debugging skills in distributed systems.
@@ -196,6 +206,8 @@ The primary objective is to build practical debugging skills in distributed syst
 
 ---
 
+
+
 ## System architecture (summary)
 
 The system follows a microservices architecture with synchronous and asynchronous communication.
@@ -203,7 +215,7 @@ The system follows a microservices architecture with synchronous and asynchronou
 ### Core components
 
 - **Nginx** — external entry (port 80); rate limits and reverse proxy to api-gateway
-- **api-gateway** — routing, JWT validation for `/tasks/*`
+- **api-gateway** — routing, JWT validation for `/tasks/`*
 - **auth-service** — authentication, JWT issuance, user store in Postgres, Redis cache-aside
 - **task-service** — task CRUD, state machine, Redis cache-aside, Kafka producer (`task_created`, `task_updated`)
 - **webhook-receiver** — `/webhooks/inbound`; inbound-only Kafka producer (`webhook_inbound` topic)
@@ -217,12 +229,16 @@ For ports, envelopes, and request diagrams, see `[docs/system-architechture/SERV
 
 ---
 
+
+
 ## Observability stack
 
 - **Logging** — structured JSON (structlog); **Fluent Bit → Elasticsearch → Kibana**
 - **Metrics** — **Prometheus** scrapes FastAPI services (`/metrics`), **external-service-simulator**, worker endpoints on **9100** (webhook-dispatcher, notification-worker, scheduler-worker), **kafka-exporter** (:9308), and **postgres-exporter** (:9187). **Grafana** loads provisioned dashboards and alert rules from `observability/grafana/provisioning/`.
 - **Tracing** — **OpenTelemetry** → **Collector** → **Jaeger** (with the `observability` profile) in services and the frontend (`frontend/src/telemetry.ts`). **Datadog APM** is a separate compose path only (`[infra/docker-compose.datadog.yml](infra/docker-compose.datadog.yml)`).
 - **Errors (optional)** — **Sentry** across FastAPI apps, workers, and the React SPA when `SENTRY_DSN` / `VITE_SENTRY_DSN` are set; shared initialisation lives in `shared/saas_shared/sentry_setup.py`
+
+
 
 ### Tracing modes (one primary tracer per process)
 
@@ -233,19 +249,25 @@ For ports, envelopes, and request diagrams, see `[docs/system-architechture/SERV
 
 ---
 
+
+
 ## Failure simulation
 
 - **Concepts:** [Failure primitives](docs/incidents-playbooks/PROD_INCIDENTS.md), [Incident patterns](docs/incidents-playbooks/1_INCIDENT_PATTERNS.md), [Debugging scenarios](docs/incidents-playbooks/DEBUGGING_SCENARIOS.md)
-- **Automation:** `**chaos/`** primitives and scenarios (`chaos/README.md`, `Makefile` targets `chaos-`*, `break-`*, `slow-db`)
+- **Automation:** `**chaos/`** primitives and scenarios (`chaos/README.md`, `Makefile` targets `chaos-`*,* `break-`, `slow-db`)
 - **Load + chaos:** run `make load-spike` or other `load-`* targets while executing scenarios
 
 ---
+
+
 
 ## Investigation documentation
 
 Guided exercises and playbooks live under `[docs/incidents-playbooks/](docs/incidents-playbooks/)` (see also `[docs/system-architechture/FILE_STRUCTURE.md](docs/system-architechture/FILE_STRUCTURE.md)`). Highlights: [Debugging scenarios](docs/incidents-playbooks/DEBUGGING_SCENARIOS.md), [Incident patterns](docs/incidents-playbooks/1_INCIDENT_PATTERNS.md), [Incident playbooks](docs/incidents-playbooks/2_INCIDENT_PLAYBOOKS.md), [Failure primitives](docs/incidents-playbooks/PROD_INCIDENTS.md).
 
 ---
+
+
 
 ## Learning artifacts
 
@@ -254,6 +276,8 @@ Guided exercises and playbooks live under `[docs/incidents-playbooks/](docs/inci
 - **Chaos:** `chaos/README.md`
 
 ---
+
+
 
 ## Target roles
 
@@ -267,6 +291,8 @@ This lab is designed to simulate real responsibilities of:
 
 ---
 
+
+
 ## Non-goals
 
 To keep the project focused:
@@ -279,13 +305,4 @@ To keep the project focused:
 The focus is debuggability, not product completeness.
 
 ---
-
-## Key design principles
-
-- Observability-first — everything must be traceable
-- Failure-first design — system is built to break
-- Reproducibility — incidents must be repeatable
-- Realism over complexity — simulate real issues, not edge-case noise
-- Modularity — failures and services are loosely coupled
-- Shared Python package (`saas_shared`) — Kafka envelopes, logging, Redis cache helpers, health router, telemetry, and Sentry setup stay DRY across services and workers
 

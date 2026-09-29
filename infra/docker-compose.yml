@@ -102,10 +102,6 @@ services:
       retries: 10
       start_period: 30s
 
-############################
-# KAFKA UI
-############################
-
   kafka-exporter:
     image: danielqsj/kafka-exporter:latest
     container_name: kafka-exporter
@@ -117,20 +113,6 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-
-  kafka-ui:
-    image: provectuslabs/kafka-ui
-    container_name: kafka-ui
-    restart: unless-stopped
-    profiles: ["core"]
-    ports:
-      - "8080:8080"
-    depends_on:
-      kafka:
-        condition: service_healthy
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
 
 ############################
 # API GATEWAY
@@ -450,29 +432,6 @@ services:
       migrations:
         condition: service_completed_successfully
 
-  flower:
-    build:
-      context: ..
-      dockerfile: workers/scheduler-worker/Dockerfile
-    container_name: flower
-    volumes:
-      - ../workers/scheduler-worker/app:/app/app
-      - ../shared:/app/shared
-    restart: unless-stopped
-    profiles: ["core"]
-    command: ["celery", "-A", "app.core.celery:celery_app", "flower", "--port=5555"]
-    env_file:
-      - ../workers/scheduler-worker/.env
-    environment:
-      SENTRY_DSN: ${SENTRY_DSN:-}
-    ports:
-      - "5555:5555"   # Flower UI — http://localhost:5555
-    depends_on:
-      redis:
-        condition: service_healthy
-      scheduler-worker:
-        condition: service_started
-
   notification-worker:
     build:
       context: ..
@@ -533,22 +492,6 @@ services:
       - VITE_SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-1.0}
     depends_on:
       - nginx
-
-
-############################
-# REDIS INSIGHT
-############################
-
-  redis-insight:
-    image: redis/redisinsight:latest
-    container_name: redis-insight
-    restart: unless-stopped
-    profiles: ["core"]
-    ports:
-      - "5540:5540"
-    depends_on:
-      redis:
-        condition: service_healthy
 
 ############################
 # JAEGER
@@ -669,22 +612,6 @@ services:
       - elasticsearch
     ports:
       - "5601:5601"
-
-############################
-# PYROSCOPE
-############################
-
-  pyroscope:
-    image: pyroscope/pyroscope:latest
-    container_name: pyroscope
-    command: server
-    restart: unless-stopped
-    profiles: ["pyroscope"]
-    ports:
-      - "4040:4040"
-    depends_on:
-      - scheduler-worker
-      - task-service
 
 ############################
 # VOLUMES

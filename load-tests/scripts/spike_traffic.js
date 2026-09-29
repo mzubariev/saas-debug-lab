@@ -24,7 +24,7 @@
  *
  * WATCH (open these in parallel)
  *   Nginx rate limiting : k6 output → http_req_failed rate, rate_limited count
- *   Redis cache         : http://localhost:5540  (Redis Insight → tasks:list key TTL)
+ *   Redis cache         : CLI  (Redis CLI -> tasks:list key TTL)
  *   Kafka throughput    : http://localhost:8080  (Kafka UI → task_created topic)
  *   Traces              : http://localhost:16686 (Jaeger → task-service spans)
  *   Metrics             : http://localhost:9090  (Prometheus → http_requests_total)
