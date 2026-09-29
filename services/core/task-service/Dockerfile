@@ -5,8 +5,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY services/core/task-service/requirements-dev.txt .
-RUN pip install --no-cache-dir -r requirements-dev.txt
+COPY services/core/task-service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY shared/ /app/shared
 RUN pip install -e "/app/shared[services]"
