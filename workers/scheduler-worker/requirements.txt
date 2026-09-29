@@ -1,8 +1,7 @@
 celery[redis]
-flower
-sqlalchemy
+sqlalchemy[asyncio]
 psycopg2-binary
-kafka-python
+kafka-python>=3.0
 httpx
 structlog
 opentelemetry-api

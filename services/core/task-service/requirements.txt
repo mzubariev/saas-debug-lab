@@ -4,7 +4,7 @@ uvicorn[standard]
 pydantic
 pydantic-settings
 
-sqlalchemy
+sqlalchemy[asyncio]
 asyncpg
 
 aiokafka
