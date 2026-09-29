@@ -2,7 +2,7 @@ import time
 
 import sentry_sdk
 import structlog
-from kafka.errors import NoBrokersAvailable
+from kafka.errors import KafkaTimeoutError
 from saas_shared.kafka_envelope import parse_envelope_message
 from saas_shared.kafka_messaging import kafka_consume_span
 
@@ -43,7 +43,7 @@ def process_dlq() -> dict:
         consumer = create_webhook_dlq_consumer(
             bootstrap_servers=settings.kafka_bootstrap_servers,
         )
-    except NoBrokersAvailable as exc:
+    except KafkaTimeoutError as exc:
         duration = time.perf_counter() - t0
         logger.error(
             "dlq_consumer_unavailable",
