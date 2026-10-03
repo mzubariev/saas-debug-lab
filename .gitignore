@@ -3,7 +3,6 @@
 
 # Editor
 .vscode/
-.cursor/
 docs/**
 
 # env

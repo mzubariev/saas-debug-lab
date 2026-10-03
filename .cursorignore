@@ -2,21 +2,35 @@
 .DS_Store
 
 # Editor
-.vscode/
+.vscode
 
 # env
+.venv
 .env
 .env.*
 !.env.example
 
 # Python
-__pycache__/
+__pycache__
 *.pyc
-*.egg-info/
+*.egg-info
 
 # Node
-node_modules/
+node_modules
 
 # Build artifacts
-dist/
-build/
+dist
+build
+*.lock
+
+# Folders to ignore
+frontend
+observability
+load-tests/config
+load-tests/lib
+load-tests/scripts
+chaos
+docs/incidents-playbooks
+docs/cheat-sheets
+docs/on-call
+test-results
