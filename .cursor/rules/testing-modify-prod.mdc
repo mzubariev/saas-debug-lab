@@ -1,27 +1,28 @@
 ---
-description: Policy for minimal testability changes in production code
+description: Policy for small behaviour-neutral production changes that make code testable
 alwaysApply: false
 ---
 
 # Testability changes in production code
 
-The owner allows small production edits **only to make code testable**. Use this rule when a seam is missing.
+The owner allows small production edits **only to make code testable**. Prefer a small prod seam over a fragile test-side hack.
 
-## Allowed
-- Add a `Depends()` for DB session, Redis, Kafka producer, HTTP client, settings.
-- Extract a client/producer factory function; make a constructor accept an injected dependency (default keeps current behaviour).
-- Remove or guard an import-time/startup side effect that blocks in-process import (Kafka connect, ddtrace, Sentry init).
-- Add accessible names / `data-testid` to the frontend.
-- Make a hardcoded delay/timeout/interval configurable via env with the current value as default.
+## Allowed (behaviour-neutral)
+- Connections and settings from env (DB/Redis/Kafka URLs, `WEBHOOK_URL`, secrets, SMTP host) instead of hard-coded values; defaults keep current behaviour.
+- Timing knobs via env (retry/backoff, beat and cleanup intervals) with the current values as defaults.
+- Move import-time side effects (Kafka connect, Sentry/OTel init, metrics registration) to lifespan/startup; keep them inert without env.
+- Add a `Depends()` or constructor-injected dependency where a seam is genuinely needed (default keeps current behaviour).
+- Compose healthchecks; frontend accessible names / `data-testid`; production frontend build target.
+- Remove Datadog.
 
 ## Not allowed
-Behaviour changes, renames, moving files, restructuring, new features, formatting-only churn. (Day-3 refactor will do those, with these tests as a safety net.)
+Behaviour changes, bug fixes, renames, moving files, restructuring, new features, formatting-only churn. All of that belongs to the refactoring phase, with these tests as the safety net.
 
 ## Procedure
-1. State in one line which seam is missing and why overrides/patches are insufficient.
-2. Make the smallest possible change; default behaviour must stay identical.
-3. Run the service's existing tests/health check to confirm nothing changed.
-4. Separate commit, message prefix `testability:`; add one line to `testing/KNOWN_ISSUES.md` ("Testability changes" section: file, what, why).
+1. State in one line what is missing and why a test-side patch is worse.
+2. Make the smallest possible change; default behaviour stays identical.
+3. Run existing checks (service starts, `/health`, manual lab smoke).
+4. Separate commit, prefix `testability:`; add one line to `testing/KNOWN_ISSUES.md` ("Testability changes": file, what, why).
 
-## If no success, then try
-`dependency_overrides`, `monkeypatch` before import, `mocker.patch(autospec=True)`, env vars, stubbing a module in `sys.modules`.
+## Fallback
+If a prod change is not worth it: `dependency_overrides`, `monkeypatch` before import, `mocker.patch(autospec=True)`, env vars, stubbing a module in `sys.modules`.

@@ -12,8 +12,7 @@ Python style: `python-style.mdc` (auto). Playwright: `playwright.mdc` (auto in U
 
 ## 0. Scope and behaviour
 - Write only in: `testing/`, `.github/workflows/`, `infra/docker-compose.test.yml`, `infra/nginx/nginx.test.conf`, root `Makefile` (include `testing/testing.mk`).
-- **Production code is read-only by default.** A testability change in prod is allowed only under the policy in `testing-modify-prod.mdc`. Never change behaviour: write `xfail(strict=True, reason="BUG-n: ...")` and add a line to `testing/KNOWN_ISSUES.md`.
-Second choice for seams: `dependency_overrides`, `monkeypatch`, `mocker.patch(autospec=True)`, env vars. 
+- **Production code:** small behaviour-neutral testability changes are allowed and preferred over fragile test-side hacks, under `testing-modify-prod.mdc`. Never change behaviour or fix bugs here: behaviour that contradicts the documented spec is `xfail(strict=True, reason="BUG-n: ...")` + a line in `testing/KNOWN_ISSUES.md`; unspecified behaviour is pinned with a `# characterization` comment.
 - Ignore Datadog everywhere (will be removed).
 - Characterise actual behaviour first (read the route, call it), then assert it. Never invent endpoints, fields or status codes; if SUT_MAP lacks it, read that one file.
 - Output discipline: no explanations, final report <= 10 lines, no re-printing files. Run the DoD command; on failure show only the last 40 lines.
@@ -24,22 +23,23 @@ Second choice for seams: `dependency_overrides`, `monkeypatch`, `mocker.patch(au
 |---|---|---|---|---|
 | unit | none | none | pytest, pytest-mock | `tests/unit` (saas_testkit self-tests now; services later) |
 | contract | in-process | PG | OpenAPI validator, Schemathesis, Pydantic, snapshots | `tests/contract/{http,events}` |
-| component | in-process ASGI, one service | real PG + Redis; Kafka = `RecordingEventBus` | httpx.ASGITransport, respx, dependency_overrides | `tests/component/<service>/` |
+| component | in-process ASGI, one service | real PG + Redis + Redpanda | httpx.ASGITransport, respx, mocker.patch | `tests/component/<service>/` |
 | integration | real containers (compose) | full stack | httpx (network), Kafka/Redis/MailHog/WireMock clients | `tests/integration/{services,scenarios}` |
 | e2e_ui | real containers | full stack | sync Playwright | `tests/e2e_ui/` |
 | smoke | fresh stack/staging/prod URL | none | httpx | `tests/smoke/` (post-deploy gate, broad, blocks) |
 | synthetic | prod/staging URL | none | httpx (+ sync Playwright for `browser/`) | `tests/synthetic/{api,browser}/` (continuous, narrow, alerts) |
 - Markers are applied from the directory by root `conftest.py`; `--strict-markers` is on. Extra markers: `slow`, `chaos`, `db`, `redis`, `kafka`, `serial`, `smoke` (tests/smoke only), `synthetic`, `critical` (fast UI subset).
 - **One service per pytest session** (controller + its xdist workers, all OS processes) for component/contract (all services are named `app`): run with `--service <name>`.
-- Tests contain only business-language steps via Flows / Page Objects. No URLs, headers, SQL, locators or raw JSON in test bodies.
-- Ports (Protocols) exist only for: event bus/reader, cache, and other boundaries with >= 2 implementations or test doubles. API adapters (`HttpTaskApi`, `HttpAuthApi`) are concrete classes with an injectable `httpx.AsyncClient`; the same Flow runs at component and integration level because only the client transport differs (ASGITransport vs network base_url).
+- Tests contain only business-language steps via Flows / Page Objects. No URLs, headers, SQL, locators or raw JSON in test bodies. **The assertion about the behaviour under test stays visible in the test body**; flows return `ApiResponse` for it. Precondition steps (`new_task`) may assert inside flows.
+- Protocols only when a boundary has >= 2 implementations (none at start). Adapters (`HttpTaskApi`, `HttpAuthApi`, `KafkaEventReader`) are concrete classes; the same Flow runs at component and integration level because only the injected `httpx.AsyncClient` transport differs. Dependency failures are injected with `mocker.patch(autospec=True)`.
 
 - Smoke and synthetic reuse flows/adapters but differ in policy: smoke blocks a pipeline; synthetic alerts after 3 consecutive failures. Synthetic tests use a dedicated user, `X-Synthetic: true`, `synthetic-` data, per-step latency budgets (soft warn / hard fail), are non-destructive and read `SYNTHETIC_BASE_URL`.
 
 ## 2. Data and isolation
 - All test data is unique via `RunContext(run_id, test_id)` (`unique_title()`). **Never assert on totals/emptiness of shared collections** (e.g. `GET /tasks`); assert on your own ids.
-- Component: DB-per-xdist-worker from a migrated template DB; per test `BEGIN` + SAVEPOINT + rollback (`join_transaction_mode="create_savepoint"`). Redis: per-worker key prefix or DB index, flushed per test. Kafka: recorded in memory.
-- Integration/UI: no cleanup/reset. Own data by uuid. Seeded users are read-only. Authenticate once per worker (FileLock + cached token/`storage_state`), never per test. Nginx `/auth/` allows 5 req/min.
+- Component: DB per xdist worker from a migrated template DB, **real commits**, the app builds its own engine from env (no `get_db` override). Redis: one DB index per worker (env), `FLUSHDB` before each test. Kafka: real Redpanda, unique ids + fresh consumer group, filter by own correlation id.
+- Default is no DB cleanup (unique data). Tests that assert on global state use `@pytest.mark.clean_db` (truncates only tables touched since the last cleanup, before the test body).
+- Integration/UI: no cleanup/reset. Own data by uuid. Seeded users are read-only. Login and seed **once per run** (FileLock, token file with expiry check), never per test. Nginx `/auth/` allows 5 req/min and is never relaxed; functional tests use the gateway port, real nginx only for UI and edge tests. WireMock stubs are matched on the test's own `payload.id`.
 - Factories: **Polyfactory** (Faker bundled), shared by all layers. `.build()` = no I/O (unit, contract, API payloads, envelopes). `await .create_async()` = DB rows via a per-test bound `__async_session__` (the `rows` fixture); `.create_sync()` = sync seeding (FileLock) or sync setup against the stack. Bind the session via a per-test subclass, never a mutable shared class attribute or ContextVar. Override business-constrained fields explicitly; seed with `Factory.seed_random(run_seed)`. Cache one argon2 hash; never hash per test.
 - Tests are order-independent and parallel-safe (`pytest-randomly` + xdist). Heavy shared resources are session-scoped and created by the xdist controller only.
 

@@ -15,7 +15,7 @@ Source of truth: `test-infra-architecture.md` (isolation, sharing, CI DAG) + aut
 | CI run → job                | one pipeline run → one matrix entry (service, shard, browser)                           |
 | runner / node / VM          | machine executing a job                                                                 |
 | pytest session (controller) | OS process (python/pytest) that starts infra, builds the template DB and spawns workers |
-| xdist worker                | child OS process (`gw0`, `gw1`) that runs tests; own DB, own Redis prefix               |
+| xdist worker                | child OS process (`gw0`, `gw1`) that runs tests; own DB, own Redis DB index               |
 | scale-up                    | more workers (`-n N`) on one stack; scale-out                                           |
 
 
@@ -27,21 +27,21 @@ Source of truth: `test-infra-architecture.md` (isolation, sharing, CI DAG) + aut
 | #   | Decision                                                                                                                                                                                                                                                                                                                                                                                    | Why / trade-off                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | **One service per pytest session (controller + its workers)** for component + contract (`--service task-service`)                                                                                                                                                                                                                                                                           | Every service package is named `app`; two in one process collide in `sys.modules`. Cost: one pytest start per service (CI matrix hides it).                                                                                                                                                                                                                                                                                                                                               |
-| 2   | **Controller owns infra; workers only read URLs** (`env-or-container`): `TEST_PG_URL`/`TEST_REDIS_URL` if set (CI `services:` or `make deps-up`), else Testcontainers started once in the xdist controller                                                                                                                                                                                  | No N-containers-for-N-workers. Skipped for pure unit runs. FileLock is used only for cross-worker one-time work (login/token, seed), not for containers.                                                                                                                                                                                                                                                                                                                                  |
-| 3   | **PG template DB → DB per worker → SAVEPOINT rollback per test**                                                                                                                                                                                                                                                                                                                            | Migrations once (real Alembic, so migration drift is tested), ~50 ms per worker DB, zero cleanup cost.                                                                                                                                                                                                                                                                                                                                                                                    |
-| 4   | **Flows over concrete API adapters; Protocols only where there are ≥2 implementations or a test double**                                                                                                                                                                                                                                                                                    | `HttpTaskApi`/`HttpAuthApi` are concrete classes taking an `httpx.AsyncClient`; the client's transport (`ASGITransport` at component, network `base_url` at integration) is the swap point, so the same Flow runs on both layers. Protocols: `EventBus`/`EventReader` (fake vs aiokafka), `Cache` (real vs failing), `Clock` only if injected. No speculative ports.                                                                                                                      |
-| 5   | **Component: real PG + Redis, Kafka replaced by** `RecordingEventBus`                                                                                                                                                                                                                                                                                                                       | Real Kafka costs 15–30 s startup and adds flake; Kafka behaviour is proven at integration. Events emitted are still schema-validated (contract).                                                                                                                                                                                                                                                                                                                                          |
-| 6   | **Integration/UI reuse** `infra/docker-compose.yml` **(profile core)** + thin `infra/docker-compose.test.yml` override                                                                                                                                                                                                                                                                      | One stack definition. Override: expose api-gateway :8000 (bypass nginx limits), relaxed `nginx.test.conf`, WireMock, fixed ports.                                                                                                                                                                                                                                                                                                                                                         |
+| 2 | **Controller owns infra; workers only read URLs** (`env-or-container`): `TEST_PG_URL` / `TEST_REDIS_URL` / `TEST_KAFKA_BOOTSTRAP` if set (CI `services:` including Redpanda with `command`, or `make deps-up`), else Testcontainers started once in the xdist controller | No N-containers-for-N-workers. Skipped for pure unit runs. FileLock is used only for cross-worker one-time work (login/token, seed), not for containers. |
+| 3 | **PG template DB → DB per worker → real commits, unique data, on-demand TRUNCATE of touched tables** | Migrations once (real Alembic, drift is tested), ~50 ms per worker DB. The app builds its own engine from env (`DATABASE_URL` = worker DB), so no `get_db` seam is needed and commits are real: races, the sync scheduler, Schemathesis and after-commit event ordering all behave as in prod. No per-test cleanup by default (unique data); tests that need clean/global state use `@pytest.mark.clean_db`, which truncates only the tables touched since the last cleanup (trigger-based tracking, §6.2). SAVEPOINT-rollback was rejected: one shared session makes concurrency tests impossible, hides commit-time behaviour, and other processes cannot see the transaction. |
+| 4 | **Flows over concrete adapters; a Protocol only when ≥2 implementations exist (none at start)** | `HttpTaskApi`/`HttpAuthApi`/`KafkaEventReader` are concrete classes. The swap point between layers is the injected `httpx.AsyncClient` transport (`ASGITransport` at component, network `base_url` at integration), so the same Flow runs on both. Dependency failures (Redis down, Kafka error) are injected with `mocker.patch(autospec=True)`, not with fake implementations. README rationale (3 lines): YAGNI, one real implementation per boundary, swap happens at httpx level. |
+| 5 | **Component: real PG + Redis + Redpanda** | Redpanda (Kafka API, single binary, no ZooKeeper) starts quickly and needs no production seam: only the bootstrap address from env. The same `KafkaEventReader` is used at component and integration. Isolation: topic names are fixed by prod, so tests use unique ids, a fresh consumer group, subscribe before producing and filter by their own correlation id. Env-or-container: `TEST_KAFKA_BOOTSTRAP`, else Testcontainers Redpanda (check the container class in the installed version); in CI a service container with `command` (§9). |
+| 6 | **Integration/UI reuse `infra/docker-compose.yml` with an explicit service list (not the whole profile)** + thin `infra/docker-compose.test.yml` | One stack definition. Override: publish api-gateway on host `:8001` (the simulator already owns `:8000`), WireMock on `:8089`, `WEBHOOK_URL` of **both** webhook-dispatcher and scheduler-worker → WireMock, shortened timing knobs. **nginx config is not relaxed**: functional tests use the gateway directly; real nginx `:80` serves UI tests and 2–3 edge tests (429, forwarded headers). Readiness = polling `/health` of each service (`--wait` only covers services with healthchecks). Frontend in CI: `vite build` + `preview`. |
 | 7   | **Integration/UI: unique data, no cleanup/reset**                                                                                                                                                                                                                                                                                                                                           | Parallel without locks; stack dies with the runner.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | 8   | **Sync Playwright** (pytest-playwright), UI tests are sync `def`                                                                                                                                                                                                                                                                                                                            | Official `pytest-playwright` is sync and xdist-friendly (a browser per worker process). The async API exists (`pytest-playwright-asyncio`) and works with pytest-asyncio, but pytest runs tests one at a time, so async gives no cross-test concurrency by itself. Mixing the *sync* API with a running event loop raises errors, so UI tests stay plain `def` and use sync httpx for data setup. Intra-test concurrency (`asyncio.gather`) is used in integration tests instead (§12.1). |
 | 9   | **pytest-asyncio loop scope = session**                                                                                                                                                                                                                                                                                                                                                     | Session-scoped async engine/clients need one loop. (Deviation from "function" in notes; deliberate.)                                                                                                                                                                                                                                                                                                                                                                                      |
 | 10  | **Polyfactory everywhere:** `ModelFactory` (Pydantic v2), `DataclassFactory`, `SQLAlchemyFactory`; `.build()` = no I/O, `create_async()` = async DB rows, `create_sync()` = sync seeding                                                                                                                                                                                                    | Native Pydantic v2/dataclass/SQLAlchemy support, typed `Factory[T]`, **real async persistence** (factory_boy has none), constraint-aware generated data, built-in Faker. Trade-off: random data can violate business rules, so override constrained fields; the fixture binds the session per test (§6.5). Replaces factory_boy.                                                                                                                                                          |
 | 11  | **Consumer-side Pydantic models** in `saas_testkit/domain` (not imported from services)                                                                                                                                                                                                                                                                                                     | Black-box: DTO drift breaks tests (that is the point of contract testing). Only component/contract import service code (in-process app, DB models from `saas_shared.models`).                                                                                                                                                                                                                                                                                                             |
-| 15  | **Src-layout package** `testing/src/saas_testkit` (not a loose `framework/` dir)                                                                                                                                                                                                                                                                                                            | Unique importable name (like `saas_shared`), installed editable by `uv sync`, no `sys.path` hacks, external-consumer import semantics, reusable by service unit tests in a separate prod-code-refactoring work. Tests/conftest stay outside the package.                                                                                                                                                                                                                                  |
-| 12  | Python 3.14 in `testing/.python-version`; **if** `uv sync` **fails on a wheel (asyncpg, aiokafka, ddtrace, greenlet), drop to 3.13 for the venv** and keep syntax 3.14-clean                                                                                                                                                                                                                | Time-box: 15 min.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| 16  | **Smoke ≠ synthetic.** `tests/smoke` = broad, shallow, post-deploy gate. `tests/synthetic` = narrow critical path run continuously with latency budgets and alerting. Same flows/adapters, different marker, schedule and failure policy. Grafana Cloud Synthetic Monitoring (k6-based, private probe for the local lab) is a complementary stretch, not a replacement for the Python suite | Python flows can't run inside Grafana SM (it runs k6 JS), so the Python synthetic suite stays as the SDET showcase.                                                                                                                                                                                                                                                                                                                                                                       |
-| 14  | **Prod code is read-only by default; small** `testability:` **commits allowed** (extra `Depends()`, client factory, remove import-time side effect, `data-testid`) when overrides/patches would cost >30 min                                                                                                                                                                                | Owner-approved pragmatism. Behaviour changes/renames wait for a seaparate refactoring work so tests characterise today's behaviour. See `testing-modify-prod.mdc`.                                                                                                                                                                                                                                                                                                                        |
+| 12  | Python 3.14 in `testing/.python-version`; **if** `uv sync` **fails on a wheel (asyncpg, aiokafka, ddtrace, greenlet), drop to 3.13 for the venv** and keep syntax 3.14-clean                                                                                                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | 13  | Defects found → `xfail(strict=True, reason="BUG-n")` + `testing/KNOWN_ISSUES.md`                                                                                                                                                                                                                                                                                                            | Portfolio artefact: "framework found N real defects".                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 14 | **Prod prep first, small behaviour-neutral seams only** (env-driven connections, timing knobs, no import-time side effects, healthchecks, `data-testid`, remove Datadog), done before the framework (P0.1) and later whenever it is simpler than patching; restructuring waits for the refactoring phase | Owner-approved pragmatism. Bug fixes/behaviour changes/renames wait so the tests characterise today's behaviour. See `testing-modify-prod.mdc`. |
+| 15  | **Src-layout package** `testing/src/saas_testkit` (not a loose `framework/` dir)                                                                                                                                                                                                                                                                                                            | Unique importable name (like `saas_shared`), installed editable by `uv sync`, no `sys.path` hacks, external-consumer import semantics, reusable by service unit tests in a separate prod-code-refactoring work. Tests/conftest stay outside the package.                                                                                                                                                                                                                                                                  |
+| 16  | **Smoke ≠ synthetic.** `tests/smoke` = broad, shallow, post-deploy gate. `tests/synthetic` = narrow critical path run continuously with latency budgets and alerting. Same flows/adapters, different marker, schedule and failure policy. Grafana Cloud Synthetic Monitoring (k6-based, private probe for the local lab) is a complementary stretch, not a replacement for the Python suite | Python flows can't run inside Grafana SM (it runs k6 JS), so the Python synthetic suite stays as the SDET showcase.                                                                                                                                                                                                                                                                                                                                                                       |
 
 
 
@@ -83,9 +83,9 @@ Source of truth: `test-infra-architecture.md` (isolation, sharing, CI DAG) + aut
 | Layer       | Process                               | PG                   | Redis  | Kafka               | External HTTP        | Isolation                                   | Parallel  | CI cadence                                                     |
 | ----------- | ------------------------------------- | -------------------- | ------ | ------------------- | -------------------- | ------------------------------------------- | --------- | -------------------------------------------------------------- |
 | unit        | –                                     | –                    | –      | –                   | –                    | process                                     | `-n auto` | every PR                                                       |
-| contract    | in-proc                               | worker DB            | prefix | fake                | respx                | worker DB                                   | `-n auto` | PR (25–50 examples), nightly (500+, stateful)                  |
-| component   | in-proc                               | worker DB + rollback | prefix | `RecordingEventBus` | respx                | rollback/test                               | `-n auto` | every PR                                                       |
-| integration | containers                            | shared stack         | shared | real                | WireMock / simulator | unique data                                 | `-n 3`    | PR (fast subset), merge queue full                             |
+| contract | in-proc | worker DB | worker DB index | Redpanda | respx | worker DB, unique data | `-n auto` | PR (25–50 examples), nightly (500+, stateful) |
+| component | in-proc | worker DB, real commits | worker DB index + `FLUSHDB` per test | Redpanda | respx | unique data, `clean_db` on demand | `-n auto` | every PR |
+| integration | containers | shared stack | shared | real | WireMock / simulator | unique data | `-n 3` | PR (fast subset), push to main full |
 | e2e_ui      | containers                            | shared stack         |        | real                |                      | context per test, unique data               | `-n 2`    | PR `-m critical`, merge full chromium, nightly cross-browser   |
 | smoke       | target URL (fresh stack/staging/prod) | –                    | –      | –                   | –                    | smoke user, unique data                     | serial    | PR (against built stack) + after every deploy; blocks          |
 | synthetic   | target URL (prod/staging)             | –                    | –      | –                   | –                    | dedicated synthetic user, `synthetic-` data | serial    | cron every 5 min (API), 30 min (browser); alerts, never blocks |
@@ -107,11 +107,11 @@ testing/
 │   └── saas_testkit/         # installable package (src-layout, hatchling, py.typed); `from saas_testkit.flows import ...`
 │       ├── config/               # settings.py (pydantic-settings), services.py (name → path, module, port, DI seams)
 │       ├── domain/               # Pydantic v2 boundary models: tasks, users, webhooks, events (Envelope v1, payloads), enums
-│       ├── ports/                # Protocols ONLY for: EventBus, EventReader, Cache (+ Clock if injected). Everything else is a concrete adapter
+│       ├── ports/                # Protocols only if ≥2 implementations appear (none at start); everything else is a concrete adapter
 │       ├── adapters/
 │       │   ├── http/             # HttpTaskApi, HttpAuthApi (one client, injectable transport), retry/backoff policy
-│       │   ├── kafka/            # AiokafkaReader (unique group), RecordingEventBus (in-memory)
-│       │   ├── redis/            # RedisCache (namespaced)
+│       │   ├── kafka/            # KafkaEventReader (aiokafka, unique consumer group; real Redpanda/Kafka)
+│       │   ├── redis/            # redis helpers (DB index per worker, flush)
 │       │   ├── postgres/         # session helpers (sync + async)
 │       │   ├── mail/             # MailHogInbox
 │       │   ├── wiremock/         # WireMockSink (stubs + request journal)
@@ -169,7 +169,7 @@ def pytest_collection_modifyitems(items) -> None:                # tests/<layer>
 
 `needs_infra`: false when `INFRA=off`, or all args are under `tests/unit`, or `-m unit`. (Controller does not collect under xdist, so use args/markexpr, not item markers.)
 
-### 6.2 Template DB, worker DB, rollback (async)
+### 6.2 Template DB, worker DB, real commits (async)
 
 ```python
 @pytest.fixture(scope="session")
@@ -181,74 +181,93 @@ def worker_db(infra: Infra, worker_id: str) -> DbUrls:            # sync fixture
     return DbUrls.for_database(infra.pg_admin_url, name)          # .async_url (asyncpg) / .sync_url
 
 @pytest.fixture(scope="session")
-async def engine(worker_db: DbUrls) -> AsyncIterator[AsyncEngine]:
-    eng = create_async_engine(worker_db.async_url)
-    yield eng
-    await eng.dispose()
+async def session_maker(worker_db: DbUrls) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
+    engine = create_async_engine(worker_db.async_url)
+    yield async_sessionmaker(engine, expire_on_commit=False)
+    await engine.dispose()
 
 @pytest.fixture
-async def db(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
-    async with engine.connect() as conn:
-        tx = await conn.begin()
-        session = AsyncSession(bind=conn, join_transaction_mode="create_savepoint", expire_on_commit=False)
-        try:
-            yield session
-        finally:
-            await session.close()
-            await tx.rollback()
+async def db(session_maker) -> AsyncIterator[AsyncSession]:       # plain session for arrange/assert; commits are real
+    async with session_maker() as session:
+        yield session
+
+@pytest.fixture(scope="session")
+def service_env(infra: Infra, worker_db: DbUrls, worker_id: str) -> Iterator[None]:
+    mp = pytest.MonkeyPatch()                                     # set BEFORE the service is imported
+    mp.setenv("DATABASE_URL", worker_db.async_url)                # real var names from SUT_MAP
+    mp.setenv("REDIS_URL", infra.redis_url_for(worker_index(worker_id)))   # redis://host:6379/<worker index>
+    mp.setenv("KAFKA_BOOTSTRAP_SERVERS", infra.kafka_bootstrap)
+    yield
+    mp.undo()
+
+@pytest.fixture(autouse=True)
+async def flush_redis(infra, worker_id) -> None:                  # cheap: FLUSHDB of this worker's DB index, before each test
+    ...
+
+@pytest.fixture
+async def clean_db(session_maker) -> None:                        # applied via @pytest.mark.clean_db, runs BEFORE the test body
+    async with session_maker() as s:
+        tables = (await s.execute(text("DELETE FROM _touched RETURNING tbl"))).scalars().all()
+        if tables:
+            await s.execute(text(f"TRUNCATE {', '.join(quote_ident(t) for t in tables)} RESTART IDENTITY CASCADE"))
+        await s.commit()
 ```
+**Template.** The controller runs `alembic upgrade head` (repo `migrations/`, DB URL via env, see SUT_MAP) into a template DB, runs the single-head + drift check, **then installs touched-table tracking**, then disposes all connections. The template is built once and reused: name = `app_template_<alembic head revision>`; the controller takes `pg_advisory_lock(<const>)`, checks `pg_database` and builds it only if missing (concurrent per-service sessions, local re-runs and `make deps-up` all reuse it; a new migration changes the head → new template, old ones are dropped by `make deps-clean`). Worker DBs are named `test_<service>_<layer>_<worker_id>` (layer = component|contract), dropped before create and at session end. `CREATE DATABASE ... TEMPLATE` needs no open connections to the template, so nobody connects to it.
 
-Template: controller runs `alembic upgrade head` (repo `migrations/`, override DB URL via env — check `env.py` in SUT_MAP) into the template DB, then disposes all connections. **Template is built once and reused:** name = `app_template_<alembic head revision>`; controller takes `pg_advisory_lock(<const>)`, checks `pg_database` and builds it only if missing (concurrent per-service processes, local re-runs and `make deps-up` all reuse it; a new migration changes the head → new template, old ones are dropped by `make deps-clean`). Worker DBs are named `test_<service>_<layer>_<worker_id>` (layer = component|contract), dropped before create and at session end. `CREATE DATABASE ... TEMPLATE` requires no open connections to the template, so nobody connects to it. Fallback: `Base.metadata.create_all` from `saas_shared.models`. Add one test: single Alembic head + `alembic check` (no drift vs models).
+**Touched-table tracking (test-only DDL, only in the template, prod migrations untouched).** Table `_touched(tbl text primary key)`, a function `_mark()` that does `INSERT INTO _touched VALUES (TG_TABLE_NAME) ON CONFLICT DO NOTHING`, and a statement-level `AFTER INSERT OR UPDATE OR DELETE` trigger on every table of schema `public` except `alembic_version` and `_touched`. Triggers see writes from the app, the scheduler and the tests alike (`pg_stat_`* counters are not reliable per test). `clean_db` truncates only the tables touched since the last cleanup (`TRUNCATE` also empties the table's indexes; `CASCADE` follows foreign keys), so the cost stays proportional to what a test actually used, not to the schema or the number of tests. Default is **no cleanup** (unique data); use `clean_db` only for tests that assert on global state (e.g. scheduler cleanup). If a table is tiny, `DELETE` can beat `TRUNCATE`: measure before optimizing.
 
-Redis: `RedisCache(prefix=f"{worker_id}:{test_id}:")` or per-worker DB index; flush prefix at teardown. Services use fixed DB indexes 0/1, so override the service's redis dependency with the namespaced client.
+**Redis.** One Redis server; each xdist worker uses its own DB index (`redis://host:6379/<n>`, set via env, so no production change) and `FLUSHDB` runs before every test (list/item caches are shared keys within a DB, so flush rather than namespace). Keep `-n` ≤ 8 so indexes stay within the default 16.
 
-### 6.3 Adapters (+ few ports) → flows → tests
+### 6.3 Adapters → flows → tests
 
 ```python
-# ports/events.py — a real port: fake (component) vs aiokafka (integration)
-class EventReader(Protocol):
-    async def wait_for(self, topic: str, *, match: Callable[[Envelope], bool], timeout: float) -> Envelope: ...
-
 # domain: ApiResponse[T] = frozen dataclass(status, data: T | None, error: ProblemBody | None, headers, elapsed)
 
-# adapters/http/tasks.py — concrete class, no Protocol; any transport via the injected client
+# adapters/http/tasks.py — concrete class; the transport is the injected client's concern
 class HttpTaskApi:
-    async def create(self, body: TaskCreate) -> ApiResponse[Task]: ...
-    async def get(self, task_id: UUID) -> ApiResponse[Task]: ...
     def __init__(self, client: httpx.AsyncClient, ctx: RunContext) -> None: ...
+    async def create(self, body: TaskCreate) -> ApiResponse[Task]: ...
+    async def start(self, task_id: UUID) -> ApiResponse[Task]: ...
 
-# flows/task_lifecycle.py — business language; takes adapters/ports via DI
+# adapters/kafka/reader.py — real Redpanda/Kafka consumer, same class at component and integration
+class KafkaEventReader:
+    async def wait_for(self, topic: str, *, match: Callable[[Envelope], bool], timeout: float) -> Envelope: ...
+
+# flows/task_lifecycle.py — business language; takes concrete adapters via DI
 class TaskLifecycle:
-    def __init__(self, tasks: HttpTaskApi, events: EventReader | None = None) -> None: ...
-    async def new_task(self, **overrides) -> Task: ...          # asserts 201 + schema
-    async def move_to_completed(self, task: Task) -> Task: ...
-    async def task_created_event_published(self, task: Task) -> Envelope: ...   # uses eventually()
+    def __init__(self, tasks: HttpTaskApi, events: KafkaEventReader | None = None) -> None: ...
+    async def new_task(self, **overrides) -> Task: ...             # precondition step: asserts 201 + schema inside
+    async def move_to_completed(self, task: Task) -> Task: ...     # precondition step
+    async def start(self, task: Task) -> ApiResponse[Task]: ...    # behaviour under test: NO assertion inside
+    async def task_created_event(self, task: Task) -> Envelope: ...   # uses eventually()
 
-# test
+# test — the assertion is visible in the test body
 async def test_completed_task_cannot_be_started_again(lifecycle: TaskLifecycle):
     task = await lifecycle.new_task()
     await lifecycle.move_to_completed(task)
-    await lifecycle.expect_start_rejected(task, reason="invalid_transition")
+
+    response = await lifecycle.start(task)
+
+    assert response.status == 409
+    assert response.error.code == "invalid_transition"            # real names from SUT_MAP
 ```
+Rule: precondition steps may assert inside flows; the behaviour under test is asserted in the test body. Raw status access never leaves the adapters/flows, but the verdict always stays in the test.
 
-Negative-path steps (`expect_*_rejected`) return/assert on `ApiResponse`; raw status access lives in flows, not tests.
-
-### 6.4 Component client with dependency overrides (per service conftest)
+### 6.4 Component app and client (per service conftest)
 
 ```python
 @pytest.fixture(scope="session")
-def service_app(request) -> FastAPI:  return importlib.import_module("app.main").app   # path set by --service
+async def service_app(service_env) -> AsyncIterator[FastAPI]:
+    app = importlib.import_module("app.main").app                 # path from --service; env already set by service_env
+    async with app.router.lifespan_context(app):                  # the app builds its own engine/redis/kafka from env
+        yield app
 
 @pytest.fixture
-async def client(service_app, db, cache, event_bus) -> AsyncIterator[httpx.AsyncClient]:
-    service_app.dependency_overrides[get_db] = lambda: db            # real names from SUT_MAP
-    ...
+async def client(service_app) -> AsyncIterator[httpx.AsyncClient]:
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=service_app), base_url="http://test") as c:
         yield c
-    service_app.dependency_overrides.clear()
 ```
-
-If lifespan connects to Kafka/Redis at import/startup: swap the producer class/getter with `monkeypatch` **before** importing `app.main`; log it in SUT_MAP. If there is no DI seam, patch the module-level getter; if that costs >30 min, apply the `testability:` policy (ADR-14).
+The app talks to the worker DB, the worker's Redis DB index and Redpanda exactly as in prod, so no `get_db`/producer override is needed. Dependency failures are injected per test with `mocker.patch.object(<adapter>, "<method>", autospec=True, side_effect=ConnectionError)`. `dependency_overrides` remain available (e.g. auth stubs) where a seam already exists and is simpler. If import/lifespan has blocking side effects, fix them in prod first (P0.1) instead of stubbing modules.
 
 ### 6.5 Factories (Polyfactory)
 
@@ -284,10 +303,10 @@ def rows(db: AsyncSession) -> Rows:
         __async_session__ = db
     return Rows(task=BoundTask, user=BoundUser)
 
-task = await rows.task.create_async(status=TaskStatus.COMPLETED)     # persisted inside the test's SAVEPOINT
+task = await rows.task.create_async(status=TaskStatus.COMPLETED)     # really committed to the worker DB; unique values keep it isolated
 ```
 
-Notes: (1) Polyfactory's SQLAlchemy persistence commits by default (flush is configurable); with `join_transaction_mode="create_savepoint"` a commit only releases the savepoint, the outer rollback still wipes it. (2) Bind per test via a subclass in a fixture; do not mutate a shared class attribute or rely on a `ContextVar` (async fixtures and tests may run in different contexts). (3) Reproducibility: `Factory.seed_random(run_seed)` in the root conftest; `RunContext.seed` is printed in the failure report. (4) Random data may violate business rules: override constrained fields (status, FKs, unique titles) explicitly. (5) Faker is bundled (`Factory.__faker__`); custom providers in `factories/providers.py` (`unique_title`, `jwt_claims`). (6) `UserRow.password_hash` = one cached argon2 hash. (7) Event factories (`ModelFactory[Envelope[TaskCreatedPayload]]`) build envelopes; a Builder only for `Envelope`/webhook bodies with many optional parts. Internal trusted dataclasses use `DataclassFactory`.
+Notes: (1) Polyfactory's SQLAlchemy persistence commits by default: rows are really committed, so the app's own engine, the scheduler and other processes see them. (2) Bind per test via a subclass in a fixture; do not mutate a shared class attribute or rely on a `ContextVar` (async fixtures and tests may run in different contexts). (3) Reproducibility: `Factory.seed_random(run_seed)` in the root conftest; `RunContext.seed` is printed in the failure report. (4) Random data may violate business rules: override constrained fields (status, FKs, unique titles) explicitly. (5) Faker is bundled (`Factory.__faker__`); custom providers in `factories/providers.py` (`unique_title`, `jwt_claims`). (6) `UserRow.password_hash` = one cached argon2 hash. (7) Event factories (`ModelFactory[Envelope[TaskCreatedPayload]]`) build envelopes; a Builder only for `Envelope`/webhook bodies with many optional parts. Internal trusted dataclasses use `DataclassFactory`.
 
 ### 6.6 Polling, correlation, resilience helpers
 
@@ -299,11 +318,12 @@ Notes: (1) Polyfactory's SQLAlchemy persistence commits by default (flush is con
 
 ### 6.7 Integration infra
 
-- `saas_testkit/infra/compose.py`: `base_url` fixture pattern from the source doc: `BASE_URL` env (CI already up) else `docker compose -f infra/docker-compose.yml -f infra/docker-compose.test.yml --profile core up -d --wait` in the controller; `KEEP_STACK=1` keeps it up; `down -v` otherwise.
-- Seed once per run under FileLock (`scripts/seed_dev.py` or direct idempotent SQL). Login once per worker → cached tokens (`admin_token`, `user_token`), and Playwright `storage_state`.
-- `docker-compose.test.yml`: publishes api-gateway `:8000`, mounts `nginx.test.conf` (relaxed limits), adds `wiremock` on `:8089` and sets `webhook-dispatcher` `WEBHOOK_URL` to `http://wiremock:8080/hook`; keep `MAX_RETRIES`/backoff env if configurable to shorten runs. Nginx behaviour is tested by a few dedicated tests against `:80` only.
-
-
+- `saas_testkit/infra/compose.py`: when the stack is already up (CI) read `BASE_URL` (gateway `:8001`) and `NGINX_URL` (`:80`) from env; otherwise the controller runs `docker compose -f infra/docker-compose.yml -f infra/docker-compose.test.yml up -d --build <explicit service list>` and **polls `/health` of every service** (`--wait` only covers services that have healthchecks). `KEEP_STACK=1` keeps the stack, otherwise `down -v`.
+- Seed and login **once per run** under FileLock (`scripts/seed_dev.py` or idempotent SQL). Tokens go into a shared token file with an expiry check (refresh when the JWT is close to `exp`); workers only read it. Playwright `storage_state` is derived from the same login.
+- `docker-compose.test.yml`: publishes api-gateway on host `:8001` (the simulator already owns `:8000`); adds `wiremock` on `:8089`; sets `WEBHOOK_URL` of **both** `webhook-dispatcher` and `scheduler-worker` to WireMock (they must match, S2 checks DLQ replay); shortens timing knobs (retry/backoff, DLQ replay and cleanup intervals) via env. **nginx is not modified.** Functional tests use the gateway; real nginx `:80` serves UI tests and 2–3 dedicated edge tests (429 on auth burst, forwarded headers).
+- WireMock isolation: the dispatcher sends everything to one URL, so each test registers a stub matched on its own `payload.id` (JSONPath) inside a unique scenario, plus a low-priority catch-all `200` for everyone else; assertions read the request journal filtered by the same id.
+- Frontend for CI: `vite build` + `preview` (not the dev server).
+- Kafka: integration/UI use the stack's own broker, component/contract use Redpanda (ADR-5); both are read through `KafkaEventReader`.
 
 ## 7. Test catalogue (scope for "cover the functionality")
 
@@ -327,27 +347,38 @@ Characterise first; record surprises in `KNOWN_ISSUES.md`.
 
 ## 8. Security testing
 
-- Static in CI: `ruff` (with `S` bandit rules), `bandit -r`, `pip-audit`/`uv pip audit`, `gitleaks` (free GitGuardian alternative), Trivy image scan (nightly).
+- Static in CI: `ruff` (with `S` bandit rules), `pip-audit`/`uv pip audit`, `gitleaks` (free GitGuardian alternative), Trivy image scan (nightly).
 - Functional (in the suites above): authN/authZ matrix, JWT tampering/expiry/`alg=none`, brute-force limit at nginx, injection-like strings in fields via Schemathesis, no secrets/hashes in responses or logs.
 - Nightly stretch: OWASP ZAP baseline against the compose stack.
-
 
 
 ## 9. CI/CD (GitHub Actions) — adapted from the source DAG
 
 ```
-push/PR ─┬─ lint (ruff, pyright)          ─┐
-         ├─ security (bandit, audit, gitleaks)│
-         ├─ unit (xdist, cov)              ─┼─► component-contract (matrix: service; PG+Redis services) ─┐
-         └─ build-stack (buildx gha cache) ─────────────────────────────────────────────────────────────┼─► integration ─┐
-                                                                                                         └─► ui-e2e       ├─► ci-gate (only required check)
+push/PR ─┬─ lint (ruff, pyright) ───────────────┐
+         ├─ security (ruff S, audit, gitleaks) ─┤
+         ├─ unit (xdist) ───────────────────────┤
+         ├─ component-contract (matrix: service; services: postgres, redis, redpanda) ─┤
+         ├─ integration (builds images in-job, buildx gha cache) ─────────────────────┼─► ci-gate (only required check)
+         └─ ui-e2e (own stack, same cache) ───────────────────────────────────────────┘
 ```
 
 - `concurrency: cancel-in-progress`; cheap jobs block expensive ones (`needs`).
 - Env-driven: component job sets `TEST_PG_URL`, `TEST_REDIS_URL`, `SCHEMA_EXAMPLES`; integration/ui set `BASE_URL`. Same pytest command as local.
+- GitHub Actions supports `command`/`entrypoint` inside `services:`, so Redpanda is a plain service container (pin the version; verify flags against the Redpanda docs for that version):
+  ```yaml
+  services:
+    redpanda:
+      image: docker.redpanda.com/redpandadata/redpanda:<pinned-version>
+      command: >-
+        redpanda start --mode dev-container --smp 1 --memory 1G --overprovisioned
+        --kafka-addr plaintext://0.0.0.0:9092 --advertise-kafka-addr plaintext://localhost:9092
+      ports: ["9092:9092"]
+  ```
+  The job sets `TEST_KAFKA_BOOTSTRAP=localhost:9092`. Add a readiness step that polls the broker before pytest.
 - Integration/UI: `docker compose ... up -d --wait` (buildx layer cache via `docker/bake-action` or `--build` with gha cache), `pytest -n 3`; on failure upload `docker compose logs`, Playwright `test-results/` (traces, screenshots), JUnit.
-- Cadence: **PR** lint/security/unit/component/contract(light)/integration(fast subset)/UI `-m critical`; **merge_group** everything except deep fuzz + cross-browser; **nightly** Schemathesis deep+stateful, firefox/webkit, `chaos` + `slow` markers, flaky report (`--count 5` on tests with reruns), refresh `.test_durations`; `smoke.yml` after build/deploy against `SMOKE_BASE_URL` (blocks); `synthetic.yml` is written with `cron */5` (API) / `*/30` (browser) against `SYNTHETIC_BASE_URL` and an issue after 3 consecutive failures, but ships **dormant (`**workflow_dispatch` **only)**: GitHub runners and Grafana's public probes can't reach a local lab, and a tunnel would expose `admin/admin123`. Enable the cron only when a reachable URL exists (GitHub cron is best-effort anyway). For the local lab: `make synthetic-local` (loop every 5 min) and/or the Grafana private probe (§9.1, outbound-only, no tunnel).
-- Reports: JUnit XML per job → `$GITHUB_STEP_SUMMARY` (dorny/test-reporter); coverage per service combined in a `coverage` job (`coverage combine`, fail-under 80 on service code touched by component+unit); reruns are listed, not hidden.
+- Cadence: **PR** lint/security/unit/component/contract(light)/integration(fast subset)/UI `-m critical`; **push to main** everything except deep fuzz + cross-browser (merge queue is not available for personal-account repos; check Settings → Rules); **nightly** Schemathesis deep+stateful, firefox/webkit, `chaos` + `slow` markers, flaky report (`--count 5` on tests with reruns), refresh `.test_durations`; `smoke.yml` after build/deploy against `SMOKE_BASE_URL` (blocks); `synthetic.yml` is written with `cron */5` (API) / `*/30` (browser) against `SYNTHETIC_BASE_URL` and an issue after 3 consecutive failures, but ships **dormant (`**workflow_dispatch` **only)**: GitHub runners and Grafana's public probes can't reach a local lab, and a tunnel would expose `admin/admin123`. Enable the cron only when a reachable URL exists (GitHub cron is best-effort anyway). For the local lab: `make synthetic-local` (loop every 5 min) and/or the Grafana private probe (§9.1, outbound-only, no tunnel).
+- Reports: JUnit XML per job → `$GITHUB_STEP_SUMMARY` (dorny/test-reporter); coverage per service combined in a `coverage` job (`coverage combine`, report only until service unit tests exist, then add a threshold); reruns are listed, not hidden.
 - "Trace coverage" is not a standard metric: replaced by **API coverage** (httpx event hook logs `method + route template`; a meta-test compares against each service's OpenAPI operations, reported as %).
 - Sharding (`pytest-split --splits N --group k`) is wired in the matrix from day one with `shards: [1]`; raise it only when integration+UI exceeds ~8 min (see §12).
 - Deploy step: intentionally out of scope for the lab (no target server); `smoke.yml` and `synthetic.yml` run against any URL.
@@ -362,19 +393,19 @@ Free plan includes 100k synthetic executions/month (verify current limits on the
 
 `--strict-markers`, `pytest-randomly`, `pytest-timeout` (component 30 s, integration 120 s), `--reruns 1` only for `integration`/`e2e_ui` and always reported; web-first assertions; no sleeps; every `xfail` is strict and linked to `KNOWN_ISSUES.md`. New tests must pass 3× with random order and `-n auto`.
 
-## 11. Risks and time-boxed fallbacks
+## 11. Risks and fallbacks
 
 
-| Risk                                                                          | Fallback (decide within 30 min)                                                                                                                                    |
+| Risk                                                                          | Fallback                                                                                                                                    |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Python 3.14 wheels missing                                                    | venv on 3.13                                                                                                                                                       |
-| Service lifespan/import needs Kafka/Redis/Sentry/ddtrace                      | monkeypatch before import; `SENTRY_DSN` unset; stub `ddtrace` module in `sys.modules`                                                                              |
-| No DI seam for DB/Redis in a service                                          | patch module-level getter/engine; else a minimal `testability:` commit adding a `Depends()` (ADR-14); else test at integration and note it                         |
-| Schemathesis `from_asgi` runs app in a different event loop than the async DB | contract layer lets the app own its engine (env `DATABASE_URL` = worker DB, fake producer patched); still failing → `from_url(BASE_URL)` against the compose stack |
+| Service lifespan/import has side effects (Kafka/Redis connect, Sentry, ddtrace) | PREP (P0.1): move them to startup and keep them inert without env; only if impossible: monkeypatch before import / stub `ddtrace` in `sys.modules` |
+| Service does not take DB/Redis/Kafka URLs from env | PREP: make them env-driven (default unchanged); else patch the module-level getter (ADR-14) |
+| Schemathesis `from_asgi` runs the app in a different event loop than async fixtures | the app builds its own engine from env (default design); still failing → `from_url(BASE_URL)` against the compose stack |
 | Alembic `env.py` can't take a URL override                                    | `Base.metadata.create_all` for the template                                                                                                                        |
-| Full-stack build too slow in CI                                               | build only `core` services needed; cache layers; run integration on merge queue + nightly, keep UI smoke on PR                                                     |
+| Full-stack build too slow in CI                                               | build only `core` services needed; cache layers; run integration on push to main + nightly, keep UI `-m critical` on PR                                                     |
 | Test env lacks service runtime deps, or services pin conflicting versions     | uv dependency group per service; sync only the group of the service under test (`uv sync --group <svc>`); long-term fix = R0 (uv + pyproject per service)          |
-| Nginx limits / seeded data conflicts                                          | use gateway `:8000` from test override; assert only on own ids                                                                                                     |
+| Nginx limits (UI tests) / seeded data conflicts | functional tests use gateway `:8001`; UI: login once per run, fewer workers; **do not relax nginx**; assert only on own ids |
 
 
 
@@ -383,7 +414,7 @@ Free plan includes 100k synthetic executions/month (verify current limits on the
 
 **Scale-up (vertical, inside one stack copy):** more xdist workers. component/contract `-n auto` (DB per worker from a shared template); integration `-n 3`; e2e_ui `-n 2` (browser per worker, context per test).
 **Scale-out (horizontal, many stack copies):** CI matrix. component/contract: one job per service. integration/e2e_ui: `shard: [1..N]` with `pytest-split --splits N --group k --durations-path .test_durations`; **every shard brings up its own compose stack**, seeds it and logs in on its own; JUnit/coverage artifacts are merged in the gate job.
-**Why scale-out needs no coordination:** all data is unique (uuid / run prefix), nothing is cleaned or reset, no shared mutable state between stacks, auth/seed is per stack.
+**Why scale-out needs no coordination:** all data is unique (uuid / run prefix), nothing is cleaned by default (`clean_db` is per-stack and on demand), no shared mutable state between stacks, auth/seed is per stack.
 **Limits of scale-up:** one stack's Kafka/PG/nginx and the runner's CPU/RAM (browsers are the heaviest). Hence conservative `-n` values for integration/UI.
 **When to scale:** keep `shards: [1]` while integration+UI < ~8 min; first raise `-n` (cheap), then shards (more runners, more image builds, more minutes).
 **Hands-on experiment (record the numbers in README):** run the integration suite with `-n 1`, `2`, `4` on the same stack and note wall time and failures; then two shards in CI (`shard: [1, 2]`) and compare. Expect sub-linear gains from `-n` (shared stack) and near-linear from shards (independent stacks, minus build/boot overhead). Refresh `.test_durations` nightly so shards stay balanced.

@@ -1,16 +1,17 @@
 ---
 description: Playwright UI test rules (page objects, fixtures, artefacts)
-globs: testing/**/e2e_ui/**, testing/**/playwright/**
+globs: testing/**/e2e_ui/**,testing/**/playwright/**
 alwaysApply: false
 ---
 
 # Playwright rules (sync API only)
 
 - Use pytest-playwright with the **sync** API; UI tests are plain `def`, not `async def`. Test data is created via sync httpx / API adapters, never via clicks.
-- One browser per worker, new context per test. `browser_context_args`, `base_url`, `storage_state` (created by API login once per worker under FileLock; only the login tests skip it).
+- One browser per worker, new context per test. `browser_context_args`, `base_url`, `storage_state` (derived from the per-run token file: API login once per run under FileLock; only the login tests skip it).
 - Artefacts: `--tracing retain-on-failure --screenshot only-on-failure --video off`.
 - Page Object: locators in `__init__` (role/label/test-id first, CSS last), one method per user action, web-first assertions (`expect(...)`) inside `expect_*` methods. Component Objects for repeated widgets (`TaskCard`, `KanbanColumn`).
 - Tests read as business flows (`board.create_task(...)`, `board.move_task(task, to=Column.IN_PROGRESS)`). No locators, URLs or sleeps in tests.
 - If the frontend lacks accessible names/test ids, list them in `testing/KNOWN_ISSUES.md` and use the most stable selector available. Adding `data-testid` to the frontend is allowed only under `testing-modify-prod.mdc`.
 - No `sleep`/`wait_for_timeout`. Max `--reruns 1` in CI, always reported.
 - The fast PR subset of UI tests is marked `@pytest.mark.critical` (the `smoke` marker belongs to `tests/smoke/`). Browser synthetic checks live in `tests/synthetic/browser/` (marker `synthetic`), run rarely, and follow the synthetic rules in `testing-core.mdc`.
+- Drag-and-drop (the board uses dnd-kit): one helper in the board page object doing `mouse.move` to the source, `mouse.down`, `mouse.move(..., steps=N)` to the target, `mouse.up`; never `drag_to`.

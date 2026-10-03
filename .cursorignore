@@ -33,4 +33,5 @@ chaos
 docs/incidents-playbooks
 docs/cheat-sheets
 docs/on-call
+docs/system-architechture/test-infra-architecture.md
 test-results
