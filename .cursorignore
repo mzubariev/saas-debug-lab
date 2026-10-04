@@ -33,5 +33,9 @@ chaos
 docs/incidents-playbooks
 docs/cheat-sheets
 docs/on-call
-docs/system-architechture/test-infra-architecture.md
+docs/system-architechture/testing-architecture
+testing/docs/IMPLEMENTATION_PLAN.md
+testing/docs/TESTING_ARCHITECTURE.md
+testing/docs/cursor/plan/00-workflow.md
+testing/docs/cursor/plan/01-prompt-template.md
 test-results

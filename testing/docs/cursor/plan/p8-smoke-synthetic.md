@@ -1,0 +1,8 @@
+# P8 - Smoke + synthetic
+Attach: cat-smoke-synthetic.md.
+- P8.1 smoke: tests/smoke/ per catalogue. Reads SMOKE_BASE_URL. make t-smoke. .github/workflows/smoke.yml (workflow_call + workflow_dispatch; reused by CI after the stack is up).
+  DoD: `SMOKE_BASE_URL=http://localhost make t-smoke` green; wrong URL -> fails fast with a clear message.
+- P8.2 synthetic: tests/synthetic/api/test_critical_path.py (and optional browser/) per catalogue: dedicated synthetic user from env, X-Synthetic: true, per-step latency budgets (soft warn / hard fail), step timings in JUnit/job summary. make t-synthetic. .github/workflows/synthetic.yml with cron */5 (API) / */30 (browser) and issue after 3 consecutive failures, but commented-out schedule, workflow_dispatch only (lab is local; enable cron when a reachable URL exists). Add make synthetic-local (shell loop, every 5 min, SYNTHETIC_BASE_URL=http://localhost).
+  DoD: `make synthetic-local` runs two cycles green; a deliberately slow step trips the budget; workflow lints (actionlint).
+- P8.3 Grafana Synthetic Monitoring (optional stretch, recommended continuous monitor for the local lab; first to cut): sign up for Grafana Cloud Free; write testing/synthetic/k6/critical_path.js (login -> create -> read; reuse load-tests/lib/helpers.js); run a private probe (outbound-only, no tunnel/ngrok) via testing/synthetic/compose.probe.yml (follow current Grafana docs for agent image/flags); create the check, an alert, a dashboard. Do not commit tokens.
+  DoD: check shows green in Grafana Cloud with the lab running; stopping task-service turns it red and fires the alert.

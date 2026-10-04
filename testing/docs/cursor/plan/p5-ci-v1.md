@@ -1,0 +1,4 @@
+# P5 - CI v1
+Attach: arch-ci.md (§9 and §9.2 skeleton; nothing else).
+Create .github/workflows/ci.yml with jobs: lint, security (ruff S, pip-audit, gitleaks), unit, component-contract (matrix over services, services: postgres + redis + redpanda (with command, arch-ci.md §9.2), TEST_KAFKA_BOOTSTRAP, TEST_PG_URL, TEST_REDIS_URL, SCHEMA_EXAMPLES=40, --cov + artifact), ci-gate (idiom from §9.2: if: always() + toJSON(needs) checked with jq, success or skipped). concurrency cancel, astral-sh/setup-uv cache, JUnit upload + job summary. Trigger: pull_request, push main (no merge queue on personal repos), schedule for nightly. Pin third-party actions by SHA (pinact/Dependabot, never invent SHAs), permissions: contents: read, timeout-minutes per job, uv sync --locked, no merge_group, no GHCR push. Postgres service container with the test tuning (ADR-18).
+DoD: push a branch, PR is green; break a test on purpose -> gate is red; revert.

@@ -2,27 +2,25 @@
 description: Policy for small behaviour-neutral production changes that make code testable
 alwaysApply: false
 ---
-
 # Testability changes in production code
-
-The owner allows small production edits **only to make code testable**. Prefer a small prod seam over a fragile test-side hack.
+Owner allows small production edits only to make code testable. Prefer a small prod seam over a fragile test-side hack.
 
 ## Allowed (behaviour-neutral)
-- Connections and settings from env (DB/Redis/Kafka URLs, `WEBHOOK_URL`, secrets, SMTP host) instead of hard-coded values; defaults keep current behaviour.
-- Timing knobs via env (retry/backoff, beat and cleanup intervals) with the current values as defaults.
-- Move import-time side effects (Kafka connect, Sentry/OTel init, metrics registration) to lifespan/startup; keep them inert without env.
-- Add a `Depends()` or constructor-injected dependency where a seam is genuinely needed (default keeps current behaviour).
-- Compose healthchecks; frontend accessible names / `data-testid`; production frontend build target.
+- Connections/settings from env (DB/Redis/Kafka URLs, WEBHOOK_URL, secrets, SMTP host) instead of hard-coded values; defaults keep current behaviour.
+- Timing knobs via env (retry/backoff, beat and cleanup intervals), current values as defaults.
+- Move import-time side effects (Kafka connect, Sentry/OTel init, metrics registration) to lifespan/startup; inert without env.
+- A Depends() or constructor-injected dependency where a seam is genuinely needed (default keeps current behaviour).
+- Compose healthchecks; frontend accessible names / data-testid; production frontend build target.
 - Remove Datadog.
 
 ## Not allowed
-Behaviour changes, bug fixes, renames, moving files, restructuring, new features, formatting-only churn. All of that belongs to the refactoring phase, with these tests as the safety net.
+Behaviour changes, bug fixes, renames, moving files, restructuring, new features, formatting-only churn: refactoring phase, with these tests as the safety net.
 
 ## Procedure
-1. State in one line what is missing and why a test-side patch is worse.
-2. Make the smallest possible change; default behaviour stays identical.
-3. Run existing checks (service starts, `/health`, manual lab smoke).
-4. Separate commit, prefix `testability:`; add one line to `testing/KNOWN_ISSUES.md` ("Testability changes": file, what, why).
+1. One line: what is missing and why a test-side patch is worse (use a seam when the patch would cost >30 min).
+2. Smallest possible change; default behaviour identical.
+3. Run existing checks (service starts, /health, manual lab smoke).
+4. Separate commit, prefix `testability:`; add one line to testing/KNOWN_ISSUES.md ("Testability changes": file, what, why).
 
 ## Fallback
-If a prod change is not worth it: `dependency_overrides`, `monkeypatch` before import, `mocker.patch(autospec=True)`, env vars, stubbing a module in `sys.modules`.
+If a prod change is not worth it: dependency_overrides, monkeypatch before import, mocker.patch(autospec=True), env vars, stubbing a module in sys.modules.
