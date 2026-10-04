@@ -98,7 +98,7 @@ Attach: `TESTING_ARCHITECTURE.md` §2, §5.
 1. Copy files into repo: `.cursor/rules/*.mdc` (4 files), `testing/docs/*`, `SUT_MAP.md` from P0. Create `.cursorignore`. [DONE]
 2. Prompt:
 
-> Create `testing/` skeleton per §5: src-layout package `src/saas_testkit/` (empty subpackages with `__init__.py`, `py.typed`), `tests/<layer>/conftest.py`; `pyproject.toml` with `[build-system]` hatchling, `packages = ["src/saas_testkit"]`, `[tool.ruff] src = ["src", "tests"]`, `[tool.uv] package = true` (deps: pytest, pytest-asyncio, pytest-xdist, pytest-randomly, pytest-timeout, pytest-mock, pytest-cov, pytest-split, pytest-rerunfailures, pytest-playwright, httpx, respx, testcontainers[postgres,redis,redpanda], sqlalchemy[asyncio], asyncpg, psycopg[binary], alembic, redis, aiokafka, pydantic, pydantic-settings, polyfactory, schemathesis, openapi-spec-validator, tenacity, filelock, pyjwt, argon2-cffi, pytest-repeat, ruff, pyright, pip-audit; `pythonpath`, `asyncio_mode=auto`, loop scopes = session, `--strict-markers`, markers, ruff incl. `S`, pyright strict for `src/saas_testkit/`), `.python-version`, `testing/testing.mk` (`t-unit`, `t-component SERVICE=`, `t-component-all` (all services in parallel: `printf '%s\n' $(SERVICES) | xargs -P 4 -I{} $(MAKE) t-component SERVICE={}`; needs `TEST_PG_URL`/`TEST_REDIS_URL`/`TEST_KAFKA_BOOTSTRAP` via `deps-up`, which starts Postgres + Redis + Redpanda from `testing/compose.deps.yml`), `deps-clean` (drop stale templates/worker DBs), `t-contract`, `t-int`, `t-ui`, `t-smoke`, `t-synthetic`, `t-lint`, `t-check` = ruff + pyright + quick pytest, `deps-up`) and a pre-commit config running `t-check` included from the root Makefile.
+> Create `testing/` skeleton per §5: src-layout package `src/saas_testkit/` (empty subpackages with `__init__.py`, `py.typed`), `tests/<layer>/conftest.py`; `pyproject.toml` with `[build-system]` hatchling, `packages = ["src/saas_testkit"]`, `[tool.ruff] src = ["src", "tests"]`, `[tool.uv] package = true` (deps: pytest, pytest-asyncio, pytest-xdist, pytest-randomly, pytest-timeout, pytest-mock, pytest-cov, pytest-split, pytest-rerunfailures, pytest-playwright, httpx, respx, testcontainers[postgres,redis,redpanda], sqlalchemy[asyncio], asyncpg, psycopg[binary], alembic, redis, aiokafka, pydantic, pydantic-settings, polyfactory, schemathesis, openapi-spec-validator, tenacity, filelock, pyjwt, argon2-cffi, pytest-repeat, ruff, pyright, pip-audit; `pythonpath`, `asyncio_mode=auto`, loop scopes = session, `--strict-markers`, markers, ruff incl. `S`, pyright strict for `src/saas_testkit/`), `.python-version`, `testing/testing.mk` (`t-unit`, `t-component SERVICE=`, `t-component-all` (all services in parallel: `printf '%s\n' $(SERVICES) | xargs -P 4 -I{} $(MAKE) t-component SERVICE={}`; needs `TEST_PG_URL`/`TEST_REDIS_URL`/`TEST_KAFKA_BOOTSTRAP` via `deps-up`, which starts Postgres (test tuning + tmpfs, architecture §6.2) + Redis + Redpanda from `testing/compose.deps.yml`), `deps-clean` (drop stale templates/worker DBs), `t-contract`, `t-int`, `t-ui`, `t-smoke`, `t-synthetic`, `t-lint`, `t-check` = ruff + pyright + quick pytest, `deps-up`) and a pre-commit config running `t-check` included from the root Makefile.
 > Service runtime deps: component/contract import service code in-process, so the test env must also contain each service's dependencies (fastapi, argon2, aiokafka, kafka-python, psycopg2, celery, ...). Put them in uv dependency groups per service (`[dependency-groups] task-service = [...]`, filled from that service's `requirements.txt`) and use `uv sync --group <svc>` / `--all-groups`; if versions conflict between services, install one group per session (this is where `--service` helps). After R0 (uv in services) these groups are replaced by the services' own packages.
 > Minimal CI right after bootstrap: `.github/workflows/ci.yml` with `lint` + `unit` only (extended in P5 and P9).
 > DoD: `cd testing && uv sync && uv run pytest tests/unit -q` (one dummy test) and `uv run ruff check . && uv run pyright` pass. If `uv sync` fails on a wheel, apply ADR-12.
@@ -109,7 +109,7 @@ Attach: `TESTING_ARCHITECTURE.md` §2, §5.
 
 Attach: `TESTING_ARCHITECTURE.md` §2, §6, `SUT_MAP.md`.
 
-1. `src/saas_testkit/config` (`settings.py`, `services.py`), `context.py`, `polling.py`, `infra/{containers,template_db,app_loader,xdist}.py`, root `conftest.py` (markers by path, `--service`, controller infra, `pytest_configure_node`, `needs_infra`, ignore other services), `tests/component/conftest.py` (`worker_db`, `session_maker`, `db`, `service_env`, `flush_redis`, `clean_db`, Redpanda/`KafkaEventReader`), template DB with touched-table tracking (architecture §6.2).
+1. `src/saas_testkit/config` (`settings.py`, `services.py`), `context.py`, `polling.py`, `infra/{containers,template_db,app_loader,xdist}.py` (Testcontainers Postgres with the ADR-18 flags + tmpfs), root `conftest.py` (markers by path, `--service`, controller infra, `pytest_configure_node`, `needs_infra`, ignore other services), `tests/component/conftest.py` (`worker_db`, `session_maker`, `db`, `service_env`, `flush_redis`, `clean_db`, Redpanda/`KafkaEventReader`), template DB with touched-table tracking (architecture §6.2).
 2. Domain models for tasks/users/envelope, concrete `HttpTaskApi`, `TaskLifecycle` flow, `TaskCreateFactory` (Polyfactory `ModelFactory`), `TaskRowFactory` (`SQLAlchemyFactory`) and the `rows` fixture binding row factories to the test session (`create_async`).
 3. `tests/component/task_service/conftest.py` (`service_app` with lifespan, `client`; no `get_db` override: the app builds its engine from env) + **two tests**: `create_task_returns_created_status`, `unknown_task_returns_404`.
 4. `tests/unit` self-tests: `eventually`, `unique_title`, factories.
@@ -142,19 +142,19 @@ DoD each: `make t-component SERVICE=<x>` green ×3 random order, `-n auto`; cove
 
 ## P4 — Contract tests
 
-Attach: rule, SUT_MAP, `TESTING_ARCHITECTURE.md` §5–§7 (contract lines) + §11 (Schemathesis fallback).
+Attach: rule, SUT_MAP, `TESTING_ARCHITECTURE.md` §7 (contract lines) + §7.1 (contract principles) + §11 (Schemathesis fallback).
 
 - P4.1 `contract/events`: Envelope + payload schema tests, JSON-schema snapshots, legacy → `unknown`, producers' captured events validate (captured through `KafkaEventReader` on Redpanda).
-- P4.2 `contract/http`: OpenAPI validity, committed snapshot diff (breaking vs additive), Schemathesis per service (`SCHEMA_EXAMPLES` env), consumer-side Pydantic validation of real responses.
+- P4.2 `contract/http`: OpenAPI validity, exact committed snapshots (ADR-17, `make contracts-update` for explicit updates), Schemathesis per service (`SCHEMA_EXAMPLES` env; a 500 is never filtered away: `xfail(strict)` + `KNOWN_ISSUES.md`), consumer-side `model_validate` of real responses (§7.1).
 DoD: `make t-contract SERVICE=<x>` green for task, auth, webhook-receiver, simulator, gateway. If Schemathesis is blocked, follow the fallback in §11.
 
 
 
 ## P5 — CI v1
 
-Attach: rule, `TESTING_ARCHITECTURE.md` §9, source doc §7 skeleton (paste the YAML block).
+Attach: rule, `TESTING_ARCHITECTURE.md` §9 and §9.2 (the corrected `ci.yml` skeleton; nothing else).
 
-> Create `.github/workflows/ci.yml` with jobs: `lint`, `security` (ruff S, pip-audit, gitleaks), `unit`, `component-contract` (matrix over services, `services:` postgres + redis + redpanda (with `command`, architecture §9), `TEST_KAFKA_BOOTSTRAP`, `TEST_PG_URL`, `TEST_REDIS_URL`, `SCHEMA_EXAMPLES=40`, `--cov` + artifact), `ci-gate`. `concurrency` cancel, `astral-sh/setup-uv` cache, JUnit upload + job summary. Trigger: pull_request, push main (no merge queue on personal repos), schedule for nightly. Pin third-party actions by SHA, `permissions: contents: read`, `timeout-minutes` per job.
+> Create `.github/workflows/ci.yml` with jobs: `lint`, `security` (ruff S, pip-audit, gitleaks), `unit`, `component-contract` (matrix over services, `services:` postgres + redis + redpanda (with `command`, architecture §9), `TEST_KAFKA_BOOTSTRAP`, `TEST_PG_URL`, `TEST_REDIS_URL`, `SCHEMA_EXAMPLES=40`, `--cov` + artifact), `ci-gate` (idiom from §9.2: `if: always()` + `toJSON(needs)` checked with `jq`, `success` or `skipped`). `concurrency` cancel, `astral-sh/setup-uv` cache, JUnit upload + job summary. Trigger: pull_request, push main (no merge queue on personal repos), schedule for nightly. Pin third-party actions by SHA (`pinact`/Dependabot, never invent SHAs), `permissions: contents: read`, `timeout-minutes` per job, `uv sync --locked`, no `merge_group`, no GHCR push. Postgres service container with the test tuning (§6.2, ADR-18).
 > DoD: push a branch, PR is green; break a test on purpose → gate is red; revert.
 
 ---
@@ -165,10 +165,10 @@ Attach: rule, `TESTING_ARCHITECTURE.md` §9, source doc §7 skeleton (paste the 
 
 Attach: rule, SUT_MAP, `TESTING_ARCHITECTURE.md` §6.7, §7 (integration).
 
-- **P6.1 (strong model):** `infra/docker-compose.test.yml` (gateway published on :8001, WireMock, `WEBHOOK_URL` of dispatcher AND scheduler → WireMock, timing knobs; **nginx is not relaxed**), explicit service list, `/health` polling, `src/saas_testkit/infra/compose.py` (`BASE_URL` env-or-up, `KEEP_STACK`), seed + login once per run (FileLock, token file with expiry check), adapters: Kafka reader, MailHog, WireMock, real-network `HttpTaskApi`/`HttpAuthApi`, `tests/integration/conftest.py`.
+- **P6.1 (strong model):** `infra/docker-compose.test.yml` (gateway published on :8001, WireMock, `WEBHOOK_URL` of dispatcher AND scheduler → WireMock, timing knobs, `postgres` with ADR-18 `command` + tmpfs; **nginx is not relaxed**), explicit service list, `/health` polling, `src/saas_testkit/infra/compose.py` (`BASE_URL` env-or-up, `KEEP_STACK`), seed + login once per run (FileLock, token file with expiry check), adapters: Kafka reader, MailHog, WireMock, real-network `HttpTaskApi`/`HttpAuthApi`, `tests/integration/conftest.py`.
 DoD: `make stack-up` healthy; one test (`login → create task → task readable`) green with `-n 3`.
-- **P6.2** `integration/services`**:** health via gateway, auth→gateway→task JWT flow, nginx dedicated (serial), `/metrics` series.
-- **P6.3** `integration/scenarios`**:** S1, S3, S4 first (fast); S2 and S5 marked `slow`/`chaos`.
+- **P6.2** `integration/services`: health via gateway, auth→gateway→task JWT flow, nginx dedicated (serial), `/metrics` series.
+- **P6.3** `integration/scenarios`: S1, S3, S4 first (fast); S2 and S5 marked `slow`/`chaos`.
 DoD: `make t-int` green ×2, no test uses `sleep`, all data unique, works with `KEEP_STACK=1`.
 
 
@@ -197,7 +197,7 @@ DoD: check shows green in Grafana Cloud with the lab running; stopping task-serv
 
 ## P9 — CI v2
 
-> Extend `ci.yml`: `integration` (builds the needed images inside the job with buildx + gha cache, compose up of an explicit service list, `/health` polling, `BASE_URL`, `-n 3`, logs artifact on failure), `smoke` (reuse `smoke.yml` after the stack is up; blocks), `ui-e2e` (Playwright browser cache, `-m critical` on PR, full on push to main, traces artifact), `ci-gate` needs all. Add a `shard` matrix to `integration` and `ui-e2e` (`shard: [1]` by default, `pytest-split --splits ${{ strategy.job-total }} --group ${{ matrix.shard }}`, `.test_durations` cached) so scale-out is a one-line change (see architecture §12). Add `nightly.yml`: Schemathesis 500 examples, `slow` + `chaos`, firefox/webkit matrix, `--count 5` flaky pass, `.test_durations` refresh. Add `coverage` job combining service coverage.
+> Extend `ci.yml`: `integration` (builds the needed images inside the job with buildx + gha cache, compose up of an explicit service list, `/health` polling, `BASE_URL`, `-n 3`, logs artifact on failure), `smoke` (reuse `smoke.yml` after the stack is up; blocks), `ui-e2e` (Playwright per architecture §9.3: browser cache keyed by Playwright version + `install-deps`, `-n 2`, `-m critical` on PR, full on push to main, traces artifact), `ci-gate` needs all (append every new job to its `needs`). Add a `shard` matrix to `integration` and `ui-e2e` (`shard: [1]` by default, `pytest-split --splits ${{ strategy.job-total }} --group ${{ matrix.shard }}`, `.test_durations` cached) so scale-out is a one-line change (see architecture §12). Add `nightly.yml`: Schemathesis 500 examples, `slow` + `chaos`, firefox/webkit matrix, `--count 5` flaky pass, `.test_durations` refresh. Add `coverage` job combining service coverage.
 > DoD: a PR runs the full DAG green; `needs` prevents e2e when lint fails; artifacts downloadable.
 
 
