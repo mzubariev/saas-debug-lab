@@ -10,4 +10,4 @@ RUN pip install -e "/app/shared[services]"
 
 COPY workers/scheduler-worker/app ./app
 
-# No CMD — command is set in docker-compose.yml; Datadog APM prepends ddtrace-run in docker-compose.datadog.yml.
+# No CMD — command is set in docker-compose.yml.

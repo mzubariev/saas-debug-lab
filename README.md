@@ -174,7 +174,7 @@ cd infra
 docker compose --profile core --profile observability down
 ```
 
-If you used the Datadog override, use the same `-f` files and `--profile` flags with `down`. Use only the profiles you actually started.
+Use only the profiles you actually started.
 
 ---
 

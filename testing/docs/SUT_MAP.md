@@ -125,6 +125,11 @@ Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE
 | webhook-dispatcher, notification-worker | none | `prometheus_client.start_http_server` on `METRICS_PORT` (default 9100) at the start of `main` / `run`, then the consume loop. Not bound at import. |
 | scheduler-worker | none | Same port, but only in one prefork child (`worker_process_init`), not in the beat parent and not at import. |
 | migrations | `service_completed_successfully` | process exit 0 |
+| mailhog | `wget` `http://127.0.0.1:8025/api/v2/messages` | HTTP API |
+| postgres-exporter, kafka-exporter | `wget` `/metrics` on 9187 and 9308 | process metrics |
+| frontend | `node` fetch `http://127.0.0.1:5173/` | Vite dev server on the default image stage |
+
+`infra/test-stack.services` is the explicit test stack (no exporters). `infra/docker-compose.test.yml` selects the frontend `preview` image stage (`vite build` then `vite preview` on port 5173). Toxiproxy has no shell or HTTP client in the image, so it has no healthcheck.
 
 `ASGITransport` does not run `on_event`, so a test that needs Redis or Kafka must enter the app lifespan itself. `get_db` closes over the module-level `SessionLocal` built from the environment at import.
 

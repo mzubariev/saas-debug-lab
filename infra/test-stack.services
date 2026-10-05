@@ -1,0 +1,17 @@
+postgres
+redis
+zookeeper
+kafka
+migrations
+auth-service
+task-service
+webhook-receiver
+webhook-dispatcher
+external-service-simulator
+notification-worker
+scheduler-worker
+api-gateway
+nginx
+mailhog
+toxiproxy
+frontend

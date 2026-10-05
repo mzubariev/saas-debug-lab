@@ -1,6 +1,6 @@
 # Production-prep candidates (P0.1 only)
 
-Behaviour-neutral seams that would remove the obstacles above. Not done in this task.
+Behaviour-neutral seams from recon. Applied in P0.1, except moving OpenTelemetry off import (tests set `OTLP_ENDPOINT=""` and `SENTRY_DSN=""`).
 
 1. Delete the `ddtrace` import in `saas_shared.logging` (and the Sentry `ddtrace` hooks) in the same change as dropping the requirement and `ddtrace-run`. Uninstalling the package alone makes every log line carry `dd_trace_error`.
 2. Call `setup_telemetry` inside lifespan / `main` / `worker_process_init`. An empty `otlp_endpoint` already skips the exporter, but the default is `http://otel-collector:4317`, so import starts `BatchSpanProcessor`. Sentry is already inert when `SENTRY_DSN` is empty. Kafka and Redis already connect only in startup / `main`, not at import.

@@ -1,0 +1,17 @@
+# Test-stack override. Does not change `docker compose --profile core`.
+#
+# Explicit service list (not the whole core profile; exporters stay out):
+# infra/test-stack.services
+#
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build \
+#     $(grep -v '^#' test-stack.services)
+#
+# Frontend uses the Dockerfile `preview` stage (`vite build` then `vite preview`).
+# Workers have no HTTP app; the test kit checks their metrics port.
+
+services:
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+      target: preview
