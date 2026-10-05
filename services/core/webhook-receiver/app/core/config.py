@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
 
     service_name: str = "webhook-receiver"
-    kafka_bootstrap_servers: str = "kafka:9092"
+    kafka_bootstrap_servers: str
 
     # Inbound events published to Kafka for downstream consumers.
     topic_webhook_inbound: str = "webhook_inbound"

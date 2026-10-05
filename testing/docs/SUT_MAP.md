@@ -31,7 +31,7 @@ There is no Flower service in `infra/docker-compose.yml`.
 
 ## JWT
 
-Both `services/core/api-gateway/app/core/config.py` and `services/core/auth-service/app/core/config.py` default `jwt_secret` to `dev-secret-change-in-production` (`JWT_SECRET`). Algorithm is the literal `HS256` in `api-gateway/app/dependencies.py` (`jwt.decode`) and `auth-service/app/services/auth_service.py` (`jwt.encode` / `jwt.decode`). No issuer or audience. Access-token claims are `sub` (username), `role`, `exp`. Lifetime is `token_expire_minutes`, default 30 (`TOKEN_EXPIRE_MINUTES`). Gateway 401 bodies: `Missing authorization header`, `Token expired`, `Invalid token: {exc}`. Auth login 401 body is `Invalid credentials` for an unknown user and for a bad password. Auth decode 401 bodies match the gateway (`Token expired`, `Invalid token: {exc}`).
+Both `services/core/api-gateway/app/core/config.py` and `services/core/auth-service/app/core/config.py` require `jwt_secret` (`JWT_SECRET`). The lab `.env` files set `dev-secret-change-in-production`. Algorithm is the literal `HS256` in `api-gateway/app/dependencies.py` (`jwt.decode`) and `auth-service/app/services/auth_service.py` (`jwt.encode` / `jwt.decode`). No issuer or audience. Access-token claims are `sub` (username), `role`, `exp`. Lifetime is `token_expire_minutes`, default 30 (`TOKEN_EXPIRE_MINUTES`). Gateway 401 bodies: `Missing authorization header`, `Token expired`, `Invalid token: {exc}`. Auth login 401 body is `Invalid credentials` for an unknown user and for a bad password. Auth decode 401 bodies match the gateway (`Token expired`, `Invalid token: {exc}`).
 
 ## Seed users
 
@@ -70,22 +70,22 @@ Base Dockerfiles run uvicorn or `python -m`. Datadog (`ddtrace`, `docker-compose
 
 ## migrations (`migrations/`)
 
-`alembic.ini` has no `sqlalchemy.url`. `script_location = alembic` is relative to the cwd (the image `WORKDIR` is `/app`). `alembic/env.py` builds `postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}`. `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` are required. `POSTGRES_HOST` defaults to `postgres`, `POSTGRES_PORT` to `5432`. It does not read `DATABASE_URL`. Online mode uses an async engine and `pool.NullPool`. Compose service `migrations` runs `alembic upgrade head` once (`restart: "no"`) after postgres is healthy. Head is `0002`. No seed in the revisions.
+`alembic.ini` has no `sqlalchemy.url`. `script_location = alembic` is relative to the cwd (the image `WORKDIR` is `/app`). `alembic/env.py` builds `postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}`. `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and `POSTGRES_HOST` are required. `POSTGRES_PORT` defaults to `5432`. It does not read `DATABASE_URL`. Online mode uses an async engine and `pool.NullPool`. Compose service `migrations` runs `alembic upgrade head` once (`restart: "no"`) after postgres is healthy. Head is `0002`. No seed in the revisions.
 
 ## Connection settings (env vs code default)
 
-"Required" means `Settings()` raises if the variable is missing. A default means a hard-coded host is used when the variable is unset. None of these are read from a single `DATABASE_URL` inside the services (only `scripts/seed_dev.py` uses `DATABASE_URL`).
+"Required" means `Settings()` raises if the variable is missing. Connection hosts have no code default. Ports that are not hosts still default (`POSTGRES_PORT` 5432, `SMTP_PORT` 11025). None of these are read from a single `DATABASE_URL` inside the services (only `scripts/seed_dev.py` uses `DATABASE_URL`). Lab values live in each service `.env` / `.env.example`.
 
 | Setting | api-gateway | auth-service | task-service | webhook-receiver | dispatcher | notification-worker | scheduler-worker |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Postgres | none | required `POSTGRES_HOST`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`; port default 5432. DSN `postgresql+asyncpg` | same shape, all four required, no `service_name` default | none | none | none | same four required; DSN `postgresql+psycopg2`; port default 5432 |
-| Redis | none | `REDIS_URL` default `redis://redis:6379/1` | `REDIS_URL` default `redis://redis:6379/0` | none | none | none | `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND` default `redis://redis:6379/2` |
-| Kafka | none | none | `KAFKA_BOOTSTRAP_SERVERS` required, no default | default `kafka:9092` | default `kafka:9092` | required, no default | default `kafka:9092` |
-| `WEBHOOK_URL` | none | none | none | none | default `http://nginx/external/receive-webhook` | none | same default |
-| `JWT_SECRET` | default `dev-secret-change-in-production` | same default | none | none | none | none | none |
-| SMTP host | none | none | none | none | none | `SMTP_HOST` default `toxiproxy`, port default `11025` | none |
+| Redis | none | `REDIS_URL` required (lab DB index 1) | `REDIS_URL` required (lab DB index 0) | none | none | none | `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND` required (lab DB index 2) |
+| Kafka | none | none | `KAFKA_BOOTSTRAP_SERVERS` required | required | required | required | required |
+| `WEBHOOK_URL` | none | none | none | none | required | none | required |
+| `JWT_SECRET` | required | required | none | none | none | none | none |
+| SMTP host | none | none | none | none | none | `SMTP_HOST` required, port default `11025` | none |
 
-Other URL defaults: gateway `AUTH_SERVICE_URL` `http://auth-service:8000`, `INTEGRATION_SERVICE_URL` `http://webhook-receiver:8000`, `TASK_SERVICE_URL` required. Simulator `INTEGRATION_SERVICE_WEBHOOK_URL` default `http://localhost/webhooks/inbound`. Every FastAPI service, webhook-dispatcher, and both workers default `OTLP_ENDPOINT` to `http://otel-collector:4317`. Alembic host default is `postgres` (table above does not apply).
+Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE_URL`, `TASK_SERVICE_URL`; simulator `INTEGRATION_SERVICE_WEBHOOK_URL`. Alembic requires `POSTGRES_HOST` (`POSTGRES_PORT` still defaults to `5432`). Every FastAPI service, webhook-dispatcher, and both workers still default `OTLP_ENDPOINT` to `http://otel-collector:4317` (tests set it empty; not a connection seam).
 
 ## Hard-coded timings
 

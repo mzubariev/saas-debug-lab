@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
 
     service_name: str = "auth-service"
-    jwt_secret: str = "dev-secret-change-in-production"
+    jwt_secret: str
     token_expire_minutes: int = 30
 
     postgres_host: str
@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     postgres_user: str
     postgres_password: str
 
-    redis_url: str = "redis://redis:6379/1"
+    redis_url: str
     otlp_endpoint: str = "http://otel-collector:4317"
     log_level: str = "INFO"
     sentry_dsn: str = ""

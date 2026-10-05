@@ -5,9 +5,9 @@ class Settings(BaseSettings):
 
     service_name: str = "api-gateway"
     task_service_url: str
-    auth_service_url: str = "http://auth-service:8000"
-    integration_service_url: str = "http://webhook-receiver:8000"
-    jwt_secret: str = "dev-secret-change-in-production"
+    auth_service_url: str
+    integration_service_url: str
+    jwt_secret: str
     gateway_timeout: float = 5.0
     otlp_endpoint: str = "http://otel-collector:4317"
     log_level: str = "INFO"

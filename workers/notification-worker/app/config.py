@@ -11,11 +11,8 @@ class Settings(BaseSettings):
 
     metrics_port: int = 9100
 
-    # SMTP delivery settings.
-    # Default: Toxiproxy → MailHog (no auth, catches all mail locally).
-    # Swap to a real provider (e.g. smtp.gmail.com:587 with STARTTLS) to deliver
-    # to actual inboxes such as emailhook.site.
-    smtp_host: str = "toxiproxy"
+    # SMTP delivery settings. Host comes from SMTP_HOST (lab: Toxiproxy → MailHog).
+    smtp_host: str
     smtp_port: int = 11025
     smtp_use_tls: bool = False       # Implicit TLS from first byte (port 465)
     smtp_use_starttls: bool = False  # Upgrade plain connection to TLS (port 587)

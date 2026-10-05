@@ -4,10 +4,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
 
     service_name: str = "webhook-dispatcher"
-    kafka_bootstrap_servers: str = "kafka:9092"
+    kafka_bootstrap_servers: str
     consumer_group: str = "webhook-dispatcher"
 
-    webhook_url: str = "http://nginx/external/receive-webhook"
+    webhook_url: str
     webhook_timeout: int = 10
     max_retries: int = 3
 

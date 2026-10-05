@@ -14,10 +14,9 @@ class Settings(BaseSettings):
     # Sentry error tracking. Leave empty to disable.
     sentry_dsn: str = ""
 
-    # Celery broker and result backend.
-    # Uses Redis DB 2 (DB 0 = task-service cache, DB 1 = auth-service cache).
-    celery_broker_url: str = "redis://redis:6379/2"
-    celery_result_backend: str = "redis://redis:6379/2"
+    # Celery broker and result backend (lab uses Redis DB 2).
+    celery_broker_url: str
+    celery_result_backend: str
 
     # Postgres — used by cleanup_old_tasks.
     postgres_host: str
@@ -27,12 +26,12 @@ class Settings(BaseSettings):
     postgres_password: str
 
     # Kafka — used by retry_failed_webhooks to drain the DLQ topic.
-    kafka_bootstrap_servers: str = "kafka:9092"
+    kafka_bootstrap_servers: str
 
     # Webhook delivery target — used by retry_failed_webhooks.
     # Should match webhook-dispatcher’s WEBHOOK_URL so retried events
     # reach the same endpoint as the original delivery attempts.
-    webhook_url: str = "http://nginx/external/receive-webhook"
+    webhook_url: str
     webhook_timeout: int = 10
 
     # Tasks completed more than this many minutes ago will be deleted by
