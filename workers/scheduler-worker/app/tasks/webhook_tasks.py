@@ -1,5 +1,3 @@
-from contextlib import nullcontext
-
 import httpx
 import sentry_sdk
 import structlog
@@ -8,7 +6,6 @@ from opentelemetry.trace import SpanKind
 from structlog.contextvars import bound_contextvars
 
 from saas_shared.prometheus_metrics import dlq_retry_result_total
-from saas_shared.tracing_env import is_otel_sdk_enabled
 
 from ..core.celery import celery_app
 from ..core.config import settings
@@ -27,13 +24,11 @@ def retry_failed_webhooks(self) -> dict:
     before the next Beat tick. Actual HTTP delivery happens in worker subprocesses.
     """
     with bound_contextvars(request_id=self.request.id, task="retry_failed_webhooks"):
-        if is_otel_sdk_enabled():
-            with _tracer.start_as_current_span(
-                "celery.job.retry_failed_webhooks",
-                kind=SpanKind.INTERNAL,
-            ):
-                return webhook_retry_service.process_dlq()
-        return webhook_retry_service.process_dlq()
+        with _tracer.start_as_current_span(
+            "celery.job.retry_failed_webhooks",
+            kind=SpanKind.INTERNAL,
+        ):
+            return webhook_retry_service.process_dlq()
 
 
 @celery_app.task(
@@ -84,21 +79,15 @@ def retry_single_webhook(
         max_attempts=self.max_retries + 1,
     )
 
-    span_cm = (
-        _tracer.start_as_current_span(
-            "celery.dlq.retry_single_webhook",
-            kind=SpanKind.INTERNAL,
-            attributes={
-                "dlq.task_id": str(task_id),
-                "dlq.event_type": str(event_type),
-                "dlq.attempt": self.request.retries + 1,
-            },
-        )
-        if is_otel_sdk_enabled()
-        else nullcontext()
-    )
-
-    with span_cm:
+    with _tracer.start_as_current_span(
+        "celery.dlq.retry_single_webhook",
+        kind=SpanKind.INTERNAL,
+        attributes={
+            "dlq.task_id": str(task_id),
+            "dlq.event_type": str(event_type),
+            "dlq.attempt": self.request.retries + 1,
+        },
+    ):
         try:
             resp = post_json_sync(
                 settings.webhook_url,

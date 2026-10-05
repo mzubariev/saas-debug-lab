@@ -10,7 +10,7 @@ integrations stay enabled (do not pass ``integrations=[]``).
 
 1. *Bridge middleware* (FastAPI services only): a thin ``BaseHTTPMiddleware`` added
    to the ``FastAPI`` app by :func:`setup_sentry_fastapi` when called with ``app=``.
-   It runs while the OTel/DD span is still live (the OTel middleware is outer/LIFO),
+   It runs while the OTel span is still live (the OTel middleware is outer/LIFO),
    reads the active trace ID, and stamps the Sentry *isolation scope* for that request.
    This covers both error events **and** performance transactions.
 
@@ -20,9 +20,6 @@ integrations stay enabled (do not pass ``integrations=[]``).
 
 When OpenTelemetry is active (``saas_shared.telemetry``), tag ``otel_trace_id``
 (32 lowercase hex) matches Jaeger / Kibana / OTLP.
-
-When Datadog APM is active (``DD_TRACE_ENABLED`` / ``ddtrace``), tag ``dd_trace_id``
-(decimal string, same as ``dd.trace_id`` in logs) correlates with the Datadog trace UI.
 
 **Observability context — clickable links in every Sentry event:**
 
@@ -113,21 +110,6 @@ def _inject_otel_trace_id_tag(event: dict[str, Any]) -> None:
     event.setdefault("tags", {})["otel_trace_id"] = format(ctx.trace_id, "032x")
 
 
-def _inject_dd_trace_id_tag(event: dict[str, Any]) -> None:
-    """Attach current Datadog trace id to a Sentry event ``tags`` dict (before_send hook)."""
-    try:
-        from ddtrace import tracer  # type: ignore[import-untyped]
-    except ImportError:
-        return
-    span = tracer.current_span()
-    if span is None or span.context is None:
-        return
-    tid = span.context.trace_id
-    if not tid:
-        return
-    event.setdefault("tags", {})["dd_trace_id"] = str(tid)
-
-
 def _inject_otel_trace_id_to_scope() -> None:
     """Set ``otel_trace_id`` tag and ``observability`` context on the current Sentry scope."""
     try:
@@ -140,21 +122,6 @@ def _inject_otel_trace_id_to_scope() -> None:
     trace_id = format(ctx.trace_id, "032x")
     sentry_sdk.set_tag("otel_trace_id", trace_id)
     sentry_sdk.set_context("observability", _observability_context(trace_id))
-
-
-def _inject_dd_trace_id_to_scope() -> None:
-    """Set ``dd_trace_id`` on the current Sentry isolation scope while span is live."""
-    try:
-        from ddtrace import tracer  # type: ignore[import-untyped]
-    except ImportError:
-        return
-    span = tracer.current_span()
-    if span is None or span.context is None:
-        return
-    tid = span.context.trace_id
-    if not tid:
-        return
-    sentry_sdk.set_tag("dd_trace_id", str(tid))
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +148,6 @@ def _before_send_correlation(event: dict[str, Any], hint: object) -> dict[str, A
     if _is_otel_infra_noise(hint):
         return None
     _inject_otel_trace_id_tag(event)
-    _inject_dd_trace_id_tag(event)
     trace_id = event.get("tags", {}).get("otel_trace_id")
     if trace_id:
         event.setdefault("contexts", {})["observability"] = _observability_context(trace_id)
@@ -192,7 +158,6 @@ def _before_send_transaction_correlation(
     event: dict[str, Any], hint: object
 ) -> dict[str, Any] | None:
     _inject_otel_trace_id_tag(event)
-    _inject_dd_trace_id_tag(event)
     return event
 
 
@@ -229,7 +194,6 @@ def _install_otel_bridge(app: object) -> None:
     class _TraceIdBridgeMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request: Request, call_next) -> Response:
             _inject_otel_trace_id_to_scope()
-            _inject_dd_trace_id_to_scope()
             return await call_next(request)
 
     app.add_middleware(_TraceIdBridgeMiddleware)  # type: ignore[union-attr]
@@ -252,7 +216,7 @@ def setup_sentry_fastapi(
         service_name: Value for the ``service`` Sentry tag.
         dsn:          Sentry DSN; pass an empty string to disable.
         httpx:        Set ``True`` for api-gateway to trace outbound HTTP calls.
-        app:          The ``FastAPI`` instance.  When provided the OTel/DD bridge
+        app:          The ``FastAPI`` instance.  When provided the OTel bridge
                       middleware is installed.  Must be passed *before*
                       ``setup_telemetry`` is called so OTel ends up outer (LIFO).
     """

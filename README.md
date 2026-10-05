@@ -48,7 +48,7 @@ Edit `**infra/.env**` and set at least:
 | `POSTGRES_DB`       | Database name (lab examples use `saas`)      |
 
 
-Keep these values consistent with the `**DATABASE_URL**` you use for seeding (step 5). Optional: `SENTRY_DSN`. For **Datadog APM**, set `DD_API_KEY` (and optionally `DD_SITE`, `DD_ENV`, `DD_VERSION`) when using `[infra/docker-compose.datadog.yml](infra/docker-compose.datadog.yml)` — see **Tracing modes** below.
+Keep these values consistent with the `**DATABASE_URL**` you use for seeding (step 5). Optional: `SENTRY_DSN`.
 
 ### 3. Start the stack
 
@@ -69,18 +69,7 @@ This starts Nginx, api-gateway, auth-service, task-service, webhook-receiver, we
 docker compose --profile core --profile observability up -d
 ```
 
-**Tracing modes** (pick **one** — do not combine `observability` with the Datadog override):
-
-
-| Mode                                                      | Command (from `infra/`)                                                                                     |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| **OpenTelemetry → Collector → Jaeger**                    | `docker compose --profile core --profile observability up -d`                                               |
-| **Datadog APM** (`ddtrace-run` only; no Jaeger/Collector) | `docker compose -f docker-compose.yml -f docker-compose.datadog.yml --profile core --profile datadog up -d` |
-
-
-For Datadog, set `DD_API_KEY` in `**infra/.env`**. Switching modes is done **only** via compose files, never by mixing env vars.
-
-Wait until containers are healthy (`docker compose ps`).
+Tracing is OpenTelemetry to the Collector and Jaeger (`observability` profile). Wait until containers are healthy (`docker compose ps`).
 
 ### 4. API entry point
 
@@ -235,17 +224,16 @@ For ports, envelopes, and request diagrams, see `[docs/system-architechture/SERV
 
 - **Logging** — structured JSON (structlog); **Fluent Bit → Elasticsearch → Kibana**
 - **Metrics** — **Prometheus** scrapes FastAPI services (`/metrics`), **external-service-simulator**, worker endpoints on **9100** (webhook-dispatcher, notification-worker, scheduler-worker), **kafka-exporter** (:9308), and **postgres-exporter** (:9187). **Grafana** loads provisioned dashboards and alert rules from `observability/grafana/provisioning/`.
-- **Tracing** — **OpenTelemetry** → **Collector** → **Jaeger** (with the `observability` profile) in services and the frontend (`frontend/src/telemetry.ts`). **Datadog APM** is a separate compose path only (`[infra/docker-compose.datadog.yml](infra/docker-compose.datadog.yml)`).
+- **Tracing** — **OpenTelemetry** → **Collector** → **Jaeger** (with the `observability` profile) in services and the frontend (`frontend/src/telemetry.ts`).
 - **Errors (optional)** — **Sentry** across FastAPI apps, workers, and the React SPA when `SENTRY_DSN` / `VITE_SENTRY_DSN` are set; shared initialisation lives in `shared/saas_shared/sentry_setup.py`
 
 
 
-### Tracing modes (one primary tracer per process)
+### Tracing
 
-- **OpenTelemetry + Jaeger** — Base compose + `**observability`** profile. Apps export OTLP to `otel-collector:4317`; OTEL auto-instrumentation (FastAPI, httpx, Redis, SQLAlchemy), W3C Kafka headers, semantic Kafka spans (`saas_shared.kafka_messaging`). `DD_TRACE_ENABLED` is not set.
-- **Datadog APM** — Base compose + `**docker-compose.datadog.yml`** + `**datadog`** profile. `ddtrace-run` on service commands; OTEL SDK registration in app code is **skipped** (`DD_TRACE_ENABLED=true` is set only by that override file). Do **not** start Jaeger or the OTel Collector in this mode.
+Base compose + the `**observability**` profile. Apps export OTLP to `otel-collector:4317`; OTEL auto-instrumentation (FastAPI, httpx, Redis, SQLAlchemy), W3C Kafka headers, semantic Kafka spans (`saas_shared.kafka_messaging`).
 
-**End-to-end check (OpenTelemetry):** Log in on the UI → create a task → follow one `**trace_id`** in JSON logs (Kibana) and the same trace in Jaeger: expect spans for nginx ingress (via gateway), HTTP client hops, Postgres (SQLAlchemy), Kafka produce/consume (named + semantic attributes), worker processing, and outbound webhook HTTP.
+**End-to-end check:** Log in on the UI → create a task → follow one `**trace_id`** in JSON logs (Kibana) and the same trace in Jaeger: expect spans for nginx ingress (via gateway), HTTP client hops, Postgres (SQLAlchemy), Kafka produce/consume (named + semantic attributes), worker processing, and outbound webhook HTTP.
 
 ---
 

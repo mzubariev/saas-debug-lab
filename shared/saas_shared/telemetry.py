@@ -1,13 +1,9 @@
 """OpenTelemetry: W3C propagation, OTLP export (Jaeger via Collector in Docker).
 
-**Default (base ``docker-compose.yml``):** OpenTelemetry only — OTLP to ``otel-collector:4317``,
-FastAPI/httpx/redis/sqlalchemy instrumentors. Use the ``observability`` profile for Jaeger + Collector.
-
-**Datadog APM (``docker-compose.datadog.yml`` override):** Set only via that compose file:
-``DD_TRACE_ENABLED=true`` and ``ddtrace-run`` on process commands. This module skips OTEL SDK
-registration when ``saas_shared.tracing_env.is_datadog_apm_enabled()`` is true.
-
-Do **not** run OTEL export and ddtrace in the same process.
+Base ``docker-compose.yml`` exports OTLP to ``otel-collector:4317`` and installs the
+FastAPI/httpx/redis/sqlalchemy instrumentors. Use the ``observability`` profile for Jaeger
+and the Collector. An empty ``otlp_endpoint`` skips the exporter and still installs the
+client instrumentors.
 """
 from __future__ import annotations
 
@@ -27,12 +23,6 @@ from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapProp
 _log = structlog.get_logger(__name__)
 
 
-def _datadog_apm_only() -> bool:
-    from saas_shared.tracing_env import is_datadog_apm_enabled
-
-    return is_datadog_apm_enabled()
-
-
 def _install_propagators() -> None:
     set_global_textmap(
         CompositePropagator(
@@ -50,14 +40,6 @@ def setup_tracer_provider(
     otlp_endpoint: str,
 ) -> None:
     """Configure global propagators and ``TracerProvider`` with an OTLP gRPC exporter."""
-    if _datadog_apm_only():
-        _log.info(
-            "otel_sdk_skipped",
-            service=service_name,
-            reason="DD_TRACE_ENABLED (Datadog APM / ddtrace-run)",
-        )
-        return
-
     _install_propagators()
 
     ep = (otlp_endpoint or "").strip()
@@ -99,8 +81,6 @@ def _instrument_client_libraries() -> None:
 
 def instrument_sqlalchemy_async_engine(async_engine: object) -> None:
     """Attach SQLAlchemy 2 async engine to OTEL (spans for DB statements)."""
-    if _datadog_apm_only():
-        return
     try:
         from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 
@@ -112,8 +92,6 @@ def instrument_sqlalchemy_async_engine(async_engine: object) -> None:
 
 def instrument_sqlalchemy_sync_engine(engine: object) -> None:
     """Attach a sync SQLAlchemy engine (e.g. Celery worker DB)."""
-    if _datadog_apm_only():
-        return
     try:
         from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 
@@ -129,8 +107,6 @@ def setup_telemetry(
 ) -> None:
     """FastAPI services: OTLP export + ``FastAPIInstrumentor``."""
     setup_tracer_provider(service_name=service_name, otlp_endpoint=otlp_endpoint)
-    if _datadog_apm_only():
-        return
     FastAPIInstrumentor.instrument_app(app)
 
 

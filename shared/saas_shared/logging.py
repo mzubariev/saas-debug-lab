@@ -27,10 +27,10 @@ Standard fields on every line:
     - ``service`` — logical service name (same value as ``service_name`` for compatibility)
     - ``message`` — human-oriented line (copy of structlog's ``event`` key)
 
-Optional when available (contextvars / OTEL / ddtrace):
+Optional when available (contextvars / OTEL):
     - ``trace_id``, ``span_id`` — W3C / OTEL
     - ``request_id`` — HTTP middleware or worker-bound correlation id
-    - ``hostname``, ``dd.*`` — see processors below
+    - ``hostname`` — see processors below
 
 Application code should use only ``structlog.get_logger()`` — never ``print(json.dumps(...))``
 for operational logs.
@@ -119,32 +119,6 @@ def _add_service_fields(service_name: str) -> Callable[..., EventDict]:
         return event_dict
 
     return processor
-
-
-def _inject_dd_trace_context(
-    _logger: Any, _method: str, event_dict: EventDict
-) -> EventDict:
-    """Datadog APM fields only when ddtrace has an active span (never merged into ``trace_id``)."""
-    try:
-        from ddtrace import tracer  # type: ignore[import-untyped]
-
-        span = tracer.current_span()
-        if span is None or span.context is None:
-            return event_dict
-        ctx = span.context
-        dd_tid = str(ctx.trace_id)
-        if not dd_tid:
-            return event_dict
-        event_dict["dd.trace_id"] = dd_tid
-        event_dict["dd.span_id"] = str(span.span_id)
-        if span.service:
-            event_dict["dd.service"] = span.service
-        env_tag = span.get_tag("env")
-        if env_tag:
-            event_dict["dd.env"] = env_tag
-    except Exception as e:  # noqa: BLE001
-        event_dict["dd_trace_error"] = str(e)
-    return event_dict
 
 
 def _add_level_name(_logger: Any, method_name: str, event_dict: EventDict) -> EventDict:
@@ -278,7 +252,6 @@ def setup_logging(*, service_name: str, log_level: str = "INFO") -> None:
             _add_level_name,
             _add_hostname(),
             _add_service_fields(service_name),
-            _inject_dd_trace_context,
             _add_trace_id,
             _utc_iso_timestamp,
             _event_to_ecs,

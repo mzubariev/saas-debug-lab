@@ -60,13 +60,13 @@ Installed in every Python image as `pip install -e /app/shared[services]` (migra
 | `metrics.py` | `GET /metrics`, `include_in_schema=False`. OpenMetrics when `Accept` contains `application/openmetrics-text`, else Prometheus text. |
 | `prometheus_metrics.py` | Process-global counters, histograms, gauges. Import sets `machine_cpu_cores` and `container_memory_limit_bytes` (0 when cgroup files are absent). |
 | `prometheus_http.py` | HTTP middleware. Path label replaces UUIDs and integer segments with `{id}` and strips a trailing slash. Skips `/metrics`. |
-| `telemetry.py` | `setup_telemetry` / `setup_worker_telemetry` build a `TracerProvider`, `BatchSpanProcessor`, and OTLP gRPC exporter unless `DD_TRACE_ENABLED` is `1`/`true`/`yes`/`on` (`tracing_env.py`). With the flag unset, FastAPI setup also calls `FastAPIInstrumentor.instrument_app`. An empty `otlp_endpoint` skips the exporter and still installs the client instrumentors. |
+| `telemetry.py` | `setup_telemetry` / `setup_worker_telemetry` build a `TracerProvider`, `BatchSpanProcessor`, and OTLP gRPC exporter. FastAPI setup also calls `FastAPIInstrumentor.instrument_app`. An empty `otlp_endpoint` skips the exporter and still installs the client instrumentors. |
 | `sentry_setup.py` | Empty `dsn` returns before `sentry_sdk.init`. `traces_sample_rate=0.1` when a DSN is set. |
-| `logging.py` | `setup_logging` configures structlog JSON on stdout. The `ddtrace` import runs inside the processor, the first time a log event is rendered. |
+| `logging.py` | `setup_logging` configures structlog JSON on stdout. No Datadog fields. |
 | `redis_cache.py` | `start_redis` sets `app.state.redis`. Cache get/set/delete swallow errors and log a warning. |
 | `models/` | `User` table `users` (`id`, `username` unique, `hashed_password`, `role` default `user`). `Task` table `tasks` (`id` UUID, `title`, `status` enum `taskstatus`: `created`, `in_progress`, `completed`, `created_at`, `updated_at`). Indexes `ix_tasks_status`, `ix_tasks_created_at`. |
 
-`ddtrace` is not imported by `setup_telemetry`. Base Dockerfiles run uvicorn or `python -m` with no `ddtrace-run`. `infra/docker-compose.datadog.yml` is the file that prefixes commands with `ddtrace-run`.
+Base Dockerfiles run uvicorn or `python -m`. Datadog (`ddtrace`, `docker-compose.datadog.yml`, `ddtrace-run`) is removed.
 
 ## migrations (`migrations/`)
 
@@ -133,7 +133,6 @@ Other URL defaults: gateway `AUTH_SERVICE_URL` `http://auth-service:8000`, `INTE
 - nginx limits by the `Authorization` value. One shared bearer token is one `20r/s` bucket on `location /`. `/auth/token` carries no `Authorization` header, so its key is empty and nginx does not account it: the `5r/m` limit is probably inactive (BUG-1 candidate, confirm in P6.2). `/auth/me` is not limited. `/webhooks/` is `20r/s` burst 20 `nodelay`, not the `location /` burst of 100.
 - `GET /ready` stays 200 when Redis, Kafka, or Postgres is down. Compose treats that as healthy for the FastAPI services.
 - Importing any FastAPI `app.main` starts `OtelBatchSpanRecordProcessor` and it tries `OTLP_ENDPOINT` (`http://otel-collector:4317` if unset). The scratch run logged `StatusCode.UNAVAILABLE` for that DNS name after `/openapi.json`.
-- `ddtrace` is not loaded by `import app.main`. The first structlog line imports it when the package is installed. If the package is absent, `_inject_dd_trace_context` catches the error and adds `dd_trace_error` to that log line.
 - Every service package is named `app`. Two services cannot be imported in one process. `prometheus_metrics` registers global collectors at import. Scheduler import sets `PROMETHEUS_MULTIPROC_DIR` and creates that directory.
 - `requirements.txt` does not pin SQLAlchemy and does not list the OTEL SDK. This venv resolved SQLAlchemy 2.1.3, and the SQLAlchemy instrumentor then instrumented nothing. Import still succeeded. Images only import because the Dockerfile installs `shared[services]`.
 - Gateway OpenAPI has duplicate operation IDs (warning, HTTP 200).
