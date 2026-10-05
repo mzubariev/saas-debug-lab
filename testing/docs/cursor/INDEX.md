@@ -1,31 +1,42 @@
-# Cursor pack: what to attach when
-Placement: rules/*.mdc -> .cursor/rules/ ; docs/*.md and plan/*.md -> testing/docs/cursor/. Human docs stay in testing/docs/.
-Per task chat: paste plan/01-prompt-template.md, then the phase file (plan/pN-*.md) and the docs from its Attach line. Rules attach by glob (never paste).
+# Cursor pack: what to attach and when
 
-Design docs (design/ folder):
-- arch-adr.md: goals, terms, ADR 1-18
-- arch-layers-layout.md: pyramid, layer matrix, repo layout, SUT cheat sheet
-- arch-core-infra.md: root conftest, template DB, worker DB, Redis, Postgres tuning, component app, helpers
-- arch-adapters-factories.md: adapters, flows, Polyfactory
-- arch-integration.md: compose test stack, seed/login, WireMock, integration scenarios S1-S5
-- arch-ci.md: CI design, ci.yml skeleton (ci-gate), Playwright in CI, scaling
-- arch-quality.md: security, flake policy, risks + fallbacks (time-boxes), anti-patterns
-- cat-component.md, cat-contract.md, cat-ui.md, cat-smoke-synthetic.md: test catalogues per layer
+Layout in the repository:
+- `.cursor/rules/*.mdc`: the four rules (from `rules/`).
+- `testing/docs/cursor/`: this file, `design/`, `plan/`, and later `KIT_MAP.md`.
+- `testing/docs/`: the human documents `TESTING_ARCHITECTURE.md` and `IMPLEMENTATION_PLAN.md` (both ignored by `.cursorignore`) and `SUT_MAP.md` (created in P0).
 
-Task -> files (plan/ folder):
-- P0 recon: lab docs only (no pack docs)
-- P0.1: SUT_MAP + testing-modify-prod.mdc (@)
-- P0.2: arch-adr, arch-layers-layout
-- P1: arch-adr, arch-core-infra, arch-adapters-factories, SUT_MAP
-- P2: arch-adapters-factories, SUT_MAP
-- P3.x: cat-component (service line), SUT_MAP, service files
-- P4: cat-contract, SUT_MAP, arch-quality (Schemathesis row)
-- P5: arch-ci (§9, §9.2)
-- P6: arch-integration, SUT_MAP
-- P7: cat-ui, SUT_MAP, frontend/src
-- P8: cat-smoke-synthetic
-- P9: arch-ci
-- P10, E, F: plan/p10-polish-after.md
-- Design question mid-task: the one relevant arch-*.md, not all.
+This pack is the source of truth for agents. The two human documents were synchronised with it once, at the revision of October 2026. After that, edit the pack first and update the human documents only when you want them current; do not maintain both by hand in parallel.
 
-Where rules live: testing-core.mdc = invariants that apply to every file in testing/** (scope, layer dirs, test bodies, data/isolation, fixtures, quality gates, time-box). Docs = rationale, skeletons, catalogues, CI. A fact is stored in one place; docs point to the rule instead of repeating it.
+## How to run a task
+1. Open a new chat named after the phase.
+2. Paste `plan/01-prompt-template.md` and fill it in from the phase file.
+3. Attach the files named in the phase file's `Attach:` line, plus `SUT_MAP.md` and (from P3 on) `KIT_MAP.md`. Rules attach by glob, and `@testing-core.mdc` is already in the template.
+
+## Design documents (`design/`)
+- `arch-adr.md`: goals, terms and ADR 1 to 18.
+- `arch-layers-layout.md`: pyramid, layer matrix, repository layout and the provisional SUT cheat sheet.
+- `arch-core-infra.md`: root conftest, template database, worker database, Redis, Postgres tuning, the component app and helpers.
+- `arch-adapters-factories.md`: adapters, flows and Polyfactory.
+- `arch-integration.md`: the compose test stack, seed and login, WireMock and integration scenarios S1 to S5.
+- `arch-ci.md`: CI design, the `ci.yml` skeleton with `ci-gate`, Playwright in CI and the scaling model.
+- `arch-quality.md`: security testing, flake policy, risks with fallbacks and time-boxes, and anti-patterns.
+- `cat-component.md`, `cat-contract.md`, `cat-ui.md`, `cat-smoke-synthetic.md`: test catalogues per layer.
+
+## Task to files
+- P0 recon: the lab's own docs only (README, ARCHITECTURE, FILE_STRUCTURE, SERVICE_MAP). No pack documents.
+- P0.1: SUT_MAP and `testing-modify-prod.mdc` (with `@`).
+- P0.2: `arch-adr`, `arch-layers-layout`.
+- P1: `arch-adr`, `arch-core-infra`, `arch-adapters-factories`, SUT_MAP.
+- P2: `arch-adapters-factories`, SUT_MAP.
+- P3.x: `cat-component` (the service's line), SUT_MAP, KIT_MAP and the service files.
+- P4: `cat-contract`, SUT_MAP, KIT_MAP and the Schemathesis row of `arch-quality` section 11.
+- P5: `arch-ci` (sections 9 and 9.2).
+- P6: `arch-integration`, SUT_MAP, KIT_MAP.
+- P7: `cat-ui`, SUT_MAP, KIT_MAP and `frontend/src`.
+- P8: `cat-smoke-synthetic`, KIT_MAP.
+- P9: `arch-ci` (all), KIT_MAP.
+- P10, E, F: `plan/p10-polish-after.md`.
+- A design question in the middle of a task: attach the one relevant design document, not all of them.
+
+## Where a fact lives
+`testing-core.mdc` holds policy that applies to every file in `testing/**`. `SUT_MAP.md` holds facts about the system under test. `KIT_MAP.md` holds what the testkit offers. The design documents hold rationale, skeletons, catalogues and CI. Each fact lives in one place, and documents point to the rule instead of repeating it.

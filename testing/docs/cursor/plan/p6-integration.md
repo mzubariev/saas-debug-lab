@@ -1,7 +1,15 @@
-# P6 - Integration stack + tests
-Attach: arch-integration.md, SUT_MAP.md.
-- P6.1 (strong model): infra/docker-compose.test.yml (gateway published on :8001, WireMock, WEBHOOK_URL of dispatcher AND scheduler -> WireMock, timing knobs, postgres with ADR-18 command + tmpfs; nginx is not relaxed), explicit service list, /health polling, src/saas_testkit/infra/compose.py (BASE_URL env-or-up, KEEP_STACK), seed + login once per run (FileLock, token file with expiry check), adapters: Kafka reader, MailHog, WireMock, real-network HttpTaskApi/HttpAuthApi, tests/integration/conftest.py.
-  DoD: `make stack-up` healthy; one test (login -> create task -> task readable) green with -n 3.
-- P6.2 integration/services: health via gateway, auth->gateway->task JWT flow, nginx dedicated (serial), /metrics series.
-- P6.3 integration/scenarios: S1, S3, S4 first (fast); S2 and S5 marked slow/chaos.
-DoD (P6.2-P6.3): `make t-int` green 2x, no test uses sleep, all data unique, works with KEEP_STACK=1.
+# P6: Integration stack and tests
+Attach: `design/arch-integration.md`, `SUT_MAP.md` and `KIT_MAP.md`.
+
+## P6.1 (strong model): the stack and its helpers
+Must do: create `infra/docker-compose.test.yml` with the gateway published on `:8001`, WireMock, `WEBHOOK_URL` of both the dispatcher and the scheduler pointing at WireMock, the timing knobs, and Postgres with the ADR-18 `command` and tmpfs; nginx is not relaxed. Define the explicit service list. Implement `src/saas_testkit/infra/compose.py` with `BASE_URL` (environment or bring-up) and `KEEP_STACK`, and with readiness checked per service kind (FastAPI `/health`, workers `:9100/metrics`, migrations exit code 0, a hard timeout and `docker compose logs --tail` on failure). Seed and log in once per run (FileLock, token file with an expiry check). Add the adapters (Kafka reader, MailHog, WireMock, the real-network `HttpTaskApi` and `HttpAuthApi`) and `tests/integration/conftest.py`. Update `KIT_MAP.md`.
+
+Definition of done: `make stack-up` is healthy; one test (login, create a task, read the task) is green with `-n 3`; `KIT_MAP.md` lists the integration fixtures.
+
+## P6.2 integration/services
+Cover health through the gateway, the auth to gateway to task JWT flow, the nginx edge tests (dedicated, marked `@pytest.mark.xdist_group("serial")`, run with `--dist loadgroup`; the auth-burst test is characterised and will likely become BUG-1), and the `/metrics` series.
+
+## P6.3 integration/scenarios
+Write S1, S3 and S4 first (they are fast). Mark S2 as `slow` and S5 as `chaos`.
+
+Definition of done for P6.2 and P6.3: `make t-int` is green twice, no test uses `sleep`, all data is unique, and the suite works with `KEEP_STACK=1`.

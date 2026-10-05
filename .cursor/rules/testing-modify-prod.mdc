@@ -3,24 +3,26 @@ description: Policy for small behaviour-neutral production changes that make cod
 alwaysApply: false
 ---
 # Testability changes in production code
-Owner allows small production edits only to make code testable. Prefer a small prod seam over a fragile test-side hack.
+
+The owner allows small production edits only when they make code testable. A small production seam is better than a fragile test-side hack.
 
 ## Allowed (behaviour-neutral)
-- Connections/settings from env (DB/Redis/Kafka URLs, WEBHOOK_URL, secrets, SMTP host) instead of hard-coded values; defaults keep current behaviour.
-- Timing knobs via env (retry/backoff, beat and cleanup intervals), current values as defaults.
-- Move import-time side effects (Kafka connect, Sentry/OTel init, metrics registration) to lifespan/startup; inert without env.
-- A Depends() or constructor-injected dependency where a seam is genuinely needed (default keeps current behaviour).
-- Compose healthchecks; frontend accessible names / data-testid; production frontend build target.
-- Remove Datadog.
+- Read connections and settings from the environment (database, Redis and Kafka URLs, `WEBHOOK_URL`, secrets, SMTP host) instead of hard-coding them. The defaults must keep the current behaviour.
+- Expose timing knobs through the environment (retry and backoff, beat and cleanup intervals), with the current values as defaults.
+- Move import-time side effects (Kafka connect, Sentry or OTel initialisation, metrics registration) into lifespan or startup code, so that the module is inert without environment configuration.
+- Add a `Depends()` or constructor-injected dependency where a seam is genuinely needed; the default keeps the current behaviour.
+- Add compose healthchecks, frontend accessible names or `data-testid`, and a production frontend build target.
+- Remove Datadog (done once, in P0.1).
+- Keep production edits compatible with the Python version the service image runs (3.11 until R0), as `python-style.mdc` describes.
 
 ## Not allowed
-Behaviour changes, bug fixes, renames, moving files, restructuring, new features, formatting-only churn: refactoring phase, with these tests as the safety net.
+Do not change behaviour, fix bugs, rename things, move files, restructure code, add features or make formatting-only changes. All of that belongs to the refactoring phase, where these tests act as the safety net.
 
 ## Procedure
-1. One line: what is missing and why a test-side patch is worse (use a seam when the patch would cost >30 min).
-2. Smallest possible change; default behaviour identical.
-3. Run existing checks (service starts, /health, manual lab smoke).
-4. Separate commit, prefix `testability:`; add one line to testing/KNOWN_ISSUES.md ("Testability changes": file, what, why).
+1. State in one line what is missing and why a test-side patch is worse. Use a seam when the patch would cost more than 30 minutes.
+2. Make the smallest possible change, with identical default behaviour.
+3. Run the existing checks: the service starts, `/health` responds, and the manual lab smoke passes.
+4. Commit separately with the prefix `testability:` and add one line under "Testability changes" in `testing/KNOWN_ISSUES.md` (file, what, why).
 
 ## Fallback
-If a prod change is not worth it: dependency_overrides, monkeypatch before import, mocker.patch(autospec=True), env vars, stubbing a module in sys.modules.
+If a production change is not worth it, use `dependency_overrides`, `monkeypatch` before import, `mocker.patch(autospec=True)`, environment variables, or stubbing a module in `sys.modules`.

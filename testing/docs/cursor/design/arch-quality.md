@@ -9,14 +9,14 @@
 --strict-markers, pytest-randomly, pytest-timeout (component 30 s, integration 120 s), --reruns 1 only for integration/e2e_ui and always reported; web-first assertions; no sleeps; every xfail is strict and linked to KNOWN_ISSUES.md. New tests must pass 3x with random order and -n auto.
 
 ## 11. Risks and fallbacks (decide within 30 min, then take the fallback)
-- Python 3.14 wheels missing -> venv on 3.13 (15 min, ADR-12).
-- Service lifespan/import has side effects (Kafka/Redis connect, Sentry, ddtrace) -> PREP (P0.1): move them to startup, inert without env; only if impossible: monkeypatch before import / stub ddtrace in sys.modules.
+- Python 3.14 wheels missing (unlikely as of 2026-10) -> venv on 3.13 (15 min, ADR-12).
+- Service lifespan/import has side effects (Kafka/Redis connect, Sentry, ddtrace; Datadog itself is removed in P0.1) -> PREP (P0.1): move them to startup, inert without env; only if impossible: monkeypatch before import / stub ddtrace in sys.modules.
 - Service does not take DB/Redis/Kafka URLs from env -> PREP: make env-driven (default unchanged); else patch the module-level getter (ADR-14).
 - Schemathesis from_asgi runs the app in a different event loop than async fixtures -> the app builds its own engine from env (default design); still failing -> from_url(BASE_URL) against the compose stack (time-box Schemathesis at 30 min).
 - Alembic env.py cannot take a URL override -> Base.metadata.create_all for the template.
 - Full-stack build too slow in CI -> build only the core services needed; cache layers; run integration on push to main + nightly, keep UI -m critical on PR.
 - Test env lacks service runtime deps, or services pin conflicting versions -> uv dependency group per service; sync only the group of the service under test (uv sync --group <svc>); long-term fix = R0 (uv + pyproject per service).
-- Nginx limits (UI tests) / seeded data conflicts -> functional tests use gateway :8001; UI: login once per run, fewer workers; do not relax nginx; assert only on own ids.
+- Nginx limits (UI tests) / seeded data conflicts -> functional tests use gateway :8001; UI: login once per run, fewer workers (the API limit is per bearer token, so all UI traffic from one token file shares one 20 r/s bucket); do not relax nginx; assert only on own ids.
 
 ## 13. Anti-patterns (do not)
 1. One container (or DB server) per xdist worker: the controller owns infra, workers read URLs (ADR-2).

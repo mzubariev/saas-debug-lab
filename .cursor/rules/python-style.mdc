@@ -1,17 +1,29 @@
 ---
-description: Modern Python 3.14 style (typing, data, DI, patterns). Applies to all Python in the repo
+description: Python style. Testing code uses Python 3.14 features; production code stays 3.11-compatible until R0
 globs: **/*.py
 alwaysApply: false
 ---
-# Python 3.14 style
-- Simple code first. Pure function > class unless real state/lifecycle. Composition > inheritance.
-- Type everything meaningful. No Any (use object, generics, TypedDict, Protocols). No `from __future__ import annotations` (3.14 evaluates annotations lazily).
-- PEP 695 generics (def f[T](x: T) -> T), `type` aliases, Annotated, StrEnum, Self, @override.
-- Protocol vs concrete class: a Protocol only when a boundary has >= 2 real implementations or needs a test double (event bus, cache, clock, external client). Otherwise a plain concrete class. No speculative interfaces. Protocol over ABC when needed.
-- Data: @dataclass(frozen=True, slots=True, kw_only=True) for trusted internal/domain data. Pydantic v2 for every external boundary: HTTP bodies, Kafka messages, settings (pydantic-settings). Strict (extra="forbid", frozen=True) for what we send or own: requests, Kafka envelopes, settings. Tolerant reader (extra="ignore") for response models we only consume, so additive API changes do not break tests.
-- Dependency injection is explicit (constructor args or FastAPI Depends); dependencies point inward: flows/use-cases depend on abstractions, adapters implement them.
-- Factory = function or Polyfactory class (ModelFactory / DataclassFactory / SQLAlchemyFactory). Strategy = Callable. Builder only for genuinely complex construction. Repository only when it hides real persistence detail. Facade = a business flow.
-- match/case only for structural dispatch (event types, response shapes), not simple if/else.
-- No module-level mutable state or singletons, no time.sleep in async code, no bare except, no print (use logging).
-- Errors: raise specific exceptions, never swallow silently; retries use exponential backoff + jitter, only on idempotent or idempotency-keyed operations.
-- Quality: ruff check, ruff format, pyright pass for touched code.
+# Python style
+
+## Which Python version applies where
+- Code under `testing/` targets Python 3.14 and may use the modern features listed below.
+- Production code (`services/`, `workers/`, `shared/`, `migrations/`) still runs on `python:3.11` images. Until the R0 packaging step moves them to 3.14, keep production edits 3.11-compatible: no PEP 695 generics, no `type` statement, no `typing.override`, and keep the file's existing annotation style.
+
+## General principles
+- Prefer simple code. Use a pure function unless there is real state or lifecycle, and prefer composition over inheritance.
+- Type everything meaningful. Do not use `Any`; use `object`, generics, `TypedDict` or Protocols instead.
+- Python 3.14 evaluates annotations lazily, so do not add `from __future__ import annotations` in testing code.
+- In testing code use PEP 695 generics (`def f[T](x: T) -> T`), `type` aliases, `Annotated`, `StrEnum`, `Self` and `@override`.
+- Use a `Protocol` only when a boundary has at least two real implementations or truly needs a test double (event bus, cache, clock, external client). Otherwise use a plain concrete class and add no speculative interfaces. When an interface is needed, prefer `Protocol` over `ABC`.
+
+## Data and boundaries
+- Use `@dataclass(frozen=True, slots=True, kw_only=True)` for trusted internal and domain data.
+- Use Pydantic v2 at every external boundary: HTTP bodies, Kafka messages and settings (`pydantic-settings`). Be strict (`extra="forbid"`, `frozen=True`) for what we send or own: request models, Kafka envelopes and settings. Be a tolerant reader (`extra="ignore"`) for response models we only consume, so additive API changes do not break tests.
+- Inject dependencies explicitly (constructor arguments or FastAPI `Depends`). Dependencies point inward: flows and use cases depend on abstractions, and adapters implement them.
+
+## Patterns and hygiene
+- A factory is a function or a Polyfactory class (`ModelFactory`, `DataclassFactory`, `SQLAlchemyFactory`). A strategy is a `Callable`. Use a builder only for genuinely complex construction, a repository only when it hides real persistence detail, and treat a facade as a business flow.
+- Use `match`/`case` only for structural dispatch (event types, response shapes), not for simple `if`/`else`.
+- Do not use module-level mutable state or singletons, `time.sleep` in async code, bare `except`, or `print` (use `logging`).
+- Raise specific exceptions and never swallow them silently. Retries use exponential backoff with jitter and only apply to idempotent or idempotency-keyed operations.
+- Before finishing, make sure `ruff check`, `ruff format` and `pyright` pass for the code you touched.

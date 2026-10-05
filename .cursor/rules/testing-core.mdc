@@ -1,50 +1,55 @@
 ---
-description: Core rules for the testing framework and tests in testing/ (layers, isolation, fixtures, quality gates)
+description: Core rules for the testing framework and tests in testing/ (scope, layers, test bodies, data isolation, fixtures, quality gates)
 globs: testing/**
 alwaysApply: false
 ---
 # Testing core rules
-Design docs live in testing/docs/cursor/ (arch-*.md, cat-*.md): read only those the task attaches. Service facts: testing/docs/SUT_MAP.md, read before touching a service; never re-read the whole repo. Style: python-style.mdc. UI: playwright.mdc. Prod edits: testing-modify-prod.mdc.
 
-## Scope
-- Write only in: testing/, .github/workflows/, infra/docker-compose.test.yml, root Makefile (include testing/testing.mk). nginx is never changed or relaxed.
-- Prod code: only testability seams (testing-modify-prod.mdc). Never fix bugs or change behaviour: behaviour contradicting the documented spec = xfail(strict=True, reason="BUG-n: ...") + a line in testing/KNOWN_ISSUES.md; unspecified behaviour = pin with a `# characterization` comment.
-- Ignore Datadog everywhere (will be removed).
-- Characterise first (read the route, call it), then assert. Never invent endpoints, fields or status codes; if SUT_MAP lacks it, read that one file.
-- One task per chat; stop when the task's DoD is green. Report <= 10 lines, no re-printing files; on failure show only the last 40 lines.
-- Time-box: stuck >30 min on a workaround, or 3 failed fixes -> stop, take the fallback from arch-quality.md (risks) or report.
+This file holds policy only. Facts about the system under test (routes, ports, rate limits, environment variable names, error codes) belong to `testing/docs/SUT_MAP.md`; never rely on a number or name from memory when SUT_MAP has it. Design documents live in `testing/docs/cursor/design/`; read only the ones the task attaches. What the testkit already offers is listed in `testing/docs/cursor/KIT_MAP.md`; read it before creating a helper, fixture, flow or factory, and extend an existing one instead of writing a duplicate. Related rules: `python-style.mdc` for code style, `playwright.mdc` for UI tests, `testing-modify-prod.mdc` for production edits.
 
-## Layers (never mix)
-Markers come from the directory via root conftest; --strict-markers is on. Extra markers: slow, chaos, db, redis, kafka, serial, smoke (tests/smoke only), synthetic, critical (fast UI subset), clean_db.
-- tests/unit: pure code, pytest-mock. Service unit tests are out of scope until the refactoring phase and go to services/<svc>/tests/unit.
-- tests/contract/{http,events}: in-process, PG; OpenAPI validator, Schemathesis, Pydantic, snapshots.
-- tests/component/<service>: in-process ASGI, one service, real PG + Redis + Redpanda; httpx.ASGITransport, respx, mocker.patch.
-- tests/integration/{services,scenarios}: compose stack; network httpx; Kafka/Redis/MailHog/WireMock clients.
-- tests/e2e_ui: compose stack; sync Playwright.
-- tests/smoke: fresh stack/staging/prod URL, httpx, broad, blocks the pipeline.
-- tests/synthetic/{api,browser}: prod/staging URL, narrow, alerts (never blocks). Policy: cat-smoke-synthetic.md.
-- Component/contract: one service per pytest session (controller + its xdist workers, all OS processes): --service <name> (all services are packages named app).
+## Scope and working method
+- Write only in `testing/`, `.github/workflows/`, `infra/docker-compose.test.yml` and the root `Makefile` (which includes `testing/testing.mk`). Never change or relax the nginx configuration.
+- Edit production code only to add a testability seam, and only as `testing-modify-prod.mdc` describes. Never fix bugs or change behaviour. When observed behaviour contradicts the documented specification, mark the test `xfail(strict=True, reason="BUG-n: ...")` and add a line under "Defects" in `testing/KNOWN_ISSUES.md`. When behaviour is unspecified, pin it and add a `# characterization` comment.
+- Ignore Datadog everywhere; it is removed in a separate step.
+- Characterise first: read the route, call it, then assert. Never invent endpoints, fields, status codes, selectors or helper names. If a fact is missing from SUT_MAP, read that one file. If a file you need is unreadable (for example blocked by `.cursorignore`) or the fact is not in SUT_MAP, stop and report it instead of guessing.
+- Record every deliberate deviation from the plan as one line under "Decisions since the plan" in `testing/KNOWN_ISSUES.md`, so later chats do not undo it.
+- Work on one task per chat and stop when its definition of done is green. Report in at most 10 lines, do not print files back, and on failure show only the last 40 lines of output.
+- Time-box: if you are stuck on a workaround for more than 30 minutes, or three fixes in a row failed, stop. Take the matching fallback from `design/arch-quality.md` (section 11) or report the blocker.
+
+## Layers
+Each test directory maps to a marker through the root `conftest.py`, and `--strict-markers` is on. The extra markers are `slow`, `chaos`, `smoke` (only in `tests/smoke`), `synthetic`, `critical` (the fast UI subset) and `clean_db`. A test that must not run in parallel with others uses `@pytest.mark.xdist_group("serial")`, and the run then uses `--dist loadgroup`.
+- `tests/unit` holds pure code tests with pytest-mock. Only `saas_testkit` self-tests live here. Service unit tests are out of scope until the refactoring phase and will live next to each service.
+- `tests/contract/{http,events}` run in-process with Postgres and cover the OpenAPI validator, Schemathesis, Pydantic models and snapshots.
+- `tests/component/<service>` run one service in-process through ASGI against real Postgres, Redis and Redpanda, using `httpx.ASGITransport`, `respx` and `mocker.patch`.
+- `tests/integration/{services,scenarios}` run against the compose stack over the network, using httpx and the Kafka, Redis, MailHog and WireMock clients.
+- `tests/e2e_ui` runs against the compose stack with sync Playwright.
+- `tests/smoke` runs broad checks against a fresh stack, staging or production URL, and a failure blocks the pipeline.
+- `tests/synthetic/{api,browser}` run narrow checks against a production or staging URL; they raise alerts and never block. The policy is in `design/cat-smoke-synthetic.md`.
+- Component and contract tests run one service per pytest session (the controller plus its xdist workers, all separate OS processes), selected with `--service <name>`, because every service package is named `app`.
 
 ## Test bodies
-- Business-language steps via Flows / Page Objects only. No URLs, headers, SQL, locators or raw JSON in test bodies. The assertion about the behaviour under test stays visible in the test body (flows return ApiResponse); precondition steps (new_task) may assert inside flows.
-- Adapters (HttpTaskApi, HttpAuthApi, KafkaEventReader) are concrete classes; Protocol only with >= 2 implementations (python-style.mdc). The same Flow runs at component and integration: only the injected httpx.AsyncClient transport differs. Dependency failures: mocker.patch(autospec=True).
-- Names: test_<behaviour>_<condition>_<expected>; one behaviour per test; parametrize instead of copy-paste.
+- Write tests as business-language steps through Flows and Page Objects. Test bodies contain no URLs, headers, SQL, locators or raw JSON.
+- The assertion about the behaviour under test stays visible in the test body, because flows return `ApiResponse` instead of asserting. Precondition steps such as `new_task` may assert inside a flow.
+- Adapters (`HttpTaskApi`, `HttpAuthApi`, `KafkaEventReader`) are concrete classes. Introduce a `Protocol` only when there are at least two implementations. The same Flow runs at component and integration level; only the transport of the injected `httpx.AsyncClient` differs. Inject dependency failures with `mocker.patch(autospec=True)`.
+- Name tests `test_<behaviour>_<condition>_<expected>`, test one behaviour per test, and parametrize instead of copying.
 
 ## Data and isolation
-- All data is unique via RunContext(run_id, test_id) (unique_title()). Never assert on totals/emptiness of shared collections (e.g. GET /tasks); assert on own ids.
-- Component: DB per xdist worker from a migrated template DB, real commits; the app builds its own engine from env (no get_db override). Redis: one DB index per worker (env), FLUSHDB before each test. Kafka: real Redpanda, unique ids, fresh consumer group (unique group_id), subscribe before producing, filter by own correlation id.
-- Default = no DB cleanup. Tests asserting global state use @pytest.mark.clean_db (truncates only tables touched since last cleanup, before the test body).
-- Integration/UI: no cleanup/reset; own data by uuid; seeded users read-only. Login and seed once per run (FileLock, token file with expiry check), never per test. Nginx /auth/ allows 5 req/min: functional tests use the gateway port; real nginx only for UI and edge tests. WireMock stubs match the test's own payload.id.
-- Factories: Polyfactory (Faker bundled), all layers. .build() = no I/O; await .create_async() = DB rows via per-test bound __async_session__ (the rows fixture); .create_sync() = sync seeding (FileLock) or sync setup against the stack. Bind the session via a per-test subclass, never a mutable shared class attribute or ContextVar. Override business-constrained fields explicitly; Factory.seed_random(run_seed). Cache one argon2 hash, never hash per test.
-- Tests are order-independent and parallel-safe (pytest-randomly + xdist). Heavy shared resources are session-scoped and created by the xdist controller only.
+- Make all data unique through `RunContext(run_id, test_id)` (for example `unique_title()`). Never assert on the totals or emptiness of shared collections such as `GET /tasks`; assert on your own ids.
+- Component tests use a database per xdist worker, cloned from a migrated template database, with real commits. The app builds its own engine from the environment, so do not override `get_db`. Redis uses one DB index per worker (from the environment) and is flushed before each test. Kafka is a real Redpanda: use unique ids, a fresh consumer group (unique `group_id`), subscribe before producing, and filter by your own correlation id.
+- By default tests do no database cleanup. A test that asserts global state uses `@pytest.mark.clean_db`, which truncates only the tables touched since the last cleanup, before the test body runs.
+- Integration and UI tests do no cleanup or reset. They create their own data with uuids and treat seeded users as read-only. Log in and seed once per run (FileLock plus a token file with an expiry check), never per test. Rate limits are described in SUT_MAP: functional tests use the gateway port, and real nginx is used only for UI and edge tests. WireMock stubs match the test's own `payload.id`.
+- Use Polyfactory (Faker is bundled) in all layers. `.build()` does no I/O. `await .create_async()` writes database rows through the per-test bound `__async_session__` (the `rows` fixture). `.create_sync()` is for synchronous seeding under FileLock or synchronous setup against the stack. Bind the session through a per-test subclass, never through a mutable shared class attribute or a ContextVar. Override business-constrained fields explicitly. Seed once per run with `Factory.seed_random(config.getoption("randomly_seed"))`, so the number printed by pytest-randomly reproduces both order and data. Cache one argon2 hash instead of hashing per test.
+- Tests must be order-independent and parallel-safe (pytest-randomly plus xdist). Heavy shared resources are session-scoped and created only by the xdist controller.
 
-## Fixtures, async, mocking
-- Scopes: infra = session; engine/clients = session (per worker); db session/app overrides = function. Always yield + cleanup; always dependency_overrides.clear() in teardown.
-- pytest-asyncio: asyncio_mode="auto"; default fixture AND test loop scope = session.
-- No TestClient with async DB: httpx.AsyncClient(transport=ASGITransport(app)). ASGITransport does not run lifespan: enter app.router.lifespan_context(app) in a session fixture.
-- respx = intercept our outgoing httpx calls in-process. WireMock = real network stub for scripted sequences (503,503,200), timeouts, request journal. Never both for the same call.
-- Eventual consistency: await eventually(fn, timeout=..., interval=..., message=...). No sleeps.
-- Retry/backoff tests: patch asyncio.sleep and jitter; assert the call sequence, not wall-clock time.
+## Fixtures, async and mocking
+- Scopes: infrastructure is session-scoped; the engine and clients are session-scoped per worker; the database session and app overrides are function-scoped. Always `yield` and clean up, and always call `dependency_overrides.clear()` in teardown.
+- pytest-asyncio runs with `asyncio_mode="auto"`, and both the default fixture loop scope and the default test loop scope are `session`.
+- Do not use `TestClient` with an async database; use `httpx.AsyncClient(transport=ASGITransport(app))`. `ASGITransport` does not run the lifespan, so enter `app.router.lifespan_context(app)` in a session-scoped fixture.
+- `respx` intercepts our own outgoing httpx calls in-process. WireMock is a real network stub for scripted sequences (503, 503, 200), timeouts and the request journal. Never use both for the same call.
+- For eventual consistency use `await eventually(fn, timeout=..., interval=..., message=...)`. Never sleep.
+- Test retry and backoff by patching `asyncio.sleep` and the jitter, and assert the call sequence, not wall-clock time.
 
-## Quality gates (before "done")
-ruff check, ruff format --check, pyright (strict on src/saas_testkit/), pytest <layer> -q pass; no unknown-marker warnings; tests pass 3x in a row, random order, -n auto. After tests for a service: break one prod line (or flip one assertion), confirm a test goes red, revert.
+## Quality gates
+- While working, use the inner loop: `pytest <file> -x -q --lf -n 0`.
+- Before reporting done, run once: `ruff check`, `ruff format --check`, `pyright` (strict for `src/saas_testkit/`), the task's pytest command, and `make t-gate` (three runs, random order, `-n auto`). There must be no unknown-marker warnings.
+- After writing tests for a service, break one production line (or flip one assertion), confirm a test turns red, and revert.

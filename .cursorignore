@@ -22,12 +22,11 @@ node_modules
 dist
 build
 *.lock
+package-lock.json
 
 # Folders to ignore
-frontend
 observability
 load-tests/config
-load-tests/lib
 load-tests/scripts
 chaos
 docs/incidents-playbooks
@@ -36,6 +35,4 @@ docs/on-call
 docs/system-architechture/testing-architecture
 testing/docs/IMPLEMENTATION_PLAN.md
 testing/docs/TESTING_ARCHITECTURE.md
-testing/docs/cursor/plan/00-workflow.md
-testing/docs/cursor/plan/01-prompt-template.md
 test-results

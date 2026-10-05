@@ -1,5 +1,5 @@
 # Testing architecture: adapters, flows, factories
-Skeletons: adapt, do not copy blindly. Used by P1, P2.
+Used by P1 and P2. Every identifier inside the code skeletons below is illustrative. Anything marked `PLACEHOLDER`, `<SHA>`, `<pinned-version>` or described as "from SUT_MAP" must be replaced with a real value before use.
 
 ## 6.3 Adapters -> flows -> tests
 ```python
@@ -31,7 +31,7 @@ async def test_completed_task_cannot_be_started_again(lifecycle: TaskLifecycle):
     response = await lifecycle.start(task)
 
     assert response.status == 409
-    assert response.error.code == "invalid_transition"            # real names from SUT_MAP
+    assert response.error.code == "invalid_transition"            # PLACEHOLDER: real error code from SUT_MAP
 ```
 Rule: precondition steps may assert inside flows; the behaviour under test is asserted in the test body. Raw status access never leaves adapters/flows, but the verdict always stays in the test.
 
@@ -66,7 +66,7 @@ task = await rows.task.create_async(status=TaskStatus.COMPLETED)     # really co
 ```
 Notes (binding rules for session binding, seeding and argon2 caching: testing-core.mdc "Data and isolation"):
 1. Polyfactory's SQLAlchemy persistence commits by default: rows are really committed, so the app's engine, the scheduler and other processes see them.
-2. RunContext.seed is printed in the failure report.
+2. One seed per run: a session fixture calls Factory.seed_random(config.getoption("randomly_seed")), so the number printed by pytest-randomly reproduces both the test order and the factory data (Polyfactory has its own Random instance that pytest-randomly does not reseed). There is no separate run_seed; the failure report prints this seed.
 3. Random data may violate business rules: override constrained fields (status, FKs, unique titles).
 4. Faker is bundled (Factory.__faker__); custom providers in factories/providers.py (unique_title, jwt_claims).
 5. UserRow.password_hash = one cached argon2 hash.

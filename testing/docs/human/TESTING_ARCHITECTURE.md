@@ -26,23 +26,23 @@ Self-contained design document for **this** monorepo (isolation, shared infra, C
 
 | # | Decision | Why / trade-off |
 |---|---|---|
-| 1 | **One service per pytest session (controller + its workers)** for component + contract (`--service task-service`) | Every service package is named `app`; two in one process collide in `sys.modules`. Cost: one pytest start per service (CI matrix hides it). |
+| 1 | **One service per pytest session (controller + its workers)** for component + contract (`--service task-service`) | Every service package is named `app`; two in one process collide in `sys.modules`. Cost: one pytest start per service (CI matrix hides it). Python 3.14 `concurrent.interpreters` was considered and rejected: the service packages and C extensions are not isolated-interpreter safe, and processes are what xdist already provides. |
 | 2 | **Controller owns infra; workers only read URLs** (`env-or-container`): `TEST_PG_URL` / `TEST_REDIS_URL` / `TEST_KAFKA_BOOTSTRAP` if set (CI `services:` including Redpanda with `command`, or `make deps-up`), else Testcontainers started once in the xdist controller | No N-containers-for-N-workers. Skipped for pure unit runs. FileLock is used only for cross-worker one-time work (login/token, seed), not for containers. |
 | 3 | **PG template DB → DB per worker → real commits, unique data, on-demand TRUNCATE of touched tables** | Migrations once (real Alembic, drift is tested), ~50 ms per worker DB. The app builds its own engine from env (`DATABASE_URL` = worker DB), so no `get_db` seam is needed and commits are real: races, the sync scheduler, Schemathesis and after-commit event ordering all behave as in prod. No per-test cleanup by default (unique data); tests that need clean/global state use `@pytest.mark.clean_db`, which truncates only the tables touched since the last cleanup (trigger-based tracking, §6.2). SAVEPOINT-rollback was rejected: one shared session makes concurrency tests impossible, hides commit-time behaviour, and other processes cannot see the transaction. |
 | 4 | **Flows over concrete adapters; a Protocol only when ≥2 implementations exist (none at start)** | `HttpTaskApi`/`HttpAuthApi`/`KafkaEventReader` are concrete classes. The swap point between layers is the injected `httpx.AsyncClient` transport (`ASGITransport` at component, network `base_url` at integration), so the same Flow runs on both. Dependency failures (Redis down, Kafka error) are injected with `mocker.patch(autospec=True)`, not with fake implementations. README rationale (3 lines): YAGNI, one real implementation per boundary, swap happens at httpx level. |
-| 5 | **Component: real PG + Redis + Redpanda** | Redpanda (Kafka API, single binary, no ZooKeeper) starts quickly and needs no production seam: only the bootstrap address from env. The same `KafkaEventReader` is used at component and integration. Isolation: topic names are fixed by prod, so tests use unique ids, a fresh consumer group, subscribe before producing and filter by their own correlation id. Env-or-container: `TEST_KAFKA_BOOTSTRAP`, else Testcontainers Redpanda (check the container class in the installed version); in CI a service container with `command` (§9). |
-| 6 | **Integration/UI reuse `infra/docker-compose.yml` with an explicit service list (not the whole profile)** + thin `infra/docker-compose.test.yml` | One stack definition. Override: publish api-gateway on host `:8001` (the simulator already owns `:8000`), WireMock on `:8089`, `WEBHOOK_URL` of **both** webhook-dispatcher and scheduler-worker → WireMock, shortened timing knobs. **nginx config is not relaxed**: functional tests use the gateway directly; real nginx `:80` serves UI tests and 2–3 edge tests (429, forwarded headers). Readiness = polling `/health` of each service (`--wait` only covers services with healthchecks). Frontend in CI: `vite build` + `preview`. |
+| 5 | **Component: real PG + Redis + Redpanda** | Redpanda (Kafka API, single binary, no ZooKeeper) starts quickly and needs no production seam: only the bootstrap address from env. The same `KafkaEventReader` is used at component and integration. Isolation: topic names are fixed by prod, so tests use unique ids, a fresh consumer group, subscribe before producing and filter by their own correlation id. Env-or-container: `TEST_KAFKA_BOOTSTRAP`, else Testcontainers Redpanda (`RedpandaContainer` from `testcontainers.community.kafka`; verify the import in the installed version: the `testcontainers.postgres/redis/kafka` modules are deprecated shims); in CI a service container with `command` (§9). |
+| 6 | **Integration/UI reuse `infra/docker-compose.yml` with an explicit service list (not the whole profile)** + thin `infra/docker-compose.test.yml` | One stack definition. Override: publish api-gateway on host `:8001` (the simulator already owns `:8000`), WireMock on `:8089`, `WEBHOOK_URL` of **both** webhook-dispatcher and scheduler-worker → WireMock, shortened timing knobs. **nginx config is not relaxed**: functional tests use the gateway directly; real nginx `:80` serves UI tests and 2–3 edge tests (auth-burst limit, forwarded headers). Readiness is checked per service kind (FastAPI: `/health`; Kafka workers: `GET :9100/metrics`, confirm the port per worker in SUT_MAP; migrations: container exit code 0), because `--wait` only covers services with healthchecks and the workers have no HTTP app. Frontend in CI: `vite build` + `preview`. |
 | 7 | **Integration/UI: unique data, no cleanup/reset** | Parallel without locks; stack dies with the runner. |
 | 8 | **Sync Playwright** (pytest-playwright), UI tests are sync `def` | Official `pytest-playwright` is sync and xdist-friendly (a browser per worker process). The async API exists (`pytest-playwright-asyncio`) and works with pytest-asyncio, but pytest runs tests one at a time, so async gives no cross-test concurrency by itself. Mixing the *sync* API with a running event loop raises errors, so UI tests stay plain `def` and use sync httpx for data setup. Intra-test concurrency (`asyncio.gather`) is used in integration tests instead (§12.1). |
 | 9 | **pytest-asyncio loop scope = session** | Session-scoped async engine/clients need one loop. (Deliberate: the pytest-asyncio default is "function".) |
 | 10 | **Polyfactory everywhere:** `ModelFactory` (Pydantic v2), `DataclassFactory`, `SQLAlchemyFactory`; `.build()` = no I/O, `create_async()` = async DB rows, `create_sync()` = sync seeding | Native Pydantic v2/dataclass/SQLAlchemy support, typed `Factory[T]`, **real async persistence** (factory_boy has none), constraint-aware generated data, built-in Faker. Trade-off: random data can violate business rules, so override constrained fields; the fixture binds the session per test (§6.5). Replaces factory_boy. |
 | 11 | **Consumer-side Pydantic models** in `saas_testkit/domain` (not imported from services) | Black-box: DTO drift breaks tests (that is the point of contract testing). Only component/contract import service code (in-process app, DB models from `saas_shared.models`). |
-| 12 | Python 3.14 in `testing/.python-version`; **if** `uv sync` **fails on a wheel (asyncpg, aiokafka, ddtrace, greenlet), drop to 3.13 for the venv** and keep syntax 3.14-clean | |
+| 12 | Python 3.14 in `testing/.python-version`; **if** `uv sync` **fails on a wheel (asyncpg, aiokafka, greenlet), drop to 3.13 for the venv** and keep syntax 3.14-clean As of 2026-10 cp314 wheels exist for these packages, so the fallback is unlikely to trigger (stay on the GIL build). **Tested is not shipped:** the service images run Python 3.11 with unpinned `requirements.txt`, while tests run 3.14 with a uv lockfile; this is acceptable for the lab, must be stated in the README, and closes in R0 when the Dockerfiles move to 3.14 and requirements are locked. Pin `sqlalchemy>=2.0,<2.2` in the kit. |
 | 13 | Defects found → `xfail(strict=True, reason="BUG-n")` + `testing/KNOWN_ISSUES.md` | Portfolio artefact: "framework found N real defects". |
 | 14 | **Prod prep first, small behaviour-neutral seams only** (env-driven connections, timing knobs, no import-time side effects, healthchecks, `data-testid`, remove Datadog), done before the framework (P0.1) and later whenever it is simpler than patching; restructuring waits for the refactoring phase | Owner-approved pragmatism. Bug fixes/behaviour changes/renames wait so the tests characterise today's behaviour. See `testing-modify-prod.mdc`. |
 | 15 | **Src-layout package** `testing/src/saas_testkit` (not a loose `framework/` dir) | Unique importable name (like `saas_shared`), installed editable by `uv sync`, no `sys.path` hacks, external-consumer import semantics, reusable by service unit tests in a separate prod-code-refactoring work. Tests/conftest stay outside the package. |
 | 16 | **Smoke ≠ synthetic.** `tests/smoke` = broad, shallow, post-deploy gate. `tests/synthetic` = narrow critical path run continuously with latency budgets and alerting. Same flows/adapters, different marker, schedule and failure policy. Grafana Cloud Synthetic Monitoring (k6-based, private probe for the local lab) is a complementary stretch, not a replacement for the Python suite | Python flows can't run inside Grafana SM (it runs k6 JS), so the Python synthetic suite stays as the SDET showcase. |
-| 17 | **Contract snapshots are exact**: any diff of `contracts/openapi/<svc>.json` or `contracts/events/*.schema.json` fails the test; updating is an explicit, reviewed commit (`make contracts-update`). `oasdiff` (breaking vs additive) is an optional stretch | "Additive = ok" needs a hand-written diff or an extra binary in CI. Producers and consumers live in one repo, so a visible diff in the PR is the cheaper review. Tolerance for additive changes lives in the consumer models (`extra="ignore"`), not in the snapshot. |
+| 17 | **Contract snapshots are exact**: any diff of `contracts/openapi/<svc>.json` or `contracts/events/*.schema.json` fails the test; updating is an explicit, reviewed commit (`make contracts-update`). `oasdiff` (breaking vs additive) is an optional stretch | "Additive = ok" needs a hand-written diff or an extra binary in CI. Producers and consumers live in one repo, so a visible diff in the PR is the cheaper review. Tolerance for additive changes lives in the consumer models (`extra="ignore"`), not in the snapshot. Pact (consumer-driven contracts) is not used: producers and consumers live in one repo and deploy together, so a consumer/provider pair is reviewed in one pull request. |
 | 18 | **Postgres is tuned for tests** everywhere it is started by us (Testcontainers, `compose.deps.yml`, CI service, integration stack): `fsync=off`, `synchronous_commit=off`, `full_page_writes=off`, data dir on tmpfs (§6.2) | Cheapest speed-up: no disk flush on thousands of commits and on `CREATE DATABASE ... TEMPLATE`. Safe only because the data is throwaway; never copy these flags to anything persistent. |
 
 
@@ -50,12 +50,12 @@ Self-contained design document for **this** monorepo (isolation, shared infra, C
 
 ## 3. System under test — cheat sheet
 
-(from ARCHITECTURE.md; code-level facts go to `SUT_MAP.md`)
+(from ARCHITECTURE.md; **provisional until `SUT_MAP.md` is built in P0**, which wins on any conflict)
 
 
 | Service | Kind | Talks to | Test-relevant facts |
 |---|---|---|---|
-| nginx :80 | proxy | api-gateway | `/auth/` 5 req/min burst 3; API 10 req/s burst 20 per IP → **429 hazard for parallel tests** |
+| nginx :80 | proxy | api-gateway | Rate-limit zones are keyed by the `Authorization` header, not by IP: API 20 r/s with burst 100 (delayed) on `/`, burst 20 nodelay on `/webhooks/`; `/auth/token` 5 r/min burst 3. A login request carries no `Authorization` header, so it is probably **not limited at all** (BUG candidate for `KNOWN_ISSUES.md`). The API limit is per bearer token, so one shared token file means one shared bucket |
 | api-gateway :8000 | FastAPI | auth, task, webhook-receiver | JWT HS256 required only for `/tasks/*`; strips Host/sentry-trace/baggage; CORS for :5173 |
 | auth-service | FastAPI + PG + Redis(db1) | | `POST /auth/token` (form), `GET /auth/me`; users admin/admin123, user/user123 (seed script, not automatic); user cache TTL 300 |
 | task-service | FastAPI + PG + Redis(db0) + Kafka producer | | `/tasks` CRUD, `PATCH /tasks/{id}/start` (other transition routes: SUT_MAP); list/item cache in Redis; emits `task_created` / `task_updated` |
@@ -89,8 +89,8 @@ Self-contained design document for **this** monorepo (isolation, shared infra, C
 | component | in-proc | worker DB, real commits | worker DB index + `FLUSHDB` per test | Redpanda | respx | unique data, `clean_db` on demand | `-n auto` | every PR |
 | integration | containers | shared stack | shared | real | WireMock / simulator | unique data | `-n 3` | PR (fast subset), push to main full |
 | e2e_ui | containers | shared stack | | real | | context per test, unique data | `-n 2` | PR `-m critical`, merge full chromium, nightly cross-browser |
-| smoke | target URL (fresh stack/staging/prod) | – | – | – | – | smoke user, unique data | serial | PR (against built stack) + after every deploy; blocks |
-| synthetic | target URL (prod/staging) | – | – | – | – | dedicated synthetic user, `synthetic-` data | serial | cron every 5 min (API), 30 min (browser); alerts, never blocks |
+| smoke | target URL (fresh stack/staging/prod) | – | – | – | – | smoke user, unique data | one process | PR (against built stack) + after every deploy; blocks |
+| synthetic | target URL (prod/staging) | – | – | – | – | dedicated synthetic user, `synthetic-` data | one process | cron every 5 min (API), 30 min (browser); alerts, never blocks |
 
 
 
@@ -104,7 +104,7 @@ testing/
 ├── conftest.py               # markers by path, --service, sys.path, controller infra, xdist hooks, failure links
 ├── compose.deps.yml          # optional: pg+redis for local runs (TEST_PG_URL / TEST_REDIS_URL)
 ├── contracts/                # committed snapshots: openapi/<svc>.json, events/*.schema.json
-├── docs/                     # this file, plan, SUT_MAP.md
+├── docs/                     # this file, plan, SUT_MAP.md, cursor/ (agent-facing pack: design/, plan/, INDEX.md, KIT_MAP.md)
 ├── src/
 │   └── saas_testkit/         # installable package (src-layout, hatchling, py.typed); `from saas_testkit.flows import ...`
 │       ├── config/               # settings.py (pydantic-settings), services.py (name → path, module, port, DI seams)
@@ -138,11 +138,13 @@ testing/
 Plus `testing/synthetic/k6/critical_path.js` (non-Python asset for Grafana Synthetic Monitoring, stretch).
 Every `tests/<layer>/` has its own `conftest.py` (fixtures for that layer only); root conftest has only cross-layer infra.
 
-Service unit tests (later) live in `services/*/tests/unit` and reuse `saas_testkit.factories`; add the kit as a path dependency (`uv add --dev ../../testing`). Fixtures stay in `conftest.py`; if services' unit tests need them, extract a `saas_testkit.pytest_plugin` (entry point) then, not before.
+Service unit tests (later) live next to each service (`services/core/<svc>/tests/unit`, `services/external/<svc>/tests/unit`, `workers/<svc>/tests/unit`) and reuse `saas_testkit.factories`; add the kit as a path dependency (`uv add --dev ../../../testing` from `services/core/<svc>` and `services/external/<svc>`, `uv add --dev ../../testing` from `workers/<svc>`). Fixtures stay in `conftest.py`; if services' unit tests need them, extract a `saas_testkit.pytest_plugin` (entry point) then, not before.
 
 ## 6. Framework internals (skeletons — adapt, do not copy blindly)
 
 
+
+> Every identifier inside the code skeletons below is illustrative. Anything marked `PLACEHOLDER`, `<SHA>`, `<pinned-version>` or taken "from SUT_MAP" must be replaced with a real value before use.
 
 ### 6.1 Root conftest (infra in controller, path per service)
 
@@ -216,12 +218,12 @@ async def clean_db(session_maker) -> None:                        # applied via 
 ```
 **Template.** The controller runs `alembic upgrade head` (repo `migrations/`, DB URL via env, see SUT_MAP) into a template DB, runs the single-head + drift check, **then installs touched-table tracking**, then disposes all connections. The template is built once and reused: name = `app_template_<alembic head revision>`; the controller takes `pg_advisory_lock(<const>)`, checks `pg_database` and builds it only if missing (concurrent per-service sessions, local re-runs and `make deps-up` all reuse it; a new migration changes the head → new template, old ones are dropped by `make deps-clean`). Worker DBs are named `test_<service>_<layer>_<worker_id>` (layer = component|contract), dropped before create and at session end. `CREATE DATABASE ... TEMPLATE` needs no open connections to the template, so nobody connects to it.
 
-**Touched-table tracking (test-only DDL, only in the template, prod migrations untouched).** Table `_touched(tbl text primary key)`, a function `_mark()` that does `INSERT INTO _touched VALUES (TG_TABLE_NAME) ON CONFLICT DO NOTHING`, and a statement-level `AFTER INSERT OR UPDATE OR DELETE` trigger on every table of schema `public` except `alembic_version` and `_touched`. Triggers see writes from the app, the scheduler and the tests alike (`pg_stat_`* counters are not reliable per test). `clean_db` truncates only the tables touched since the last cleanup (`TRUNCATE` also empties the table's indexes; `CASCADE` follows foreign keys), so the cost stays proportional to what a test actually used, not to the schema or the number of tests. Default is **no cleanup** (unique data); use `clean_db` only for tests that assert on global state (e.g. scheduler cleanup). If a table is tiny, `DELETE` can beat `TRUNCATE`: measure before optimizing.
+**Touched-table tracking (test-only DDL, only in the template, prod migrations untouched).** Table `_touched(tbl text primary key)`, a function `_mark()` that does `INSERT INTO _touched VALUES (TG_TABLE_NAME) ON CONFLICT DO NOTHING`, and a statement-level `AFTER INSERT OR UPDATE OR DELETE` trigger on every table of schema `public` except `alembic_version` and `_touched`. Triggers see writes from the app, the scheduler and the tests alike (`pg_stat_*` counters are not reliable per test). `clean_db` truncates only the tables touched since the last cleanup (`TRUNCATE` also empties the table's indexes; `CASCADE` follows foreign keys), so the cost stays proportional to what a test actually used, not to the schema or the number of tests. Default is **no cleanup** (unique data); use `clean_db` only for tests that assert on global state (e.g. scheduler cleanup). If a table is tiny, `DELETE` can beat `TRUNCATE`: measure before optimizing.
 
 **Redis.** One Redis server; each xdist worker uses its own DB index (`redis://host:6379/<n>`, set via env, so no production change) and `FLUSHDB` runs before every test (list/item caches are shared keys within a DB, so flush rather than namespace). Keep `-n` ≤ 8 so indexes stay within the default 16.
 
 **Postgres tuning for tests (ADR-18).** Start every test Postgres with `postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=200` and put the data dir on tmpfs. `max_connections`: each worker holds its own app engine plus the test engine, and the default 100 runs out at `-n 8` with several pools.
-- Testcontainers (controller): `PostgresContainer(image).with_command("postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=200").with_kwargs(tmpfs={PGDATA_PARENT: "rw"})`. Verify the kwarg name in the installed version.
+- Testcontainers (controller): `PostgresContainer(image).with_command("postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=200").with_tmpfs_mount(PGDATA_PARENT)` (Testcontainers 4.x; verify the method in the installed version).
 - `compose.deps.yml` and the integration stack (`docker-compose.test.yml` override of `postgres`): `command: postgres -c ...` plus `tmpfs: [<data dir>]`.
 - GitHub Actions service container: `command:` + `options: --tmpfs <data dir>` (§9.2).
 - Data dir by image: `/var/lib/postgresql/data` up to Postgres 17; Postgres 18+ keeps PGDATA under `/var/lib/postgresql/<major>/docker`, so mount tmpfs on `/var/lib/postgresql`. Pin the image tag and check this when upgrading.
@@ -258,7 +260,7 @@ async def test_completed_task_cannot_be_started_again(lifecycle: TaskLifecycle):
     response = await lifecycle.start(task)
 
     assert response.status == 409
-    assert response.error.code == "invalid_transition"            # real names from SUT_MAP
+    assert response.error.code == "invalid_transition"            # PLACEHOLDER: real error code from SUT_MAP
 ```
 Rule: precondition steps may assert inside flows; the behaviour under test is asserted in the test body. Raw status access never leaves the adapters/flows, but the verdict always stays in the test.
 
@@ -315,7 +317,7 @@ def rows(db: AsyncSession) -> Rows:
 task = await rows.task.create_async(status=TaskStatus.COMPLETED)     # really committed to the worker DB; unique values keep it isolated
 ```
 
-Notes: (1) Polyfactory's SQLAlchemy persistence commits by default: rows are really committed, so the app's own engine, the scheduler and other processes see them. (2) Bind per test via a subclass in a fixture; do not mutate a shared class attribute or rely on a `ContextVar` (async fixtures and tests may run in different contexts). (3) Reproducibility: `Factory.seed_random(run_seed)` in the root conftest; `RunContext.seed` is printed in the failure report. (4) Random data may violate business rules: override constrained fields (status, FKs, unique titles) explicitly. (5) Faker is bundled (`Factory.__faker__`); custom providers in `factories/providers.py` (`unique_title`, `jwt_claims`). (6) `UserRow.password_hash` = one cached argon2 hash. (7) Event factories (`ModelFactory[Envelope[TaskCreatedPayload]]`) build envelopes; a Builder only for `Envelope`/webhook bodies with many optional parts. Internal trusted dataclasses use `DataclassFactory`.
+Notes: (1) Polyfactory's SQLAlchemy persistence commits by default: rows are really committed, so the app's own engine, the scheduler and other processes see them. (2) Bind per test via a subclass in a fixture; do not mutate a shared class attribute or rely on a `ContextVar` (async fixtures and tests may run in different contexts). (3) Reproducibility: one seed per run. A session fixture calls `Factory.seed_random(config.getoption("randomly_seed"))`, so the number printed by pytest-randomly reproduces both the test order and the factory data (Polyfactory has its own `Random` instance, which pytest-randomly does not reseed); there is no separate `run_seed`. The failure report prints that seed. (4) Random data may violate business rules: override constrained fields (status, FKs, unique titles) explicitly. (5) Faker is bundled (`Factory.__faker__`); custom providers in `factories/providers.py` (`unique_title`, `jwt_claims`). (6) `UserRow.password_hash` = one cached argon2 hash. (7) Event factories (`ModelFactory[Envelope[TaskCreatedPayload]]`) build envelopes; a Builder only for `Envelope`/webhook bodies with many optional parts. Internal trusted dataclasses use `DataclassFactory`.
 
 ### 6.6 Polling, correlation, resilience helpers
 
@@ -327,12 +329,13 @@ Notes: (1) Polyfactory's SQLAlchemy persistence commits by default: rows are rea
 
 ### 6.7 Integration infra
 
-- `saas_testkit/infra/compose.py`: when the stack is already up (CI) read `BASE_URL` (gateway `:8001`) and `NGINX_URL` (`:80`) from env; otherwise the controller runs `docker compose -f infra/docker-compose.yml -f infra/docker-compose.test.yml up -d --build <explicit service list>` and **polls `/health` of every service** (`--wait` only covers services that have healthchecks). `KEEP_STACK=1` keeps the stack, otherwise `down -v`.
+- `saas_testkit/infra/compose.py`: when the stack is already up (CI) read `BASE_URL` (gateway `:8001`) and `NGINX_URL` (`:80`) from env; otherwise the controller runs `docker compose -f infra/docker-compose.yml -f infra/docker-compose.test.yml up -d --build <explicit service list>` and **checks readiness per service kind**: FastAPI services via `/health`, Kafka workers via `GET :9100/metrics` (confirm the port per worker in SUT_MAP), migrations via container exit code 0, third-party containers via their own port. `--wait` only covers services that have healthchecks. On timeout the helper fails hard and prints `docker compose logs --tail=100` of the services that are not ready (locally and in CI). `KEEP_STACK=1` keeps the stack, otherwise `down -v`.
 - Seed and login **once per run** under FileLock (`scripts/seed_dev.py` or idempotent SQL). Tokens go into a shared token file with an expiry check (refresh when the JWT is close to `exp`); workers only read it. Playwright `storage_state` is derived from the same login.
 - `docker-compose.test.yml`: publishes api-gateway on host `:8001` (the simulator already owns `:8000`); adds `wiremock` on `:8089`; sets `WEBHOOK_URL` of **both** `webhook-dispatcher` and `scheduler-worker` to WireMock (they must match, S2 checks DLQ replay); shortens timing knobs (retry/backoff, DLQ replay and cleanup intervals) via env. **nginx is not modified.** Functional tests use the gateway; real nginx `:80` serves UI tests and 2–3 dedicated edge tests (429 on auth burst, forwarded headers).
 - `postgres` in the integration stack gets the ADR-18 tuning in the same override file (`command` + tmpfs); do not touch the base `infra/docker-compose.yml`.
 - WireMock isolation: the dispatcher sends everything to one URL, so each test registers a stub matched on its own `payload.id` (JSONPath) inside a unique scenario, plus a low-priority catch-all `200` for everyone else; assertions read the request journal filtered by the same id.
 - Frontend for CI: `vite build` + `preview` (not the dev server).
+- Tests that must not run in parallel with others (the nginx edge tests) carry `@pytest.mark.xdist_group("serial")` and the integration run uses `--dist loadgroup`, so they stay serialised under `-n 3` without custom plumbing.
 - Kafka: integration/UI use the stack's own broker, component/contract use Redpanda (ADR-5); both are read through `KafkaEventReader`.
 
 ## 7. Test catalogue (scope for "cover the functionality")
@@ -341,7 +344,7 @@ Characterise first; record surprises in `KNOWN_ISSUES.md`.
 
 **task-service (component, deepest):** create (201, schema, `status=created`, `task.created` envelope emitted & schema-valid); validation (empty/oversize/wrong-type title → 422); get 200/404/bad-uuid 422; list ordering by `created_at`, filter/pagination if present; state machine: created→in_progress→completed, and 409 for every illegal transition (parametrized matrix), 404 unknown id; `task.updated` event on each transition; cache: 2nd `GET` served from Redis (key + TTL asserted), invalidated on create/transition; Redis down → falls through to DB; Kafka publish failure → characterised behaviour; DB error → 5xx shape; race: N concurrent `start` on one task → exactly one success; health/ready/metrics.
 **auth-service:** token OK for both roles, JWT claims/exp; wrong password / unknown user → 401 (same body); missing fields 422; `/me`: valid, expired, tampered signature, `alg=none`, missing/malformed header; password never leaked, hash is argon2; user cache hit on 2nd login; Redis down OK; `/ready` false when DB unavailable.
-**api-gateway (respx upstreams):** routing per prefix; JWT required for `/tasks/`* only (401 missing/invalid/expired); header stripping/forwarding; upstream 5xx passthrough, timeout and connection error mapping; CORS preflight for `localhost:5173`; health/metrics.
+**api-gateway (respx upstreams):** routing per prefix; JWT required for `/tasks/*` only (401 missing/invalid/expired); header stripping/forwarding; upstream 5xx passthrough, timeout and connection error mapping; CORS preflight for `localhost:5173`; health/metrics.
 **webhook-receiver:** valid inbound → published envelope `webhook.inbound`; invalid body 422; producer failure → 5xx; correlation id propagation.
 **external-service-simulator:** `fail_rate` 0/1, `status`, `delay` (sleep patched), idempotency dedupe (same key twice → `duplicate`; failed attempt not recorded), `/trigger-event` posts to gateway URL (respx) with retry.
 **webhook-dispatcher (worker component; fake consumer/producer, respx):** envelope decode; `Idempotency-Key = payload.id`; 2xx success; 5xx/network → retries with backoff 1/2/4 ±10 % up to `MAX_RETRIES`; 4xx → no retry; exhausted → DLQ envelope `webhook.dlq`; legacy raw JSON handled; poison message skipped.
@@ -349,7 +352,7 @@ Characterise first; record surprises in `KNOWN_ISSUES.md`.
 **scheduler-worker:** `cleanup_old_tasks` on real PG (only `completed` older than N h; boundary; `0` disables; in_progress untouched); `retry_failed_webhooks` (DLQ message → HTTP replay via respx; offsets committed regardless; envelope + legacy).
 **contract/http:** per service — OpenAPI valid; committed exact snapshot (any diff fails, ADR-17, §7.1); Schemathesis (25–50 examples PR, 500+ nightly, `not_a_server_error` + schema conformance); consumer-side Pydantic models validate real responses.
 **contract/events:** Envelope v1 model; payload schema per topic (`task_created`, `task_updated`, `webhook_inbound`, `webhook_dlq`); JSON-schema snapshots in `contracts/events`; producers' captured events validate; legacy → `unknown`.
-**integration/services:** every service `/health` through gateway; auth→gateway→task with real JWT; nginx `429` on auth burst and forwarded headers (dedicated, serial); `/metrics` exposes expected series after traffic.
+**integration/services:** every service `/health` through gateway; auth→gateway→task with real JWT; nginx edge behaviour (dedicated, `xdist_group("serial")`): characterise the auth-burst limit (documentation says 429, the nginx config suggests none: a mismatch is a defect, not a test problem) and forwarded headers; `/metrics` exposes expected series after traffic.
 **integration/scenarios:** S1 task lifecycle with side effects (Kafka `task_created` w/ envelope → MailHog email with unique title → WireMock got webhook with `Idempotency-Key`; transitions → `task_updated`); S2 webhook failure → retries (WireMock scenario 503,503,200) → success, and permanent failure → DLQ message → scheduler replay (`slow`); S3 inbound path simulator→gateway→receiver→`webhook_inbound`; S4 idempotent duplicate delivery; S5 resilience (`chaos`, nightly): Toxiproxy latency/reset on SMTP → API stays healthy, mail arrives after toxic removed; Redis paused → API still works.
 **e2e_ui:** login success/failure (no storage_state); unauthenticated redirect; board shows own task; create task via UI (card in first column); drag to In Progress persists after reload (verified via API); drag to Completed; smoke subset = login + create + move.
 **smoke (post-deploy gate, 1–2 min, broad):** `/health` of every service through the gateway, login for both roles, create + read one task, `/metrics` reachable, frontend returns 200. Reads `SMOKE_BASE_URL`; any failure blocks the pipeline/rollback.
@@ -357,7 +360,7 @@ Characterise first; record surprises in `KNOWN_ISSUES.md`.
 
 ### 7.1 Contract principles
 
-1. **Never silence a 500 in Schemathesis** with filters, `exclude_`*, custom checks that accept it, or by dropping the check. A 5xx on generated input is a defect: the right fix is request validation (422) in the service. Fixing is out of scope in the testing phase (`testing-modify-prod.mdc`), so record it as `xfail(strict=True, reason="BUG-n")` for that operation + `KNOWN_ISSUES.md`; the fix lands in the refactoring phase and the xfail flips to a failure that forces removal.
+1. **Never silence a 500 in Schemathesis** with filters, `exclude_*`, custom checks that accept it, or by dropping the check. A 5xx on generated input is a defect: the right fix is request validation (422) in the service. Fixing is out of scope in the testing phase (`testing-modify-prod.mdc`), so record it as `xfail(strict=True, reason="BUG-n")` for that operation + `KNOWN_ISSUES.md`; the fix lands in the refactoring phase and the xfail flips to a failure that forces removal.
 2. **Consumer models are run against real responses**: component/contract tests call the endpoint and pass the body through `Model.model_validate(...)`. Response models are tolerant readers (`extra="ignore"`), request models and envelopes are strict (`python-style.mdc`).
 3. **Snapshots are exact** (ADR-17): normalised JSON (`sort_keys`, stable indent, no volatile fields such as `servers`/build version), one file per service/event; the test diffs the live schema against the committed file and prints a readable diff. `oasdiff breaking` can be added later as a nightly stretch if "additive = ok" is ever needed.
 4. The contract layer asserts shape, not behaviour: business rules belong to component tests.
@@ -399,7 +402,7 @@ push/PR ─┬─ lint (ruff, pyright) ─────────────�
   The job sets `TEST_KAFKA_BOOTSTRAP=localhost:9092`. Add a readiness step that polls the broker before pytest.
 - Integration/UI: `docker compose ... up -d --wait` (buildx layer cache via `docker/bake-action` or `--build` with gha cache), `pytest -n 3`; on failure upload `docker compose logs`, Playwright `test-results/` (traces, screenshots), JUnit.
 - Cadence: **PR** lint/security/unit/component/contract(light)/integration(fast subset)/UI `-m critical`; **push to main** everything except deep fuzz + cross-browser (merge queue is not available for personal-account repos; check Settings → Rules); **nightly** Schemathesis deep+stateful, firefox/webkit, `chaos` + `slow` markers, flaky report (`--count 5` on tests with reruns), refresh `.test_durations`; `smoke.yml` after build/deploy against `SMOKE_BASE_URL` (blocks); `synthetic.yml` is written with `cron */5` (API) / `*/30` (browser) against `SYNTHETIC_BASE_URL` and an issue after 3 consecutive failures, but ships **dormant** (`workflow_dispatch` only): GitHub runners and Grafana's public probes can't reach a local lab, and a tunnel would expose `admin/admin123`. Enable the cron only when a reachable URL exists (GitHub cron is best-effort anyway). For the local lab: `make synthetic-local` (loop every 5 min) and/or the Grafana private probe (§9.1, outbound-only, no tunnel).
-- Reports: JUnit XML per job → `$GITHUB_STEP_SUMMARY` (dorny/test-reporter); coverage per service combined in a `coverage` job (`coverage combine`, report only until service unit tests exist, then add a threshold); reruns are listed, not hidden.
+- Reports: JUnit XML per job → `$GITHUB_STEP_SUMMARY` (dorny/test-reporter); coverage per service (`[tool.coverage.run] parallel = true`, `concurrency = ["thread", "greenlet"]`, `sigterm = true`, because async SQLAlchemy runs ORM internals in greenlets) combined in a `coverage` job (`coverage combine`, report only until service unit tests exist, then add a threshold); reruns are listed, not hidden.
 - "Trace coverage" is not a standard metric: replaced by **API coverage** (httpx event hook logs `method + route template`; a meta-test compares against each service's OpenAPI operations, reported as %).
 - Sharding (`pytest-split --splits N --group k`) is wired in the matrix from day one with `shards: [1]`; raise it only when integration+UI exceeds ~8 min (see §12).
 - Deploy step: intentionally out of scope for the lab (no target server); `smoke.yml` and `synthetic.yml` run against any URL.
@@ -495,7 +498,7 @@ jobs:
       COVERAGE_FILE: .coverage.${{ matrix.service }}
     services:
       postgres:
-        image: postgres:17-alpine               # pin; Postgres 18+ needs the tmpfs path from §6.2
+        image: postgres:15                      # same major as the lab (infra/docker-compose.yml); one pinned tag in compose.deps.yml, Testcontainers and CI
         env: { POSTGRES_PASSWORD: test }
         command: postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=200
         options: >-
@@ -518,11 +521,13 @@ jobs:
       - uses: astral-sh/setup-uv@<SHA>          # vX
         with: { enable-cache: true, cache-dependency-glob: testing/uv.lock }
       - run: uv sync --locked --group ${{ matrix.service }}
+      - id: svc                                 # service directory comes from config/services.py (services/core/..., workers/...)
+        run: echo "path=$(uv run python -c 'from saas_testkit.config.services import SERVICES; print(SERVICES["${{ matrix.service }}"].path)')" >> "$GITHUB_OUTPUT"
       - name: Wait for Redpanda
         run: timeout 60 bash -c 'until (echo > /dev/tcp/localhost/9092) 2>/dev/null; do sleep 1; done'
       - run: >-
           uv run pytest tests/component tests/contract --service ${{ matrix.service }}
-          -n auto -q --cov=../services/${{ matrix.service }} --cov-report=
+          -n auto -q --cov=../${{ steps.svc.outputs.path }} --cov-report=
           --junitxml=reports/junit-${{ matrix.service }}.xml
       - uses: actions/upload-artifact@<SHA>     # vX
         if: ${{ !cancelled() }}
@@ -593,7 +598,7 @@ The job runs the compose stack on the runner host, so a job-level container (`mc
 | Alembic `env.py` can't take a URL override | `Base.metadata.create_all` for the template |
 | Full-stack build too slow in CI | build only `core` services needed; cache layers; run integration on push to main + nightly, keep UI `-m critical` on PR |
 | Test env lacks service runtime deps, or services pin conflicting versions | uv dependency group per service; sync only the group of the service under test (`uv sync --group <svc>`); long-term fix = R0 (uv + pyproject per service) |
-| Nginx limits (UI tests) / seeded data conflicts | functional tests use gateway `:8001`; UI: login once per run, fewer workers; **do not relax nginx**; assert only on own ids |
+| Nginx limits (UI tests) / seeded data conflicts | functional tests use gateway `:8001`; UI: login once per run, fewer workers (the API limit is per bearer token, so all UI traffic from one token file shares one 20 r/s bucket); **do not relax nginx**; assert only on own ids |
 
 
 

@@ -1,5 +1,5 @@
 # Testing architecture: framework core (root conftest, template DB, component app, helpers)
-Skeletons: adapt, do not copy blindly. Used by P1.
+Used by P1. Every identifier inside the code skeletons below is illustrative. Anything marked `PLACEHOLDER`, `<SHA>`, `<pinned-version>` or described as "from SUT_MAP" must be replaced with a real value before use.
 
 ## 6.1 Root conftest (infra in controller, path per service)
 ```python
@@ -75,9 +75,9 @@ Touched-table tracking (test-only DDL, only in the template, prod migrations unt
 Redis. One Redis server; each xdist worker uses its own DB index (redis://host:6379/<n>, via env, no production change) and FLUSHDB runs before every test (list/item caches are shared keys within a DB, so flush rather than namespace). Keep -n <= 8 so indexes stay within the default 16.
 
 Postgres tuning for tests (ADR-18). Start every test Postgres with `postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=200`, data dir on tmpfs. max_connections: each worker holds its own app engine plus the test engine; default 100 runs out at -n 8 with several pools.
-- Testcontainers (controller): PostgresContainer(image).with_command("postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=200").with_kwargs(tmpfs={PGDATA_PARENT: "rw"}). Verify the kwarg name in the installed version.
+- Testcontainers (controller): PostgresContainer(image).with_command("postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=200").with_tmpfs_mount(PGDATA_PARENT) (Testcontainers 4.x; verify the method name in the installed version).
 - compose.deps.yml and the integration stack (docker-compose.test.yml override of postgres): command: postgres -c ... plus tmpfs: [<data dir>].
-- GitHub Actions service container: command: + options: --tmpfs <data dir> (arch-ci.md §9.2).
+- GitHub Actions service container: command: + options: --tmpfs <data dir> (arch-ci.md §9.2). The lab runs Postgres 15, so use the same major everywhere (compose.deps.yml, Testcontainers, CI) with one pinned tag.
 - Data dir by image: /var/lib/postgresql/data up to Postgres 17; Postgres 18+ keeps PGDATA under /var/lib/postgresql/<major>/docker, so mount tmpfs on /var/lib/postgresql. Pin the image tag and re-check on upgrade.
 - RAM cost = template + one DB per worker + data: tens of MB here. Never use these flags outside throwaway test databases.
 

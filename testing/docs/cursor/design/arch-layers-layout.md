@@ -14,8 +14,8 @@ unit (pure code, mocker)
 - component: in-proc; worker DB with real commits; worker Redis DB index + FLUSHDB per test; Redpanda; respx; unique data, clean_db on demand; -n auto; every PR.
 - integration: containers; shared stack PG/Redis; real Kafka; WireMock / simulator; unique data; -n 3; PR fast subset, push to main full.
 - e2e_ui: containers; shared stack; real Kafka; context per test, unique data; -n 2; PR -m critical, push to main full chromium, nightly cross-browser.
-- smoke: target URL (fresh stack/staging/prod); smoke user, unique data; serial; PR (against built stack) + after every deploy; blocks.
-- synthetic: target URL (prod/staging); dedicated synthetic user, synthetic- data; serial; cron every 5 min (API), 30 min (browser); alerts, never blocks.
+- smoke: target URL (fresh stack/staging/prod); smoke user, unique data; one process; PR (against built stack) + after every deploy; blocks.
+- synthetic: target URL (prod/staging); dedicated synthetic user, synthetic- data; one process; cron every 5 min (API), 30 min (browser); alerts, never blocks.
 
 ## Repository layout
 testing/
@@ -24,9 +24,9 @@ testing/
   conftest.py      # markers by path, --service, sys.path, controller infra, xdist hooks, failure links
   compose.deps.yml # optional pg+redis(+redpanda) for local runs (TEST_PG_URL / TEST_REDIS_URL / TEST_KAFKA_BOOTSTRAP)
   contracts/       # committed snapshots: openapi/<svc>.json, events/*.schema.json
-  docs/            # human docs, cursor/ (this pack), SUT_MAP.md
+  docs/            # human docs, SUT_MAP.md, cursor/ (agent-facing pack: design/, plan/, INDEX.md, KIT_MAP.md)
   src/saas_testkit/   # installable package (src-layout, hatchling, py.typed): from saas_testkit.flows import ...
-    config/      # settings.py (pydantic-settings), services.py (name -> path, module, port, DI seams)
+    config/      # settings.py (pydantic-settings), services.py (name -> path, module, port, DI seams; real paths are services/core/*, services/external/*, workers/*)
     domain/      # Pydantic v2 boundary models: tasks, users, webhooks, events (Envelope v1, payloads), enums
     ports/       # Protocols only if >= 2 implementations appear (none at start)
     adapters/
@@ -54,10 +54,10 @@ testing/
     synthetic/   # continuous critical-path checks (api/, browser/)
 Plus testing/synthetic/k6/critical_path.js (non-Python asset for Grafana Synthetic Monitoring, stretch).
 Every tests/<layer>/ has its own conftest.py (fixtures for that layer only); root conftest = cross-layer infra only.
-Service unit tests (later) live in services/*/tests/unit and reuse saas_testkit.factories; add the kit as a path dependency (uv add --dev ../../testing). Fixtures stay in conftest.py; if services' unit tests need them, extract saas_testkit.pytest_plugin (entry point) then, not before.
+Service unit tests (later) live next to each service (services/core/<svc>/tests/unit, services/external/<svc>/tests/unit, workers/<svc>/tests/unit) and reuse saas_testkit.factories. Add the kit as a path dependency: `uv add --dev ../../../testing` from services/core/<svc> and services/external/<svc>, `uv add --dev ../../testing` from workers/<svc>. Fixtures stay in conftest.py; if services' unit tests need them, extract saas_testkit.pytest_plugin (entry point) then, not before.
 
-## SUT cheat sheet (from ARCHITECTURE.md; code-level facts go to SUT_MAP.md)
-- nginx :80 -> api-gateway. /auth/ 5 req/min burst 3; API 10 req/s burst 20 per IP: 429 hazard for parallel tests.
+## SUT cheat sheet (from ARCHITECTURE.md; provisional until SUT_MAP.md is built in P0, which wins on any conflict)
+- nginx :80 -> api-gateway. Rate-limit zones are keyed by the Authorization header, not by IP: API 20 r/s burst 100 (delayed) on /, burst 20 nodelay on /webhooks/; /auth/token 5 r/min burst 3. A login request has no Authorization header, so it is probably not limited at all (BUG candidate for KNOWN_ISSUES.md). The API limit is per bearer token, so one shared token file means one shared bucket.
 - api-gateway :8000 (FastAPI) -> auth, task, webhook-receiver. JWT HS256 required only for /tasks/*; strips Host/sentry-trace/baggage; CORS for :5173.
 - auth-service (FastAPI + PG + Redis db1): POST /auth/token (form), GET /auth/me; users admin/admin123, user/user123 (seed script, not automatic); user cache TTL 300.
 - task-service (FastAPI + PG + Redis db0 + Kafka producer): /tasks CRUD, PATCH /tasks/{id}/start (other transition routes: SUT_MAP); list/item cache in Redis; emits task_created / task_updated.

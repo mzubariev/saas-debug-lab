@@ -4,11 +4,12 @@ globs: testing/**/e2e_ui/**,testing/**/playwright/**
 alwaysApply: false
 ---
 # Playwright rules (sync API only)
-- pytest-playwright, sync API; UI tests are plain `def`, not `async def`. Test data via sync httpx / API adapters, never via clicks.
-- One browser per worker, new context per test. Set browser_context_args, base_url, storage_state (from the per-run token file: API login once per run under FileLock; only login tests skip it).
-- Artefacts: --tracing retain-on-failure --screenshot only-on-failure --video off. Max --reruns 1 in CI, always reported.
-- Page Object: locators in __init__ (role/label/test-id first, CSS last), one method per user action, web-first assertions (expect(...)) inside expect_* methods. Component Objects for repeated widgets (TaskCard, KanbanColumn).
-- Tests read as business flows (board.create_task(...), board.move_task(task, to=Column.IN_PROGRESS)). No locators, URLs, sleeps or wait_for_timeout in tests.
-- Frontend lacks accessible names/test ids: list them in testing/KNOWN_ISSUES.md, use the most stable selector. Adding data-testid to the frontend only under testing-modify-prod.mdc.
-- Fast PR subset = @pytest.mark.critical (marker smoke belongs to tests/smoke/). Browser synthetic checks: tests/synthetic/browser/ (marker synthetic), run rarely, policy in cat-smoke-synthetic.md.
-- Drag-and-drop (dnd-kit): one helper in the board page object: mouse.move to source, mouse.down, mouse.move(..., steps=N) to target, mouse.up; never drag_to.
+
+- Use `pytest-playwright` with the sync API. UI tests are plain `def`, never `async def`. Create test data through sync httpx or the API adapters, never by clicking through the UI.
+- Use one browser per xdist worker and a new browser context per test. Set `browser_context_args`, `base_url` and `storage_state`. The storage state comes from the per-run token file: API login happens once per run under FileLock, and only the login tests skip it.
+- Collect artefacts with `--tracing retain-on-failure --screenshot only-on-failure --video off`. In CI allow at most `--reruns 1`, and always report reruns.
+- Page Objects declare locators in `__init__`, preferring role, label and test id, with CSS only as a last resort. Each method is one user action, and web-first assertions (`expect(...)`) live inside `expect_*` methods. Use Component Objects for repeated widgets such as `TaskCard` and `KanbanColumn`.
+- Tests read as business flows, for example `board.create_task(...)` and `board.move_task(task, to=Column.IN_PROGRESS)`. Tests contain no locators, URLs, sleeps or `wait_for_timeout`.
+- If the frontend lacks accessible names or test ids, list them in `testing/KNOWN_ISSUES.md` and use the most stable selector available. Adding `data-testid` to the frontend is allowed only under `testing-modify-prod.mdc`. If you cannot read the frontend source, stop and report; never guess selectors.
+- The fast pull-request subset is marked `@pytest.mark.critical`. The `smoke` marker belongs to `tests/smoke/` only. Browser synthetic checks live in `tests/synthetic/browser/` with the `synthetic` marker and run rarely; their policy is in `design/cat-smoke-synthetic.md`.
+- Implement drag and drop (dnd-kit) in one helper on the board page object: `mouse.move` to the source, `mouse.down`, `mouse.move(..., steps=N)` to the target, `mouse.up`. Never use `drag_to`.

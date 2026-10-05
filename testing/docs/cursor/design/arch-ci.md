@@ -1,5 +1,5 @@
 # Testing architecture: CI/CD (GitHub Actions) and scaling (P5, P9)
-Playwright in CI: §9.3. Grafana SM: cat-smoke-synthetic.md.
+Playwright in CI: §9.3. Grafana SM: cat-smoke-synthetic.md. The placeholders `<SHA>` and `<pinned-version>` in the YAML must be resolved before use (pinact or Dependabot for SHAs; never invent them).
 
 ## 9. CI design
 DAG on push/PR: lint (ruff, pyright), security (ruff S, audit, gitleaks), unit (xdist) -> component-contract (matrix: service; services: postgres, redis, redpanda) ; integration (builds images in-job, buildx gha cache) ; ui-e2e (own stack, same cache) ; all -> ci-gate (only required check).
@@ -10,7 +10,7 @@ DAG on push/PR: lint (ruff, pyright), security (ruff S, audit, gitleaks), unit (
 - Integration/UI: `docker compose ... up -d --wait` (buildx layer cache via docker/bake-action, or --build with gha cache), pytest -n 3; on failure upload docker compose logs, Playwright test-results/ (traces, screenshots), JUnit.
 - Cadence: PR = lint/security/unit/component/contract(light)/integration(fast subset)/UI -m critical. Push to main = everything except deep fuzz + cross-browser (merge queue is not available for personal-account repos; check Settings -> Rules). Nightly = Schemathesis deep+stateful, firefox/webkit, chaos + slow markers, flaky report (--count 5 on tests with reruns), refresh .test_durations. smoke.yml after build/deploy against SMOKE_BASE_URL (blocks).
 - synthetic.yml is written with cron */5 (API) / */30 (browser) against SYNTHETIC_BASE_URL and an issue after 3 consecutive failures, but ships dormant (workflow_dispatch only): GitHub runners and Grafana public probes cannot reach a local lab, and a tunnel would expose admin/admin123. Enable the cron only when a reachable URL exists (GitHub cron is best-effort anyway). For the local lab: make synthetic-local (loop every 5 min) and/or the Grafana private probe (cat-smoke-synthetic.md).
-- Reports: JUnit XML per job -> $GITHUB_STEP_SUMMARY (dorny/test-reporter); coverage per service combined in a coverage job (coverage combine; report only until service unit tests exist, then add a threshold); reruns are listed, not hidden.
+- Reports: JUnit XML per job -> $GITHUB_STEP_SUMMARY (dorny/test-reporter); coverage per service (`[tool.coverage.run] parallel = true`, `concurrency = ["thread", "greenlet"]`, `sigterm = true`, because async SQLAlchemy runs ORM internals in greenlets) combined in a coverage job (coverage combine; report only until service unit tests exist, then add a threshold); reruns are listed, not hidden.
 - "Trace coverage" is not a standard metric: replaced by API coverage (httpx event hook logs method + route template; a meta-test compares against each service's OpenAPI operations, reported as %).
 - Sharding (pytest-split --splits N --group k) is wired in the matrix from day one with shards: [1]; raise only when integration+UI exceeds ~8 min (§12).
 - Deploy step: out of scope for the lab (no target server); smoke.yml and synthetic.yml run against any URL.
@@ -100,7 +100,7 @@ jobs:
       COVERAGE_FILE: .coverage.${{ matrix.service }}
     services:
       postgres:
-        image: postgres:17-alpine               # pin; Postgres 18+ needs the tmpfs path from §6.2
+        image: postgres:15                      # same major as the lab (infra/docker-compose.yml); one pinned tag in compose.deps.yml, Testcontainers and CI
         env: { POSTGRES_PASSWORD: test }
         command: postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=200
         options: >-
@@ -123,11 +123,13 @@ jobs:
       - uses: astral-sh/setup-uv@<SHA>          # vX
         with: { enable-cache: true, cache-dependency-glob: testing/uv.lock }
       - run: uv sync --locked --group ${{ matrix.service }}
+      - id: svc                                 # service directory comes from config/services.py (services/core/..., workers/...)
+        run: echo "path=$(uv run python -c 'from saas_testkit.config.services import SERVICES; print(SERVICES["${{ matrix.service }}"].path)')" >> "$GITHUB_OUTPUT"
       - name: Wait for Redpanda
         run: timeout 60 bash -c 'until (echo > /dev/tcp/localhost/9092) 2>/dev/null; do sleep 1; done'
       - run: >-
           uv run pytest tests/component tests/contract --service ${{ matrix.service }}
-          -n auto -q --cov=../services/${{ matrix.service }} --cov-report=
+          -n auto -q --cov=../${{ steps.svc.outputs.path }} --cov-report=
           --junitxml=reports/junit-${{ matrix.service }}.xml
       - uses: actions/upload-artifact@<SHA>     # vX
         if: ${{ !cancelled() }}

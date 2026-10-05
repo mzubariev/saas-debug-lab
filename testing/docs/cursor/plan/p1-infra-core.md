@@ -1,9 +1,19 @@
-# P1 - Infra core + first slice (strongest model; Plan/Ask first, then Agent)
-Attach: arch-adr.md, arch-core-infra.md, arch-adapters-factories.md, SUT_MAP.md.
-1. src/saas_testkit/config (settings.py, services.py), context.py, polling.py, infra/{containers,template_db,app_loader,xdist}.py (Testcontainers Postgres with the ADR-18 flags + tmpfs), root conftest.py (markers by path, --service, controller infra, pytest_configure_node, needs_infra, ignore other services), tests/component/conftest.py (worker_db, session_maker, db, service_env, flush_redis, clean_db, Redpanda/KafkaEventReader), template DB with touched-table tracking (arch-core-infra.md §6.2).
-2. Domain models for tasks/users/envelope, concrete HttpTaskApi, TaskLifecycle flow, TaskCreateFactory (Polyfactory ModelFactory), TaskRowFactory (SQLAlchemyFactory) and the rows fixture binding row factories to the test session (create_async).
-3. tests/component/task_service/conftest.py (service_app with lifespan, client; no get_db override: the app builds its engine from env) + two tests: create_task_returns_created_status, unknown_task_returns_404.
-4. tests/unit self-tests: eventually, unique_title, factories.
-DoD: `make t-component SERVICE=task-service` passes with -n 0 and -n 3, 3x in a row, DB-per-worker visible (test_task_service_component_gw0, ..._gw1); second run reuses the template (no Alembic re-run, check log); `pytest tests/unit` needs no Docker (docker stop all, still green); ruff + pyright clean.
-Time-box: app loading / DI seam problem unresolved after 30 min -> fallback in arch-core-infra.md §6.4 and arch-quality.md §11.
-Review yourself carefully: this is the heart of the kit.
+# P1: Infrastructure core and the first slice
+Use a strong model, in Plan or Ask mode first, then Agent mode. This is the heart of the kit, so review it yourself.
+
+Attach: `design/arch-adr.md`, `design/arch-core-infra.md`, `design/arch-adapters-factories.md` and `SUT_MAP.md`.
+
+Must do:
+1. Create `src/saas_testkit/config` (`settings.py`, `services.py`), `context.py`, `polling.py` and `infra/{containers,template_db,app_loader,xdist}.py`. The Testcontainers Postgres uses the ADR-18 flags and tmpfs. Create the root `conftest.py` (markers by path, `--service`, controller infrastructure, `pytest_configure_node`, `needs_infra`, ignoring other services' directories). Create `tests/component/conftest.py` with the fixtures `worker_db`, `session_maker`, `db`, `service_env`, `flush_redis`, `clean_db` and the Redpanda and `KafkaEventReader` wiring. Build the template database with touched-table tracking (`arch-core-infra.md` section 6.2). Use the same Postgres major version as the lab.
+2. Add the domain models for tasks, users and the envelope, the concrete `HttpTaskApi`, the `TaskLifecycle` flow, `TaskCreateFactory` (Polyfactory `ModelFactory`), `TaskRowFactory` (`SQLAlchemyFactory`), and the `rows` fixture that binds row factories to the test's session (`create_async`). Seed the factories once per run from pytest-randomly's seed.
+3. Create `tests/component/task_service/conftest.py` (`service_app` with lifespan, and `client`; do not override `get_db`, because the app builds its engine from the environment) and two tests: `test_create_task_returns_created_status` and `test_unknown_task_returns_404`.
+4. Add `tests/unit` self-tests for `eventually`, `unique_title` and the factories.
+5. Create `testing/docs/cursor/KIT_MAP.md` (30–50 lines: public fixtures, flows, factories, markers and make targets).
+
+Definition of done:
+- `make t-component SERVICE=task-service` passes with `-n 0` and with `-n 3`, three times in a row.
+- The database per worker is visible (`test_task_service_component_gw0`, `..._gw1`), and a second run reuses the template (no Alembic re-run, check the log).
+- `pytest tests/unit` needs no Docker (stop all containers and it is still green).
+- ruff and pyright are clean, and `KIT_MAP.md` exists.
+
+Time-box: if app loading or a missing DI seam is still unresolved after 30 minutes, use the fallback in `arch-core-infra.md` section 6.4 and `arch-quality.md` section 11.
