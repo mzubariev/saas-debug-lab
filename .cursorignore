@@ -36,4 +36,6 @@ docs/system-architechture/testing-architecture
 testing/docs/IMPLEMENTATION_PLAN.md
 testing/docs/TESTING_ARCHITECTURE.md
 testing/docs/cursor/thoughts/DOCS_REVIEW_2026-10.md
+testing/docs/cursor/plan/00-workflow.md
+testing/docs/cursor/plan/01-prompt-template.md
 test-results
