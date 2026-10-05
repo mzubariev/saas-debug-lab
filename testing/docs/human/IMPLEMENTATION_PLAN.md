@@ -134,6 +134,7 @@ Attach: rule, `SUT_MAP.md`, `TESTING_ARCHITECTURE.md` §6.3, §6.5.
 Each sub-task = new chat. Attach: rule, SUT_MAP, KIT_MAP, the service's route/deps files, and the catalogue line from `TESTING_ARCHITECTURE.md` §7.
 
 - **P3.1 task-service:** full catalogue list. Bugs → `xfail(strict)` + `KNOWN_ISSUES.md`.
+  *Optional, only after the P3.1 tests are green:* one property-based state-machine test of the task lifecycle (Hypothesis `RuleBasedStateMachine`, already a transitive dependency through Schemathesis). It generates transition sequences against the real service and complements the parametrised 409 matrix; its invariant is that an allowed transition succeeds and an illegal one returns 409 without changing the task. Keep it in one file with a small `max_examples` and `deadline=None`.
 - **P3.2 auth-service:** replicate structure of P3.1.
 - **P3.3 api-gateway:** respx upstreams, JWT matrix.
 - **P3.4 webhook-receiver + external-service-simulator.**
@@ -168,6 +169,7 @@ Attach: rule, `TESTING_ARCHITECTURE.md` §9 and §9.2 (the corrected `ci.yml` sk
 
 Attach: rule, SUT_MAP, `TESTING_ARCHITECTURE.md` §6.7, §7 (integration).
 
+- **P6.0 KRaft migration of the lab's Kafka (separate branch, before P6.1).** Replace cp-kafka + ZooKeeper with a single KRaft node (broker + controller roles, `CLUSTER_ID`, `controller.quorum.voters`, separate internal and external listeners) and remove the zookeeper service. This is infrastructure-only: no production code changes. Preserve the existing network settings and make sure `kafka-exporter`, `kafka-ui` (if present) and the Python services still reach Kafka on the correct internal ports; old ZooKeeper-era volumes are incompatible, so drop them. Do it now because it removes a container and shortens the integration-stack boot, which pays back through P6 to P9; it does not affect P0 to P5, because component and contract tests use Redpanda. Definition of done: the whole lab works as before (manual smoke: login, create a task, move a task, email in MailHog, webhook delivered) and `kafka-exporter` sees the broker. If it takes more than about two hours, stop, `git restore`, and keep ZooKeeper for now (the item stays in F.4). Use a strong model.
 - **P6.1 (strong model):** `infra/docker-compose.test.yml` (gateway published on :8001, WireMock, `WEBHOOK_URL` of dispatcher AND scheduler → WireMock, timing knobs, `postgres` with ADR-18 `command` + tmpfs; **nginx is not relaxed**), explicit service list, readiness per service kind (FastAPI `/health`, workers `:9100/metrics`, migrations exit code 0, hard timeout plus `docker compose logs --tail` on failure), `src/saas_testkit/infra/compose.py` (`BASE_URL` env-or-up, `KEEP_STACK`), seed + login once per run (FileLock, token file with expiry check), adapters: Kafka reader, MailHog, WireMock, real-network `HttpTaskApi`/`HttpAuthApi`, `tests/integration/conftest.py`.
 DoD: KIT_MAP.md updated with the integration fixtures; `make stack-up` healthy; one test (`login → create task → task readable`) green with `-n 3`.
 - **P6.2** `integration/services`: health via gateway, auth→gateway→task JWT flow, nginx dedicated (`xdist_group("serial")`, `--dist loadgroup`; the auth-burst test is characterised and likely becomes BUG-1), `/metrics` series.
@@ -209,6 +211,7 @@ DoD: check shows green in Grafana Cloud with the lab running; stopping task-serv
 
 - `testing/README.md`: purpose, layer diagram, how to run each layer, ADR summary, CI badge, findings summary (from `KNOWN_ISSUES.md`), screenshot of a trace/report.
 - `reporting.py` failure links (Jaeger/Kibana by correlation id), API-coverage meta-test if time.
+- Optional, high portfolio value: export the pytest run itself as a trace into the lab's Jaeger (`pytest-opentelemetry`, or a small plugin on the OpenTelemetry SDK; verify the package and versions first, and check that Jaeger accepts OTLP in the lab compose). The run becomes the root span, tests become child spans, and the existing `traceparent` header continues it, so one trace shows test → nginx/gateway → service → Kafka → worker. Do this after P9 and only if time remains.
 - Final run: `make t-lint && make t-unit && make t-component-all && make t-contract && make t-int && make t-ui`.
 
 ---
@@ -230,6 +233,6 @@ DoD: check shows green in Grafana Cloud with the lab running; stopping task-serv
 1. Write the integration scenarios S1–S4 plus scheduler scenarios (cleanup, DLQ replay with shortened knobs) and make them green on the current code.
 2. Unify scheduler-worker on async SQLAlchemy + aiokafka: Celery tasks stay thin synchronous wrappers around `asyncio.run(...)` of async service functions (create the engine inside each run); drop `psycopg2` and `kafka-python`. Re-run the integration scenarios.
 3. Restructure the remaining services; then write worker/scheduler component and unit tests (P3.5–P3.6) once, against the final structure.
-4. Replace cp-kafka + ZooKeeper with KRaft in the lab compose. Remove the zookeeper service entirely. Make sure to preserve existing network settings, and ensure that other services like kafka-exporter and python services can still connect to Kafka on the correct internal ports.
+4. Replace cp-kafka + ZooKeeper with KRaft in the lab compose (normally already done in P6.0; do it here only if P6.0 was skipped). Remove the zookeeper service entirely. Make sure to preserve existing network settings, and ensure that other services like kafka-exporter and python services can still connect to Kafka on the correct internal ports.
 
 Refactor service by service with the suite as safety net: for each service, run its component + contract + integration subset before/after; write its unit tests in `<service dir>/tests/unit` (`services/core/<svc>`, `services/external/<svc>` or `workers/<svc>`) using `saas_testkit.factories` (path dependency: `uv add --dev ../../testing`). Add two rules then: `refactor.mdc` (manual `@`: characterization tests first, one service per branch, no behaviour change, layers `api / application / domain / infrastructure`, run the service's component + contract suites before and after) and `unit-tests.mdc` (globs `services/**/tests/unit/**`: pure-function tests, pytest-mock `autospec=True`, no DB/Kafka/Redis/HTTP, `.build()` factories only). `python-style.mdc` already covers prod code. (Datadog is removed once, in P0.1.)

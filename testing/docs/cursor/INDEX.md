@@ -31,7 +31,8 @@ This pack is the source of truth for agents. The two human documents were synchr
 - P3.x: `cat-component` (the service's line), SUT_MAP, KIT_MAP and the service files.
 - P4: `cat-contract`, SUT_MAP, KIT_MAP and the Schemathesis row of `arch-quality` section 11.
 - P5: `arch-ci` (sections 9 and 9.2).
-- P6: `arch-integration`, SUT_MAP, KIT_MAP.
+- P6.0 (KRaft, separate branch): the lab's compose files only; no pack documents.
+- P6.1 to P6.3: `arch-integration`, SUT_MAP, KIT_MAP.
 - P7: `cat-ui`, SUT_MAP, KIT_MAP and `frontend/src`.
 - P8: `cat-smoke-synthetic`, KIT_MAP.
 - P9: `arch-ci` (all), KIT_MAP.

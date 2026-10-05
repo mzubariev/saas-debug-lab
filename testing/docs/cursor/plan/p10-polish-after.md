@@ -3,6 +3,7 @@
 ## P10: Polish
 - Write `testing/README.md`: purpose, layer diagram, how to run each layer, ADR summary, CI badge, a summary of findings from `KNOWN_ISSUES.md`, and a screenshot of a trace or report. State there that the tests run on Python 3.14 with a lockfile while the service images still run Python 3.11 with unpinned requirements (closed in R0).
 - Optionally add the failure links in `reporting.py` (Jaeger and Kibana by correlation id) and the API-coverage meta-test.
+- Optional, high portfolio value: export the pytest run itself as a trace into the lab's Jaeger (`pytest-opentelemetry`, or a small plugin on the OpenTelemetry SDK; verify the package and versions first, and check that Jaeger accepts OTLP in the lab compose). The run becomes the root span, tests become child spans, and the existing `traceparent` header continues it, so one trace shows test, nginx/gateway, service, Kafka and worker. Do this after P9 and only if time remains.
 - Run the final check: `make t-lint && make t-unit && make t-component-all && make t-contract && make t-int && make t-ui`.
 
 ## E: Optional improvement (after P10, before the refactoring)
@@ -15,7 +16,7 @@ Order of the refactoring phase (workers and scheduler first, under the integrati
 1. Write the integration scenarios S1 to S4 plus the scheduler scenarios (cleanup, DLQ replay with shortened knobs) and make them green on the current code.
 2. Unify scheduler-worker on async SQLAlchemy and aiokafka. The Celery tasks stay thin synchronous wrappers around `asyncio.run(...)` of async service functions (create the engine inside each run). Drop `psycopg2` and `kafka-python`, then re-run the integration scenarios.
 3. Restructure the remaining services, then write the worker and scheduler component and unit tests (P3.5 and P3.6) once, against the final structure.
-4. Replace cp-kafka plus ZooKeeper with KRaft in the lab compose and remove the zookeeper service entirely. Preserve the existing network settings and make sure the other services (kafka-exporter, the Python services) still connect to Kafka on the correct internal ports.
+4. Replace cp-kafka plus ZooKeeper with KRaft in the lab compose and remove the zookeeper service entirely. This is normally already done in P6.0; do it here only if P6.0 was skipped. Preserve the existing network settings and make sure the other services (kafka-exporter, the Python services) still connect to Kafka on the correct internal ports.
 
 Refactor service by service with the suite as the safety net: for each service run its component, contract and integration subset before and after, and write its unit tests next to it (`services/core/<svc>/tests/unit`, `services/external/<svc>/tests/unit` or `workers/<svc>/tests/unit`) using `saas_testkit.factories`. The kit is a path dependency: `uv add --dev ../../../testing` from `services/core/<svc>` and `services/external/<svc>`, and `uv add --dev ../../testing` from `workers/<svc>`.
 
