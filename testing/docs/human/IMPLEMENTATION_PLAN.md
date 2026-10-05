@@ -27,6 +27,8 @@
 - **Parallelise:** after the golden example P3.2–P3.6 are independent; use parallel agents/worktrees if available. Drop a chat after ~15 turns or 2 failed fixes (`git restore`, narrower prompt).
 - Use terminal output tails (`| tail -40`), `-x -q`, `--lf` to keep loops cheap.
 
+**SUT_MAP is split:** the common `testing/docs/SUT_MAP.md` (nginx, JWT, envelope, saas_shared, settings, timings, readiness, hazards) plus one file per service in `testing/docs/sut/` (`api-gateway.md`, `auth-service.md`, `task-service.md`, `webhook-receiver.md`, `external-service-simulator.md`, `webhook-dispatcher.md`, `notification-worker.md`, `scheduler-worker.md`), `_prep.md` (prep candidates, P0.1 only) and `_recon-log.md` (evidence, rarely needed). A task attaches the common file plus the service file(s) it touches.
+
 **Keep the kit map and the decision log current:** `testing/docs/cursor/KIT_MAP.md` (what the kit already offers, so agents do not re-create helpers) and the "Decisions since the plan" section of `KNOWN_ISSUES.md` (one line per deviation, so a later chat does not undo it). Un-ignore in `.cursorignore` what a phase needs before it starts: `frontend/src`, `vite.config.*`, `frontend/Dockerfile` and `frontend/package.json` for P0.1 item 5 and P7, `load-tests/lib` for P8.3.
 
 **Interview angle:** keep `KNOWN_ISSUES.md` (defects found), ADR table in the architecture doc, and README diagrams — they are the portfolio.
@@ -36,7 +38,7 @@
 ```
 You are Principal Software Development Engineer in Test (the main programming language is Python v3.14).
 Task <id>: <title>.
-Read only: @testing-core.mdc, testing/docs/SUT_MAP.md, testing/docs/cursor/KIT_MAP.md (from P3 on) and <files>.
+Read only: @testing-core.mdc, testing/docs/SUT_MAP.md, testing/docs/sut/<service>.md (only the service(s) the task touches), testing/docs/cursor/KIT_MAP.md (from P3 on) and <files>.
 Follow the auto-attached rules.
 Deliver: <list>.
 Inner loop while working: `pytest <file> -x -q --lf -n 0`. Final DoD: <command(s)> pass (run once at the end; `make t-gate` for the 3x random-order run); ruff + pyright clean.
@@ -74,16 +76,16 @@ Attach: README, ARCHITECTURE, FILE_STRUCTURE (the 3 docs). Cursor reads the code
 
 ## P0.1 — Prod prep (small, behaviour-neutral seams)
 
-Attach: `SUT_MAP.md`, `testing-modify-prod.mdc`.
+Attach: `SUT_MAP.md`, `sut/_prep.md` (the recon's prep candidates), `testing-modify-prod.mdc`.
 
 Goal: remove the obstacles the recon found **before** building the kit, so the framework stays simple (no monkeypatch hacks). Behaviour must stay identical. One commit per item with the prefix `testability:`. Run the manual lab smoke before the first change and after the last (login, create task, move task, email in MailHog, webhook delivered).
 
 Candidates (take only what the recon proves is needed):
 
-1. Remove Datadog (compose overlay, `ddtrace-run`, env, docs): it blocks in-process imports and is planned anyway.
+1. Remove Datadog (`docker-compose.datadog.yml` and its `ddtrace-run` prefixes, env, docs, the `ddtrace` requirement). In the same change delete the `ddtrace` import in `saas_shared.logging` (`_inject_dd_trace_context`) and the Sentry `ddtrace` hooks: removing the package alone makes every log line carry `dd_trace_error`.
 2. Every service/worker reads connections only from env (DB URL, Redis URL including DB index, Kafka bootstrap, `WEBHOOK_URL`, JWT secret, SMTP host); no hard-coded hosts.
 3. Timing knobs via env with current values as defaults: dispatcher retries/backoff base, scheduler beat intervals (DLQ replay, cleanup), cleanup age threshold.
-4. No import-time side effects: Sentry/OTel/metrics registration/Kafka connect happen in lifespan/startup; inert when env is absent.
+4. Import-time side effects: probably unnecessary. The recon found only OTEL at import, and the tests neutralise it with `OTLP_ENDPOINT=""` and `SENTRY_DSN=""` (no production change); Kafka and Redis already connect only in startup. Do this item only if the recon shows a remaining side effect.
 5. Compose: a healthcheck for every service (`/health`) and an explicit service list for the test stack; frontend `vite build` + `preview` target.
 
 Not now: restructuring, or moving scheduler-worker to async SQLAlchemy/aiokafka. That happens in the refactoring phase (section F) under the integration safety net.
@@ -169,8 +171,8 @@ Attach: rule, `TESTING_ARCHITECTURE.md` §9 and §9.2 (the corrected `ci.yml` sk
 
 Attach: rule, SUT_MAP, `TESTING_ARCHITECTURE.md` §6.7, §7 (integration).
 
-- **P6.0 KRaft migration of the lab's Kafka (separate branch, before P6.1).** Replace cp-kafka + ZooKeeper with a single KRaft node (broker + controller roles, `CLUSTER_ID`, `controller.quorum.voters`, separate internal and external listeners) and remove the zookeeper service. This is infrastructure-only: no production code changes. Preserve the existing network settings and make sure `kafka-exporter`, `kafka-ui` (if present) and the Python services still reach Kafka on the correct internal ports; old ZooKeeper-era volumes are incompatible, so drop them. Do it now because it removes a container and shortens the integration-stack boot, which pays back through P6 to P9; it does not affect P0 to P5, because component and contract tests use Redpanda. Definition of done: the whole lab works as before (manual smoke: login, create a task, move a task, email in MailHog, webhook delivered) and `kafka-exporter` sees the broker. If it takes more than about two hours, stop, `git restore`, and keep ZooKeeper for now (the item stays in F.4). Use a strong model.
-- **P6.1 (strong model):** `infra/docker-compose.test.yml` (gateway published on :8001, WireMock, `WEBHOOK_URL` of dispatcher AND scheduler → WireMock, timing knobs, `postgres` with ADR-18 `command` + tmpfs; **nginx is not relaxed**), explicit service list, readiness per service kind (FastAPI `/health`, workers `:9100/metrics`, migrations exit code 0, hard timeout plus `docker compose logs --tail` on failure), `src/saas_testkit/infra/compose.py` (`BASE_URL` env-or-up, `KEEP_STACK`), seed + login once per run (FileLock, token file with expiry check), adapters: Kafka reader, MailHog, WireMock, real-network `HttpTaskApi`/`HttpAuthApi`, `tests/integration/conftest.py`.
+- **P6.0 KRaft migration of the lab's Kafka (separate branch, before P6.1).** Replace cp-kafka + ZooKeeper with a single KRaft node (keep the existing external listener `PLAINTEXT_HOST://localhost:9093`, which the test override publishes) (broker + controller roles, `CLUSTER_ID`, `controller.quorum.voters`, separate internal and external listeners) and remove the zookeeper service. This is infrastructure-only: no production code changes. Preserve the existing network settings and make sure `kafka-exporter`, `kafka-ui` (if present) and the Python services still reach Kafka on the correct internal ports; old ZooKeeper-era volumes are incompatible, so drop them. Do it now because it removes a container and shortens the integration-stack boot, which pays back through P6 to P9; it does not affect P0 to P5, because component and contract tests use Redpanda. Definition of done: the whole lab works as before (manual smoke: login, create a task, move a task, email in MailHog, webhook delivered) and `kafka-exporter` sees the broker. If it takes more than about two hours, stop, `git restore`, and keep ZooKeeper for now (the item stays in F.4). Use a strong model.
+- **P6.1 (strong model):** `infra/docker-compose.test.yml` (gateway published on :8001, Postgres, Redis, Kafka `:9093` and the workers' metrics ports published on distinct host ports (the base compose keeps them internal), WireMock, `WEBHOOK_URL` of dispatcher AND scheduler → WireMock, timing knobs, `postgres` with ADR-18 `command` + tmpfs; **nginx is not relaxed**), explicit service list, readiness per service kind (FastAPI `/health`, workers `:9100/metrics`, migrations exit code 0, hard timeout plus `docker compose logs --tail` on failure), `src/saas_testkit/infra/compose.py` (`BASE_URL` env-or-up, `KEEP_STACK`), seed + login once per run (FileLock, token file with expiry check), adapters: Kafka reader, MailHog, WireMock, real-network `HttpTaskApi`/`HttpAuthApi`, `tests/integration/conftest.py`.
 DoD: KIT_MAP.md updated with the integration fixtures; `make stack-up` healthy; one test (`login → create task → task readable`) green with `-n 3`.
 - **P6.2** `integration/services`: health via gateway, auth→gateway→task JWT flow, nginx dedicated (`xdist_group("serial")`, `--dist loadgroup`; the auth-burst test is characterised and likely becomes BUG-1), `/metrics` series.
 - **P6.3** `integration/scenarios`: S1, S3, S4 first (fast); S2 and S5 marked `slow`/`chaos`.

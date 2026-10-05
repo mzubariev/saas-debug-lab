@@ -5,7 +5,7 @@ alwaysApply: false
 ---
 # Testing core rules
 
-This file holds policy only. Facts about the system under test (routes, ports, rate limits, environment variable names, error codes) belong to `testing/docs/SUT_MAP.md`; never rely on a number or name from memory when SUT_MAP has it. Design documents live in `testing/docs/cursor/design/`; read only the ones the task attaches. What the testkit already offers is listed in `testing/docs/cursor/KIT_MAP.md`; read it before creating a helper, fixture, flow or factory, and extend an existing one instead of writing a duplicate. Related rules: `python-style.mdc` for code style, `playwright.mdc` for UI tests, `testing-modify-prod.mdc` for production edits.
+This file holds policy only. Facts about the system under test (routes, ports, rate limits, environment variable names, error messages) belong to `testing/docs/SUT_MAP.md` (common facts) and `testing/docs/sut/<service>.md` (one file per service); never rely on a number or name from memory when they have it. Design documents live in `testing/docs/cursor/design/`; read only the ones the task attaches. What the testkit already offers is listed in `testing/docs/cursor/KIT_MAP.md`; read it before creating a helper, fixture, flow or factory, and extend an existing one instead of writing a duplicate. Related rules: `python-style.mdc` for code style, `playwright.mdc` for UI tests, `testing-modify-prod.mdc` for production edits.
 
 ## Scope and working method
 - Write only in `testing/`, `.github/workflows/`, `infra/docker-compose.test.yml` and the root `Makefile` (which includes `testing/testing.mk`). Never change or relax the nginx configuration.

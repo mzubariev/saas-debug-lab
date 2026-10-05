@@ -3,14 +3,14 @@
 Layout in the repository:
 - `.cursor/rules/*.mdc`: the four rules (from `rules/`).
 - `testing/docs/cursor/`: this file, `design/`, `plan/`, and later `KIT_MAP.md`.
-- `testing/docs/`: the human documents `TESTING_ARCHITECTURE.md` and `IMPLEMENTATION_PLAN.md` (both ignored by `.cursorignore`) and `SUT_MAP.md` (created in P0).
+- `testing/docs/`: the human documents `TESTING_ARCHITECTURE.md` and `IMPLEMENTATION_PLAN.md` (both ignored by `.cursorignore`), `SUT_MAP.md` (common facts, created in P0) and `sut/` (one file per service, plus `_prep.md` for P0.1 and `_recon-log.md` as evidence).
 
 This pack is the source of truth for agents. The two human documents were synchronised with it once, at the revision of October 2026. After that, edit the pack first and update the human documents only when you want them current; do not maintain both by hand in parallel.
 
 ## How to run a task
 1. Open a new chat named after the phase.
 2. Paste `plan/01-prompt-template.md` and fill it in from the phase file.
-3. Attach the files named in the phase file's `Attach:` line, plus `SUT_MAP.md` and (from P3 on) `KIT_MAP.md`. Rules attach by glob, and `@testing-core.mdc` is already in the template.
+3. Attach the files named in the phase file's `Attach:` line, plus `SUT_MAP.md`, the `sut/<service>.md` of each service the task touches, and (from P3 on) `KIT_MAP.md`. Rules attach by glob, and `@testing-core.mdc` is already in the template.
 
 ## Design documents (`design/`)
 - `arch-adr.md`: goals, terms and ADR 1 to 18.

@@ -3,7 +3,7 @@ Used by P1 and P2. Every identifier inside the code skeletons below is illustrat
 
 ## 6.3 Adapters -> flows -> tests
 ```python
-# domain: ApiResponse[T] = frozen dataclass(status, data: T | None, error: ProblemBody | None, headers, elapsed)
+# domain: ApiResponse[T] = frozen dataclass(status, data: T | None, error: ProblemBody | None, headers, elapsed); ProblemBody mirrors the FastAPI error body {"detail": str | list of validation errors}, there is no error code field
 
 # adapters/http/tasks.py: concrete class; the transport is the injected client's concern
 class HttpTaskApi:
@@ -31,7 +31,7 @@ async def test_completed_task_cannot_be_started_again(lifecycle: TaskLifecycle):
     response = await lifecycle.start(task)
 
     assert response.status == 409
-    assert response.error.code == "invalid_transition"            # PLACEHOLDER: real error code from SUT_MAP
+    assert "Cannot start task" in response.error.detail           # PLACEHOLDER: exact message from SUT_MAP (409 body is {"detail": "..."})
 ```
 Rule: precondition steps may assert inside flows; the behaviour under test is asserted in the test body. Raw status access never leaves adapters/flows, but the verdict always stays in the test.
 

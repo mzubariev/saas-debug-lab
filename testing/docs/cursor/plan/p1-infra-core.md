@@ -1,7 +1,7 @@
 # P1: Infrastructure core and the first slice
 Use a strong model, in Plan or Ask mode first, then Agent mode. This is the heart of the kit, so review it yourself.
 
-Attach: `design/arch-adr.md`, `design/arch-core-infra.md`, `design/arch-adapters-factories.md` and `SUT_MAP.md`.
+Attach: `design/arch-adr.md`, `design/arch-core-infra.md`, `design/arch-adapters-factories.md`, `SUT_MAP.md` and `sut/task-service.md`.
 
 Must do:
 1. Create `src/saas_testkit/config` (`settings.py`, `services.py`), `context.py`, `polling.py` and `infra/{containers,template_db,app_loader,xdist}.py`. The Testcontainers Postgres uses the ADR-18 flags and tmpfs. Create the root `conftest.py` (markers by path, `--service`, controller infrastructure, `pytest_configure_node`, `needs_infra`, ignoring other services' directories). Create `tests/component/conftest.py` with the fixtures `worker_db`, `session_maker`, `db`, `service_env`, `flush_redis`, `clean_db` and the Redpanda and `KafkaEventReader` wiring. Build the template database with touched-table tracking (`arch-core-infra.md` section 6.2). Use the same Postgres major version as the lab.

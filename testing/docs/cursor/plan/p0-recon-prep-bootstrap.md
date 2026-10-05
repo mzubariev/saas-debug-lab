@@ -13,15 +13,15 @@ Build `testing/docs/SUT_MAP.md` (about 150–400 lines, one table per service) f
 Definition of done: `SUT_MAP.md` exists and you have skimmed it for wrong facts. A wrong line here is copied into every later task, so fix it immediately.
 
 ## P0.1: Production prep (small, behaviour-neutral seams)
-Attach: `SUT_MAP.md` and `testing-modify-prod.mdc` (with `@`).
+Attach: `SUT_MAP.md`, `sut/_prep.md` (the recon's prep candidates) and `testing-modify-prod.mdc` (with `@`).
 
 Goal: remove the obstacles the recon found before building the kit, so the framework stays simple and needs no monkeypatch hacks. Behaviour must stay identical. Make one commit per item with the prefix `testability:`. Run the manual lab smoke (login, create a task, move a task, see the email in MailHog, see the webhook delivered) before the first change and after the last. Keep every edit compatible with the Python 3.11 that the service images run.
 
 Take only the items the recon proves are needed:
-1. Remove Datadog (compose overlay, `ddtrace-run`, environment variables, docs). It blocks in-process imports. This is the only place where Datadog is removed.
+1. Remove Datadog: `docker-compose.datadog.yml` and its `ddtrace-run` prefixes, environment variables, docs and the `ddtrace` requirement. In the same change delete the `ddtrace` import in `saas_shared.logging` (`_inject_dd_trace_context`) and the Sentry `ddtrace` hooks, because removing the package alone makes every log line carry `dd_trace_error`. This is the only place where Datadog is removed.
 2. Make every service and worker read its connections only from the environment: database URL, Redis URL including the DB index, Kafka bootstrap, `WEBHOOK_URL`, JWT secret and SMTP host. No hard-coded hosts remain.
 3. Expose timing knobs through the environment, with the current values as defaults: the dispatcher's retries and backoff base, the scheduler's beat intervals (DLQ replay and cleanup) and the cleanup age threshold.
-4. Remove import-time side effects. Sentry, OTel, metrics registration and Kafka connection happen in lifespan or startup code and stay inert when the environment is absent.
+4. Import-time side effects: probably unnecessary. The recon found only OTEL at import, and the tests neutralise it with `OTLP_ENDPOINT=""` and `SENTRY_DSN=""` (no production change); Kafka and Redis already connect only in startup. Do this item only if the recon shows a remaining side effect.
 5. In compose, add a healthcheck for every service where one is possible (FastAPI services via `/health`), define an explicit service list for the test stack, and add a frontend `vite build` plus `preview` target. Workers have no HTTP app, so their readiness is checked through the metrics port, which the test kit handles.
 
 Out of scope here: restructuring, and moving scheduler-worker to async SQLAlchemy and aiokafka (refactoring phase, see `p10-polish-after.md`).

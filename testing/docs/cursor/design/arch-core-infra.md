@@ -49,10 +49,13 @@ async def db(session_maker) -> AsyncIterator[AsyncSession]:       # plain sessio
 
 @pytest.fixture(scope="session")
 def service_env(infra: Infra, worker_db: DbUrls, worker_id: str) -> Iterator[None]:
-    mp = pytest.MonkeyPatch()                                     # set BEFORE the service is imported
-    mp.setenv("DATABASE_URL", worker_db.async_url)                # real var names from SUT_MAP
-    mp.setenv("REDIS_URL", infra.redis_url_for(worker_index(worker_id)))   # redis://host:6379/<worker index>
+    mp = pytest.MonkeyPatch()                                     # set BEFORE the service is imported (Settings() and the engine are built at import)
+    for key, value in worker_db.postgres_env().items():           # POSTGRES_HOST/PORT/DB/USER/PASSWORD: the services have no DATABASE_URL
+        mp.setenv(key, value)
+    mp.setenv("REDIS_URL", infra.redis_url_for(worker_index(worker_id)))   # auth/task; scheduler-worker reads CELERY_BROKER_URL / CELERY_RESULT_BACKEND instead
     mp.setenv("KAFKA_BOOTSTRAP_SERVERS", infra.kafka_bootstrap)
+    mp.setenv("OTLP_ENDPOINT", "")                                # empty = no OTLP exporter; otherwise import starts a thread dialling otel-collector:4317
+    mp.setenv("SENTRY_DSN", "")                                   # empty = Sentry stays inert
     yield
     mp.undo()
 
@@ -68,7 +71,7 @@ async def clean_db(session_maker) -> None:                        # via @pytest.
             await s.execute(text(f"TRUNCATE {', '.join(quote_ident(t) for t in tables)} RESTART IDENTITY CASCADE"))
         await s.commit()
 ```
-Template. The controller runs alembic upgrade head (repo migrations/, DB URL via env, see SUT_MAP) into a template DB, runs the single-head + drift check, then installs touched-table tracking, then disposes all connections. The template is built once and reused: name = app_template_<alembic head revision>; the controller takes pg_advisory_lock(<const>), checks pg_database and builds only if missing (concurrent per-service sessions, local re-runs and make deps-up all reuse it; a new migration changes the head -> new template, old ones dropped by make deps-clean). Worker DBs are test_<service>_<layer>_<worker_id> (layer = component|contract), dropped before create and at session end. CREATE DATABASE ... TEMPLATE needs no open connections to the template, so nobody connects to it.
+Template. The controller runs alembic upgrade head into a template DB (with cwd=migrations/, because script_location is relative; Alembic builds its URL from POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, POSTGRES_HOST (default postgres) and POSTGRES_PORT, and does not read DATABASE_URL), runs the single-head + drift check, then installs touched-table tracking, then disposes all connections. The template is built once and reused: name = app_template_<alembic head revision>; the controller takes pg_advisory_lock(<const>), checks pg_database and builds only if missing (concurrent per-service sessions, local re-runs and make deps-up all reuse it; a new migration changes the head -> new template, old ones dropped by make deps-clean). Worker DBs are test_<service>_<layer>_<worker_id> (layer = component|contract), dropped before create and at session end. CREATE DATABASE ... TEMPLATE needs no open connections to the template, so nobody connects to it.
 
 Touched-table tracking (test-only DDL, only in the template, prod migrations untouched). Table _touched(tbl text primary key); function _mark() doing INSERT INTO _touched VALUES (TG_TABLE_NAME) ON CONFLICT DO NOTHING; statement-level AFTER INSERT OR UPDATE OR DELETE trigger on every table of schema public except alembic_version and _touched. Triggers see writes from the app, the scheduler and the tests alike (pg_stat_* counters are not reliable per test). clean_db truncates only tables touched since the last cleanup (TRUNCATE also empties indexes; CASCADE follows foreign keys), so cost is proportional to what a test used. Default = no cleanup (unique data); use clean_db only for tests asserting global state (e.g. scheduler cleanup). If a table is tiny, DELETE can beat TRUNCATE: measure before optimizing.
 
@@ -99,4 +102,4 @@ The app talks to the worker DB, the worker's Redis DB index and Redpanda exactly
 ## 6.6 Polling, correlation, resilience helpers
 - eventually(fn, *, timeout=10, interval=0.2, message): retries on AssertionError/None, raises with last error and elapsed.
 - RunContext.run_id (per session), test_id (per test). HTTP adapter adds X-Request-ID + W3C traceparent per test; reporting.py prints those plus Jaeger (:16686) / Kibana (:5601) search URLs in the failure report.
-- Retry/backoff/circuit-breaker patterns are tested, not implemented in the kit: patch asyncio.sleep + random.uniform, assert sequence 1/2/4 s +-10 %. The kit's own HTTP adapter has a small retry policy only for GET/idempotent calls against a starting stack (tenacity, max 3, exponential).
+- Retry/backoff/circuit-breaker patterns are tested, not implemented in the kit: patch asyncio.sleep + random.uniform, assert the sequence (default: about 1 s then 2 s, each plus 0..+10 % jitter). The kit's own HTTP adapter has a small retry policy only for GET/idempotent calls against a starting stack (tenacity, max 3, exponential).

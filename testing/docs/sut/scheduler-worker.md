@@ -1,0 +1,9 @@
+# scheduler-worker (SUT facts)
+
+Directory `workers/scheduler-worker`. Compose command: `celery -A app.core.celery:celery_app worker --beat --loglevel=info --concurrency=2 --prefetch-multiplier=1`. No HTTP app and no compose healthcheck. Depends on redis, postgres, kafka, migrations.
+
+Import of `app.core.celery` (before any broker connection) does all of the following: `setdefault PROMETHEUS_MULTIPROC_DIR` to `/tmp/prometheus_multiproc_scheduler` and `os.makedirs` it; `setup_logging`; `setup_sentry_celery` (no-op if DSN empty); `CeleryInstrumentor().instrument()`. It does not call `setup_worker_telemetry`. That, a second Sentry init, SQLAlchemy sync instrumentation, and the metrics HTTP server run in `worker_process_init`. With the multiproc dir set, only the child that takes `metrics_http.lock` binds `METRICS_PORT`. The parent `--beat` process does not bind it.
+
+`retry_failed_webhooks` (every 60 s) imports kafka-python at import of `app.tasks.webhook_tasks` (`from kafka.errors import KafkaTimeoutError` and `KafkaConsumer` via `infrastructure/kafka/consumer.py`) but constructs the consumer only inside the task. Consumer: topic `webhook_dlq`, group `scheduler-worker`, `enable_auto_commit=True`, `auto_offset_reset=earliest`, `value_deserializer` JSON. Each message is `retry_single_webhook.delay(...)` after dropping the `error` field; `attempts` and `timestamp` stay on the body. `post_json_sync` is `httpx.Client.post` with no `Idempotency-Key`. `cleanup_old_tasks` uses a sync SQLAlchemy engine, `pool_pre_ping=True`, created on first use (`get_sync_engine`), driver psycopg2 through the DSN. SQL: `DELETE FROM tasks WHERE status = 'completed' AND updated_at < :cutoff`.
+
+Common facts (nginx, JWT, envelope, settings, timings, readiness, hazards): `testing/docs/SUT_MAP.md`.

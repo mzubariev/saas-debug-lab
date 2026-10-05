@@ -32,6 +32,7 @@ chaos
 docs/incidents-playbooks
 docs/cheat-sheets
 docs/on-call
+docs/system-architechture/SERVICE_MAP.md
 docs/system-architechture/testing-architecture
 testing/docs/IMPLEMENTATION_PLAN.md
 testing/docs/TESTING_ARCHITECTURE.md

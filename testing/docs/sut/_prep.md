@@ -1,0 +1,9 @@
+# Production-prep candidates (P0.1 only)
+
+Behaviour-neutral seams that would remove the obstacles above. Not done in this task.
+
+1. Delete the `ddtrace` import in `saas_shared.logging` (and the Sentry `ddtrace` hooks) in the same change as dropping the requirement and `ddtrace-run`. Uninstalling the package alone makes every log line carry `dd_trace_error`.
+2. Call `setup_telemetry` inside lifespan / `main` / `worker_process_init`. An empty `otlp_endpoint` already skips the exporter, but the default is `http://otel-collector:4317`, so import starts `BatchSpanProcessor`. Sentry is already inert when `SENTRY_DSN` is empty. Kafka and Redis already connect only in startup / `main`, not at import.
+3. Remove hard-coded hosts so a missing variable fails `Settings()` instead of pointing at Docker DNS: Redis DB 0/1/2 URLs, Kafka `kafka:9092`, both `WEBHOOK_URL`s, both `JWT_SECRET`s, `SMTP_HOST`, gateway `AUTH_SERVICE_URL` and `INTEGRATION_SERVICE_URL`, simulator `INTEGRATION_SERVICE_WEBHOOK_URL`, Alembic's `POSTGRES_HOST` default. `TASK_SERVICE_URL` and notification `KAFKA_BOOTSTRAP_SERVERS` are already required.
+4. Env knobs, current numbers as defaults: dispatcher `_BACKOFF_BASE` (and the 10% jitter cap), beat `60.0` and `300.0`. `MAX_RETRIES`, `WEBHOOK_TIMEOUT`, and `CLEANUP_COMPLETED_TASKS_MINUTES` (default 5, not an hour setting) already exist. Cache TTLs 300/60/120 and the DLQ caps (200, 20 s, 5000 ms) are still literals.
+5. Compose healthchecks already curl `/health` for the five FastAPI services. Dispatcher and notification-worker bind `:9100/metrics` at the start of `main` / `run`; scheduler binds it only in one prefork child. A metrics-port check is the readiness signal those three have. Migrations stays "exit 0".

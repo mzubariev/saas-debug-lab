@@ -10,22 +10,4 @@
 
 ## 11. Risks and fallbacks (decide within 30 min, then take the fallback)
 - Python 3.14 wheels missing (unlikely as of 2026-10) -> venv on 3.13 (15 min, ADR-12).
-- Service lifespan/import has side effects (Kafka/Redis connect, Sentry, ddtrace; Datadog itself is removed in P0.1) -> PREP (P0.1): move them to startup, inert without env; only if impossible: monkeypatch before import / stub ddtrace in sys.modules.
-- Service does not take DB/Redis/Kafka URLs from env -> PREP: make env-driven (default unchanged); else patch the module-level getter (ADR-14).
-- Schemathesis from_asgi runs the app in a different event loop than async fixtures -> the app builds its own engine from env (default design); still failing -> from_url(BASE_URL) against the compose stack (time-box Schemathesis at 30 min).
-- Alembic env.py cannot take a URL override -> Base.metadata.create_all for the template.
-- Full-stack build too slow in CI -> build only the core services needed; cache layers; run integration on push to main + nightly, keep UI -m critical on PR.
-- Test env lacks service runtime deps, or services pin conflicting versions -> uv dependency group per service; sync only the group of the service under test (uv sync --group <svc>); long-term fix = R0 (uv + pyproject per service).
-- Nginx limits (UI tests) / seeded data conflicts -> functional tests use gateway :8001; UI: login once per run, fewer workers (the API limit is per bearer token, so all UI traffic from one token file shares one 20 r/s bucket); do not relax nginx; assert only on own ids.
-
-## 13. Anti-patterns (do not)
-1. One container (or DB server) per xdist worker: the controller owns infra, workers read URLs (ADR-2).
-2. A session-scoped Testcontainers fixture that ignores xdist: every worker starts its own copy. Start in the controller only.
-3. Logging in through the UI in every test: API login once per run, storage_state for UI tests.
-4. A shared mutable seed or shared mutable rows between tests, and asserting on totals of shared collections: unique data, assert on own ids.
-5. sleep / wait_for_timeout: use eventually() and web-first assertions.
-6. Global --reruns: only integration / e2e_ui, max 1, always reported; flakiness is measured nightly, not hidden.
-7. docker compose build from scratch on every shard/job: buildx with the gha layer cache, build only the services under test.
-8. SAVEPOINT-rollback sessions, get_db overrides or fake DB/Kafka implementations where the real thing is cheap (ADR-3, 4, 5).
-9. Relaxing nginx limits, or sharing one login across parallel UI workers beyond the token file: functional tests use the gateway.
-10. Kubernetes (or any orchestration) before compose + CI matrix stops being enough; speculative Protocols before a second implementation exists.
+- Service import has side effects -> the recon found only OTEL at import (a BatchSpanProcessor dialling OTLP_ENDPOINT); Kafka and Redis connect in startup only, Sentry is inert without a DSN. Fix without touching prod: service_env sets OTLP_ENDPOINT="" and SENTRY_DSN="". Only if that is not enough: PREP (P0.1) or monkeypatch before import. ddtrace is imported lazily by the first log line and is removed in P0.1 together with that import.
