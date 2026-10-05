@@ -113,11 +113,11 @@ celery_app.conf.update(
     beat_schedule={
         "retry-failed-webhooks-every-60s": {
             "task": "app.tasks.webhook_tasks.retry_failed_webhooks",
-            "schedule": 60.0,
+            "schedule": settings.dlq_replay_interval_seconds,
         },
         "cleanup-old-tasks-every-5m": {
             "task": "app.tasks.cleanup_tasks.cleanup_old_tasks",
-            "schedule": 300.0,
+            "schedule": settings.cleanup_interval_seconds,
         },
     },
 )

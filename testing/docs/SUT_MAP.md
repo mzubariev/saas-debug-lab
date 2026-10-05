@@ -96,10 +96,10 @@ Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE
 | User cache | auth `auth_service._USER_CACHE_TTL`, key `user:{username}` | 300 s | no |
 | Task list / item cache | task `TaskService` | 60 s key `tasks:list`; 120 s key `tasks:{id}` | no |
 | Dispatcher attempts | `max_retries` | 3 | `MAX_RETRIES` |
-| Dispatcher backoff | `dispatcher_service._BACKOFF_BASE` | after attempt `n` (when `n < max_retries`): sleep `1.0 * 2^(n-1)` seconds plus `random.uniform(0, backoff * 0.1)` (zero to +10%, not ±10%). Default 3 attempts sleep ~1 s then ~2 s. No 4 s sleep unless `MAX_RETRIES` ≥ 4 | base and jitter are not env |
+| Dispatcher backoff | `webhook_backoff_base` | after attempt `n` (when `n < max_retries`): sleep `base * 2^(n-1)` seconds plus `random.uniform(0, backoff * 0.1)` (zero to +10%, not ±10%). Default base 1.0, so 3 attempts sleep ~1 s then ~2 s. No 4 s sleep unless `MAX_RETRIES` ≥ 4 | `WEBHOOK_BACKOFF_BASE` (jitter cap stays 10%) |
 | Dispatcher HTTP timeout | `webhook_timeout` | 10 s | `WEBHOOK_TIMEOUT` |
 | Simulator inbound POST | `routes._send_with_retry` | timeout 10 s; sleep `delay * 2**attempt` between tries. Query `delay` default 1.0, `retry` default 0 | no |
-| Beat | `scheduler` `celery.py` `beat_schedule` | `retry_failed_webhooks` every 60.0 s; `cleanup_old_tasks` every 300.0 s | no |
+| Beat | `scheduler` `celery.py` `beat_schedule` | `retry_failed_webhooks` every 60.0 s; `cleanup_old_tasks` every 300.0 s | `DLQ_REPLAY_INTERVAL_SECONDS`, `CLEANUP_INTERVAL_SECONDS` |
 | DLQ drain caps | `webhook_retry_service` | 200 messages, 20 s wall, consumer `consumer_timeout_ms=5000` | no |
 | Celery DLQ HTTP retry | `retry_single_webhook` | `autoretry_for=(httpx.RequestError,)`, `max_retries=5`, `retry_backoff=True`, `retry_backoff_max=300`, `acks_late=True`. Any `HTTPStatusError` (4xx and 5xx) is permanent | no |
 | Cleanup age | `cleanup_completed_tasks_minutes` | 5 minutes. `0` disables. Column compare is `updated_at < now - minutes`. Not hours | `CLEANUP_COMPLETED_TASKS_MINUTES` |

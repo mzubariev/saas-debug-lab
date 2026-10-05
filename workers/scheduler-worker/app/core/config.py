@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     webhook_url: str
     webhook_timeout: int = 10
 
+    # Beat intervals (seconds). Current lab cadence: DLQ replay every 60s, cleanup every 300s.
+    dlq_replay_interval_seconds: float = 60.0
+    cleanup_interval_seconds: float = 300.0
+
     # Tasks completed more than this many minutes ago will be deleted by
     # cleanup_old_tasks. Set to 0 to disable deletion.
     cleanup_completed_tasks_minutes: int = 5

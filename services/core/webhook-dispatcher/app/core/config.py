@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     webhook_url: str
     webhook_timeout: int = 10
     max_retries: int = 3
+    webhook_backoff_base: float = 1.0
 
     log_level: str = "INFO"
     sentry_dsn: str = ""

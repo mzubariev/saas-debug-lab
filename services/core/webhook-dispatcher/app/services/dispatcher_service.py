@@ -30,7 +30,6 @@ _TOPIC_EVENT_TYPE: dict[str, str] = {
     "webhook_dlq": "webhook.dlq"
 }
 
-_BACKOFF_BASE = 1.0  # seconds
 _TARGET = settings.webhook_url  # constant label value — set once at import time
 
 
@@ -137,7 +136,7 @@ async def deliver(
                     error=last_error,
                 )
                 if attempt < settings.max_retries:
-                    backoff = _BACKOFF_BASE * (2 ** (attempt - 1))
+                    backoff = settings.webhook_backoff_base * (2 ** (attempt - 1))
                     jitter = random.uniform(0, backoff * 0.1)
                     await asyncio.sleep(backoff + jitter)
 
@@ -159,7 +158,7 @@ async def deliver(
                     error=last_error,
                 )
                 if attempt < settings.max_retries:
-                    backoff = _BACKOFF_BASE * (2 ** (attempt - 1))
+                    backoff = settings.webhook_backoff_base * (2 ** (attempt - 1))
                     jitter = random.uniform(0, backoff * 0.1)
                     await asyncio.sleep(backoff + jitter)
     finally:
