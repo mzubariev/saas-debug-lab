@@ -21,6 +21,10 @@ alwaysApply: false
 - Use Pydantic v2 at every external boundary: HTTP bodies, Kafka messages and settings (`pydantic-settings`). Be strict (`extra="forbid"`, `frozen=True`) for what we send or own: request models, Kafka envelopes and settings. Be a tolerant reader (`extra="ignore"`) for response models we only consume, so additive API changes do not break tests.
 - Inject dependencies explicitly (constructor arguments or FastAPI `Depends`). Dependencies point inward: flows and use cases depend on abstractions, and adapters implement them.
 
+## Package Exports & Facade Imports Rule
+- ALWAYS import public submodules, utilities, and classes directly from the root package's facade (the `__init__.py` file exposing them).
+- DO NOT bypass the module facade by importing deeply from internal files or submodules.
+
 ## Patterns and hygiene
 - A factory is a function or a Polyfactory class (`ModelFactory`, `DataclassFactory`, `SQLAlchemyFactory`). A strategy is a `Callable`. Use a builder only for genuinely complex construction, a repository only when it hides real persistence detail, and treat a facade as a business flow.
 - Use `match`/`case` only for structural dispatch (event types, response shapes), not for simple `if`/`else`.
