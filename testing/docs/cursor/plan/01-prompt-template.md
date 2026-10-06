@@ -4,6 +4,7 @@ Paste this at the start of every task chat and fill in the angle-bracket parts f
 
 ```
 You are Senior Software Development Engineer in Test (the main programming language is Python v3.14).
+
 Task <id>: <title>.
 Read only: @testing-core.mdc, testing/docs/SUT_MAP.md, testing/docs/sut/<service>.md (only the service(s) the task touches), testing/docs/cursor/KIT_MAP.md (from P3 on) and <files>.
 Follow the auto-attached rules.
