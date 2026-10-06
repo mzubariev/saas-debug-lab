@@ -87,6 +87,7 @@ def service_env(infra: Infra, worker_db: DbUrls, worker_id: str) -> Iterator[Non
             patch.setenv(key, value)
         patch.setenv("REDIS_URL", infra.redis_url_for(worker_index(worker_id)))
         patch.setenv("KAFKA_BOOTSTRAP_SERVERS", infra.kafka_bootstrap)
+        patch.setenv("SERVICE_NAME", infra.service)
         patch.setenv("OTLP_ENDPOINT", "")
         patch.setenv("SENTRY_DSN", "")
         yield
