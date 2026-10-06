@@ -14,6 +14,7 @@ This file holds policy only. Facts about the system under test (routes, ports, r
 - Characterise first: read the route, call it, then assert. Never invent endpoints, fields, status codes, selectors or helper names. If a fact is missing from SUT_MAP, read that one file. If a file you need is unreadable (for example blocked by `.cursorignore`) or the fact is not in SUT_MAP, stop and report it instead of guessing.
 - Record every deliberate deviation from the plan as one line under "Decisions since the plan" in `testing/KNOWN_ISSUES.md`, so later chats do not undo it.
 - Work on one task per chat and stop when its definition of done is green. Report in at most 10 lines, do not print files back, and on failure show only the last 40 lines of output.
+- Do not add features, helpers, validation layers, abstractions or files beyond what the task lists. Prefer fewer lines. If a deliverable seems to need something extra, stop and ask.
 - Time-box: if you are stuck on a workaround for more than 30 minutes, or three fixes in a row failed, stop. Take the matching fallback from `design/arch-quality.md` (section 11) or report the blocker.
 
 ## Layers

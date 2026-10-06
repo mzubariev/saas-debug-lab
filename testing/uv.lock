@@ -196,6 +196,7 @@ wheels = [
 name = "billiard"
 version = "4.3.1"
 source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ea/0d/8921e960be19fa226358bf933509f57ec679d9b35a1e7ea43460af4b7fef/billiard-4.3.1.tar.gz", hash = "sha256:c88559b306ee5dc93f8d5f843d07da15d795d67af26720d14ee9d09f09eb0b22", size = 166478, upload-time = "2026-10-05T06:38:30.496Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bb/b1/360936699597063a2d9863aa94ccc3a6951e906ced032a9a1d8e562fc56b/billiard-4.3.1-py3-none-any.whl", hash = "sha256:2c7075283191d9c0add66cf8fca8e06ba599e75fe7319b67186759f8877dfdaf", size = 90178, upload-time = "2026-10-05T06:38:28.373Z" },
 ]
@@ -2319,6 +2320,7 @@ dependencies = [
     { name = "redis" },
     { name = "respx" },
     { name = "ruff" },
+    { name = "saas-shared" },
     { name = "schemathesis" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "tenacity" },
@@ -2452,6 +2454,7 @@ requires-dist = [
     { name = "redis" },
     { name = "respx" },
     { name = "ruff" },
+    { name = "saas-shared", editable = "../shared" },
     { name = "schemathesis" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0,<2.2" },
     { name = "tenacity" },

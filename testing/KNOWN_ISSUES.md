@@ -19,3 +19,5 @@
 - P1: worker database names replace hyphens with underscores (`test_task_service_component_gw0`). The skeleton interpolated the raw service name, which is not the name the definition of done checks for.
 - P1: `needs_infra` is true only when `--service` is set or `INFRA=on`, and never for `integration`, `e2e_ui`, `smoke`, or `synthetic`. The skeleton's unit-path and `-m unit` heuristics are not used.
 - P1: the template is migrated in `app_template_<head>_building` and renamed into place, so `CREATE DATABASE ... TEMPLATE` does not see an open connection to the source.
+- P1: `UserRowFactory` sets `hashed_password` (the `users` column). The skeleton's `password_hash` is not a column. One argon2 hash of `user123` is computed at import.
+- P1: pyright `extraPaths` includes `../shared`, and `saas-shared` is a base kit dependency, because row factories import `saas_shared.models`. A service group is no longer required for that import.

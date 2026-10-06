@@ -9,11 +9,14 @@ from collections.abc import AsyncIterator, Iterator
 from uuid import uuid4
 
 import pytest
+from polyfactory.factories.base import BaseFactory
 from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from saas_testkit.adapters.kafka.reader import KafkaEventReader
+from saas_testkit.context import RunContext, using_context
+from saas_testkit.factories.rows import Rows, TaskRowFactory, UserRowFactory
 from saas_testkit.infra.containers import Infra, InfraHandle
 from saas_testkit.infra.template_db import (
     DbUrls,
@@ -116,6 +119,41 @@ async def clean_db(
             listed = ", ".join(quote_ident(name) for name in names)
             await session.execute(text(f"TRUNCATE {listed} RESTART IDENTITY CASCADE"))
         await session.commit()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _seed_factories(pytestconfig: pytest.Config) -> None:
+    """One seed per run, so the pytest-randomly number reproduces factory data too."""
+    seed = pytestconfig.getoption("randomly_seed")
+    if not isinstance(seed, int):
+        raise RuntimeError("pytest-randomly did not provide an integer seed")
+    BaseFactory.seed_random(seed)
+
+
+@pytest.fixture(scope="session")
+def run_id() -> str:
+    return uuid4().hex
+
+
+@pytest.fixture(autouse=True)
+def run_context(run_id: str, request: pytest.FixtureRequest) -> Iterator[RunContext]:
+    """Bind `RunContext` for `unique_title` and for the headers on task calls."""
+    ctx = RunContext.create(run_id=run_id, test_id=request.node.nodeid)
+    with using_context(ctx):
+        yield ctx
+
+
+@pytest.fixture
+def rows(db: AsyncSession) -> Rows:
+    """Per-test subclasses. The session is not stored on the shared factory."""
+
+    class BoundTask(TaskRowFactory):
+        __async_session__ = db
+
+    class BoundUser(UserRowFactory):
+        __async_session__ = db
+
+    return Rows(task=BoundTask, user=BoundUser)
 
 
 @pytest.fixture(scope="session")

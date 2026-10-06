@@ -23,6 +23,7 @@ dependencies = [
     "respx",
     "testcontainers[redis]",
     "sqlalchemy[asyncio]>=2.0,<2.2",
+    "saas-shared",
     "asyncpg",
     "psycopg[binary]",
     "alembic",
@@ -192,7 +193,7 @@ pythonVersion = "3.14"
 venvPath = "."
 venv = ".venv"
 include = ["src", "tests", "conftest.py"]
-extraPaths = ["src"]
+extraPaths = ["src", "../shared"]
 typeCheckingMode = "standard"
 strict = ["src/saas_testkit"]
 exclude = [".venv", "**/__pycache__"]
