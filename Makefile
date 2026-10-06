@@ -52,3 +52,6 @@ chaos-scenario:
 
 chaos-random:
 	bash chaos/random_scenario.sh
+
+# Test kit targets live in testing/testing.mk.
+include testing/testing.mk

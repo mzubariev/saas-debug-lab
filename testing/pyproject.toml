@@ -1,0 +1,203 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "saas-testkit"
+version = "0.1.0"
+description = "Test kit for saas-debug-lab."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-xdist",
+    "pytest-randomly",
+    "pytest-timeout",
+    "pytest-mock",
+    "pytest-cov",
+    "pytest-split",
+    "pytest-rerunfailures",
+    "pytest-playwright",
+    "httpx",
+    "respx",
+    "testcontainers[redis]",
+    "sqlalchemy[asyncio]>=2.0,<2.2",
+    "asyncpg",
+    "psycopg[binary]",
+    "alembic",
+    "redis",
+    "aiokafka",
+    "pydantic",
+    "pydantic-settings",
+    "polyfactory",
+    "schemathesis",
+    "openapi-spec-validator",
+    "tenacity",
+    "filelock",
+    "pyjwt",
+    "argon2-cffi",
+    "pytest-repeat",
+    "ruff",
+    "pyright",
+    "pip-audit",
+]
+
+[dependency-groups]
+task-service = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic",
+    "pydantic-settings",
+    "sqlalchemy[asyncio]",
+    "asyncpg",
+    "aiokafka",
+    "redis",
+    "structlog",
+    "sentry-sdk[fastapi]",
+    "prometheus-client",
+    "saas-shared[services]",
+]
+auth-service = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic",
+    "pydantic-settings",
+    "python-multipart",
+    "pyjwt",
+    "passlib[argon2]",
+    "sqlalchemy[asyncio]",
+    "asyncpg",
+    "redis",
+    "structlog",
+    "sentry-sdk[fastapi]",
+    "prometheus-client",
+    "saas-shared[services]",
+]
+api-gateway = [
+    "fastapi",
+    "uvicorn[standard]",
+    "httpx",
+    "pydantic-settings",
+    "pyjwt",
+    "structlog",
+    "sentry-sdk[fastapi]",
+    "prometheus-client",
+    "saas-shared[services]",
+]
+webhook-receiver = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic",
+    "pydantic-settings",
+    "aiokafka",
+    "structlog",
+    "sentry-sdk[fastapi]",
+    "prometheus-client",
+    "saas-shared[services]",
+]
+webhook-dispatcher = [
+    "pydantic-settings",
+    "httpx",
+    "aiokafka",
+    "structlog",
+    "opentelemetry-api",
+    "sentry-sdk",
+    "prometheus-client",
+    "saas-shared[services]",
+]
+external-service-simulator = [
+    "uvicorn[standard]",
+    "httpx",
+    "pydantic-settings",
+    "opentelemetry-instrumentation-httpx",
+    "prometheus-client",
+    "sentry-sdk[fastapi]",
+    "saas-shared[services]",
+]
+notification-worker = [
+    "pydantic-settings",
+    "aiokafka",
+    "aiosmtplib",
+    "structlog",
+    "tenacity",
+    "prometheus-client",
+    "sentry-sdk",
+    "saas-shared[services]",
+]
+scheduler-worker = [
+    "celery[redis]",
+    "sqlalchemy[asyncio]",
+    "psycopg2-binary",
+    "kafka-python>=3.0",
+    "httpx",
+    "structlog",
+    "opentelemetry-api",
+    "opentelemetry-instrumentation-celery",
+    "pydantic-settings",
+    "sentry-sdk[celery]",
+    "prometheus-client",
+    "saas-shared[services]",
+]
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+saas-shared = { path = "../shared", editable = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/saas_testkit"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+addopts = ["--strict-markers", "--import-mode=importlib"]
+xfail_strict = true
+markers = [
+    "unit: saas_testkit self-tests (tests/unit)",
+    "contract: in-process contract tests (tests/contract)",
+    "component: in-process service tests (tests/component)",
+    "integration: compose-stack tests (tests/integration)",
+    "e2e_ui: Playwright tests (tests/e2e_ui)",
+    "smoke: post-deploy gate (tests/smoke only)",
+    "synthetic: continuous critical-path checks (tests/synthetic)",
+    "slow: long-running test",
+    "chaos: fault-injection test",
+    "critical: fast UI subset",
+    "clean_db: truncate tables touched since the last cleanup",
+]
+
+[tool.ruff]
+src = ["src", "tests"]
+target-version = "py314"
+line-length = 100
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S", "ASYNC", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+"src/saas_testkit/**" = ["S105", "S106"]   # seeded test users and tokens
+
+[tool.ruff.lint.isort]
+known-first-party = ["saas_testkit"]
+
+[tool.pyright]
+pythonVersion = "3.14"
+venvPath = "."
+venv = ".venv"
+include = ["src", "tests", "conftest.py"]
+extraPaths = ["src"]
+typeCheckingMode = "standard"
+strict = ["src/saas_testkit"]
+exclude = [".venv", "**/__pycache__"]
+
+[tool.coverage.run]
+parallel = true
+concurrency = ["thread", "greenlet"]
+sigterm = true

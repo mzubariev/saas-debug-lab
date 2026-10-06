@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: t-check
+        name: t-check
+        entry: make t-check
+        language: system
+        pass_filenames: false
+        files: ^(testing/|Makefile|\.github/workflows/ci\.yml)

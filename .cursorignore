@@ -1,5 +1,6 @@
 # OS
 .DS_Store
+.github
 
 # Editor
 .vscode
@@ -23,6 +24,7 @@ dist
 build
 *.lock
 package-lock.json
+*cache
 
 # Folders to ignore
 observability

@@ -1,0 +1,54 @@
+# Throwaway Postgres, Redis, and Redpanda for local component and contract runs.
+# Postgres flags and tmpfs: ADR-18. Image major matches infra/docker-compose.yml (postgres:15).
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: postgres
+    command: >
+      postgres
+      -c fsync=off
+      -c synchronous_commit=off
+      -c full_page_writes=off
+      -c max_connections=200
+    tmpfs:
+      - /var/lib/postgresql/data:rw,nosuid,size=1g,mode=0777
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.2.2
+    command: >
+      redpanda start
+      --mode dev-container
+      --smp 1
+      --memory 1G
+      --overprovisioned
+      --kafka-addr plaintext://0.0.0.0:9092
+      --advertise-kafka-addr plaintext://localhost:9092
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 10s
