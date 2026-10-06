@@ -21,7 +21,7 @@ class KitSettings(BaseSettings):
 
     model_config = SettingsConfigDict(extra="forbid", frozen=True)
 
-    infra: Literal["auto", "off"] = "auto"
+    infra: Literal["auto", "off", "on"] = "auto"
     test_pg_url: str | None = None
     test_redis_url: str | None = None
     test_kafka_bootstrap: str | None = None

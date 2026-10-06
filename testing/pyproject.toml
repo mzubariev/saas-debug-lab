@@ -155,7 +155,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
-addopts = ["--strict-markers", "--import-mode=importlib"]
+addopts = ["--strict-markers", "--import-mode=importlib", "--maxprocesses=8"]
 xfail_strict = true
 markers = [
     "unit: saas_testkit self-tests (tests/unit)",

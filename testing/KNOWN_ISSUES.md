@@ -16,3 +16,6 @@
 - P0.2: each service dependency group also installs `saas-shared[services]` from `../shared`. Image Dockerfiles install that extra and the service `requirements.txt` files do not; in-process imports need it.
 - P0.2: `testcontainers` 4.15 has no `postgres` or `kafka` extras (those containers are in the core wheel). The dependency is `testcontainers[redis]`. Service groups use `redis` rather than `redis[asyncio]` because redis 8.1 publishes no `asyncio` extra.
 - P0.2: ruff excludes `testing/docs`. Those notes embed Python samples that are not kit code.
+- P1: worker database names replace hyphens with underscores (`test_task_service_component_gw0`). The skeleton interpolated the raw service name, which is not the name the definition of done checks for.
+- P1: `needs_infra` is true only when `--service` is set or `INFRA=on`, and never for `integration`, `e2e_ui`, `smoke`, or `synthetic`. The skeleton's unit-path and `-m unit` heuristics are not used.
+- P1: the template is migrated in `app_template_<head>_building` and renamed into place, so `CREATE DATABASE ... TEMPLATE` does not see an open connection to the source.

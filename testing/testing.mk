@@ -28,13 +28,13 @@ GATE_N = $(or $(N),$(N_$(LAYER)),auto)
 	t-lint t-check t-gate
 
 t-unit:
-	cd $(TESTING_DIR) && uv run pytest tests/unit -n auto -q
+	cd $(TESTING_DIR) && uv run pytest tests/unit -n auto --maxprocesses=8 -q
 
 # One service per session. Install its group first: uv sync --group <svc> (or --all-groups).
 # Run "make deps-up" first: TEST_* above always point at compose.deps.yml. Unset them to let Testcontainers start the infra instead.
 t-component:
 	@test -n "$(SERVICE)" || (echo "Usage: make t-component SERVICE=task-service" >&2; exit 1)
-	cd $(TESTING_DIR) && $(UV_RUN) pytest tests/component --service $(SERVICE) -n auto -q
+	cd $(TESTING_DIR) && $(UV_RUN) pytest tests/component --service $(SERVICE) -n auto --maxprocesses=8 -q
 
 # Sync once, then run the services in parallel without letting each uv run re-sync the environment.
 t-component-all:
@@ -54,7 +54,7 @@ deps-clean:
 
 # SERVICE is required for tests/contract/http (one service per session); contract/events may run without it.
 t-contract:
-	cd $(TESTING_DIR) && uv run pytest tests/contract $(if $(SERVICE),--service $(SERVICE)) -n auto -q
+	cd $(TESTING_DIR) && uv run pytest tests/contract $(if $(SERVICE),--service $(SERVICE)) -n auto --maxprocesses=8 -q
 
 # Rewrites committed snapshots (ADR-17). Tests read --update-contracts.
 contracts-update:
@@ -91,6 +91,6 @@ t-gate:
 	if [ -n "$(SERVICE)" ]; then service_arg="--service $(SERVICE)"; fi; \
 	i=1; \
 	while [ "$$i" -le 3 ]; do \
-		uv run pytest tests/$(LAYER) $$service_arg -n $(GATE_N) -q || exit 1; \
+		uv run pytest tests/$(LAYER) $$service_arg -n $(GATE_N) --maxprocesses=8 -q || exit 1; \
 		i=$$((i + 1)); \
 	done
