@@ -20,6 +20,7 @@ dependencies = [
     "pytest-rerunfailures",
     "pytest-playwright",
     "httpx",
+    "fastapi",
     "respx",
     "testcontainers[redis]",
     "sqlalchemy[asyncio]>=2.0,<2.2",
