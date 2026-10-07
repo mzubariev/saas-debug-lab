@@ -2,11 +2,13 @@
 
 ## P10: Polish
 
-- Write `testing/README.md`: purpose, layer diagram, how to run each layer, ADR summary, CI badge, a summary of findings from `KNOWN_ISSUES.md`, and a screenshot of a trace or report. State there that the tests run on Python 3.14 with a lockfile while the service images still run Python 3.11 with unpinned requirements (closed in R0).
 - Optionally add the failure links in `reporting.py` (Jaeger and Kibana by correlation id) and the API-coverage meta-test.
 - Optional, high portfolio value: export the pytest run itself as a trace into the lab's Jaeger (`pytest-opentelemetry`, or a small plugin on the OpenTelemetry SDK; verify the package and versions first, and check that Jaeger accepts OTLP in the lab compose). The run becomes the root span, tests become child spans, and the existing `traceparent` header continues it, so one trace shows test, nginx/gateway, service, Kafka and worker. Do this after P9 and only if time remains.
 - Run only the affected parts in CI: use `dorny/paths-filter` per service, shared code, frontend and infra. `ci-gate` still requires the full set on main, and changes to shared code, `saas_shared` or infra trigger everything.
 - Run the final check: `make t-lint && make t-unit && make t-component-all && make t-contract && make t-int && make t-ui`.
+- Write `testing/README.md`: purpose, layer diagram, how to run each layer, ADR summary, CI badge, a summary of findings from `KNOWN_ISSUES.md`, and a screenshot of a trace or report. State there that the tests run on Python 3.14 with a lockfile while the service images still run Python 3.11 with unpinned requirements (closed in R0).
+
+
 
 ## A: After testing (a separate production-code refactoring and unit-test effort)
 

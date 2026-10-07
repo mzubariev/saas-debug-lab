@@ -2,8 +2,9 @@
 
 import pytest
 
-from saas_testkit.infra import template_db
-from saas_testkit.infra.template_db import DbUrls, building_database_name, ensure_template_database
+from saas_testkit.infra import DbUrls, building_database_name, ensure_template_database
+
+_MODULE = "saas_testkit.infra.template_db"
 
 _ADMIN = "postgresql://postgres:test@localhost:5432/postgres"
 _FINAL = "app_template_0002"
@@ -59,9 +60,9 @@ def test_building_name_is_the_final_name_plus_suffix() -> None:
 def test_missing_template_is_built_then_renamed(monkeypatch: pytest.MonkeyPatch) -> None:
     conn = _Conn(final_exists=False)
     upgraded: list[str] = []
-    monkeypatch.setattr(template_db, "read_alembic_head", lambda: "0002")
-    monkeypatch.setattr(template_db, "admin_engine", lambda _url: _Engine(conn))
-    monkeypatch.setattr(template_db, "terminate_connections", lambda _url, _name: None)
+    monkeypatch.setattr(f"{_MODULE}.read_alembic_head", lambda: "0002")
+    monkeypatch.setattr(f"{_MODULE}.admin_engine", lambda _url: _Engine(conn))
+    monkeypatch.setattr(f"{_MODULE}.terminate_connections", lambda _url, _name: None)
 
     def upgrade(urls: DbUrls) -> None:
         upgraded.append(urls.name)
@@ -69,8 +70,8 @@ def test_missing_template_is_built_then_renamed(monkeypatch: pytest.MonkeyPatch)
     def track(urls: DbUrls) -> None:
         upgraded.append(urls.name)
 
-    monkeypatch.setattr(template_db, "_upgrade_and_check", upgrade)
-    monkeypatch.setattr(template_db, "install_touched_tracking", track)
+    monkeypatch.setattr(f"{_MODULE}._upgrade_and_check", upgrade)
+    monkeypatch.setattr(f"{_MODULE}.install_touched_tracking", track)
 
     assert ensure_template_database(_ADMIN) == _FINAL
 
@@ -88,12 +89,11 @@ def test_existing_template_is_reused_after_the_leftover_is_dropped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     conn = _Conn(final_exists=True)
-    monkeypatch.setattr(template_db, "read_alembic_head", lambda: "0002")
-    monkeypatch.setattr(template_db, "admin_engine", lambda _url: _Engine(conn))
-    monkeypatch.setattr(template_db, "terminate_connections", lambda _url, _name: None)
+    monkeypatch.setattr(f"{_MODULE}.read_alembic_head", lambda: "0002")
+    monkeypatch.setattr(f"{_MODULE}.admin_engine", lambda _url: _Engine(conn))
+    monkeypatch.setattr(f"{_MODULE}.terminate_connections", lambda _url, _name: None)
     monkeypatch.setattr(
-        template_db,
-        "_upgrade_and_check",
+        f"{_MODULE}._upgrade_and_check",
         lambda _urls: pytest.fail("alembic must not run when the template exists"),
     )
 
@@ -105,14 +105,14 @@ def test_existing_template_is_reused_after_the_leftover_is_dropped(
 
 def test_failed_upgrade_drops_the_building_database(monkeypatch: pytest.MonkeyPatch) -> None:
     conn = _Conn(final_exists=False)
-    monkeypatch.setattr(template_db, "read_alembic_head", lambda: "0002")
-    monkeypatch.setattr(template_db, "admin_engine", lambda _url: _Engine(conn))
-    monkeypatch.setattr(template_db, "terminate_connections", lambda _url, _name: None)
+    monkeypatch.setattr(f"{_MODULE}.read_alembic_head", lambda: "0002")
+    monkeypatch.setattr(f"{_MODULE}.admin_engine", lambda _url: _Engine(conn))
+    monkeypatch.setattr(f"{_MODULE}.terminate_connections", lambda _url, _name: None)
 
     def upgrade(_urls: DbUrls) -> None:
         raise RuntimeError("migrate failed")
 
-    monkeypatch.setattr(template_db, "_upgrade_and_check", upgrade)
+    monkeypatch.setattr(f"{_MODULE}._upgrade_and_check", upgrade)
 
     with pytest.raises(RuntimeError, match="migrate failed"):
         ensure_template_database(_ADMIN)

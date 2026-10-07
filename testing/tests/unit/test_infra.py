@@ -5,18 +5,20 @@ import types
 
 import pytest
 
-from saas_testkit.config.paths import repo_root
-from saas_testkit.config.services import SERVICES, redis_db_index
-from saas_testkit.infra.app_loader import import_service_app, install_service_paths
-from saas_testkit.infra.containers import Infra, redis_url_for
-from saas_testkit.infra.template_db import (
+from saas_testkit.config import SERVICES, redis_db_index, repo_root
+from saas_testkit.infra import (
     DbUrls,
+    Infra,
+    import_service_app,
+    infra_required,
+    install_service_paths,
     quote_ident,
     read_alembic_head,
+    redis_url_for,
     template_database_name,
     worker_database_name,
+    worker_index,
 )
-from saas_testkit.infra.xdist import infra_required, worker_index
 
 
 def test_worker_database_name_matches_the_visible_name() -> None:

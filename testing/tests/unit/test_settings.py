@@ -3,10 +3,14 @@
 import pytest
 from pydantic import ValidationError
 
-from saas_testkit.config.paths import repo_root
-from saas_testkit.config.services import SERVICES, service_environment
-from saas_testkit.config.settings import POSTGRES_IMAGE, KitSettings
-from saas_testkit.factories.jwt import LAB_JWT_SECRET
+from saas_testkit.config import (
+    POSTGRES_IMAGE,
+    SERVICES,
+    KitSettings,
+    repo_root,
+    service_environment,
+)
+from saas_testkit.factories import LAB_JWT_SECRET
 
 
 def test_blank_urls_are_unset(monkeypatch: pytest.MonkeyPatch) -> None:

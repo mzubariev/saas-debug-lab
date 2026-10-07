@@ -6,11 +6,11 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from saas_testkit.adapters.http.tasks import HttpTaskApi
-from saas_testkit.config.services import SERVICES
+from saas_testkit.adapters.http import HttpTaskApi
+from saas_testkit.config import SERVICES
 from saas_testkit.context import RunContext
 from saas_testkit.flows import TaskLifecycle
-from saas_testkit.infra.app_loader import import_service_app
+from saas_testkit.infra import import_service_app
 
 
 @pytest.fixture(scope="session")

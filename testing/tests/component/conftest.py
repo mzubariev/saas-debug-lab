@@ -14,19 +14,22 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from saas_testkit.adapters.kafka.reader import KafkaEventReader
-from saas_testkit.config.services import redis_db_index, service_environment
+from saas_testkit.adapters.kafka import KafkaEventReader
+from saas_testkit.config import redis_db_index, service_environment
 from saas_testkit.context import RunContext, using_context
-from saas_testkit.factories.rows import Rows, TaskRowFactory, UserRowFactory
-from saas_testkit.infra.containers import KAFKA_TOPICS, Infra, InfraHandle
-from saas_testkit.infra.template_db import (
+from saas_testkit.factories import Rows, TaskRowFactory, UserRowFactory
+from saas_testkit.infra import (
+    KAFKA_TOPICS,
     DbUrls,
+    Infra,
+    InfraHandle,
     create_worker_database,
     drop_database,
+    is_worker,
     quote_ident,
     worker_database_name,
+    worker_index,
 )
-from saas_testkit.infra.xdist import is_worker, worker_index
 
 logger = logging.getLogger("saas_testkit.component")
 

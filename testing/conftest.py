@@ -9,10 +9,15 @@ from pathlib import Path
 import pytest
 from xdist.workermanage import WorkerController
 
-from saas_testkit.config.services import SERVICES
-from saas_testkit.infra.app_loader import install_service_paths
-from saas_testkit.infra.containers import InfraHandle, start_or_attach_infra
-from saas_testkit.infra.xdist import _layer, is_worker, needs_infra
+from saas_testkit.config import SERVICES
+from saas_testkit.infra import (
+    InfraHandle,
+    _layer,
+    install_service_paths,
+    is_worker,
+    needs_infra,
+    start_or_attach_infra,
+)
 
 _MARKERS: dict[str, pytest.MarkDecorator] = {
     "unit": pytest.mark.unit,
