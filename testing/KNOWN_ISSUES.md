@@ -7,6 +7,7 @@
 - BUG-2: task-service `TaskCreate.title` is an unconstrained string. `POST /tasks` stores an empty title and a 10000-character title and returns 201. Expected 422. `xfail(strict=True)` on those two cases. A non-string title does return 422.
 - BUG-3: task-service commits in the repository, then calls `publish_event`. A Kafka failure returns 500, the task row remains (a create stays stored, a start stays `in_progress`), the event is not published, and `cache_delete` does not run. `xfail(strict=True)` on create and start.
 - BUG-4: auth-service login writes `hashed_password` to Redis (`user:{username}`, TTL 300 s) before it checks the password. `xfail(strict=True)` expects that cache entry to omit the hash. A second login reads the cached row.
+- BUG-5: webhook-receiver `receive_inbound` logs `event=<payload event>` after a successful publish, and the failure log does the same. structlog already takes that name as the message, so the call raises `TypeError` and the route returns 500 instead of 200. The Kafka message is published before the success log. `xfail(strict=True)` on the 200 response.
 
 ### Candidates to confirm
 
@@ -50,3 +51,4 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P3.2: the auth component sets `TOKEN_EXPIRE_MINUTES=45` before import. Issued-token `exp` is checked against that value.
 - P3.3: the api-gateway ASGI client sets `raise_app_exceptions=False`, matching the task-service and auth-service component clients.
 - P3.3: the header test pins the request respx sees. The proxy omits `host`, `sentry-trace`, `baggage`, `traceparent`, and `tracestate`. With `OTLP_ENDPOINT` empty, the httpx instrumentor puts the client's `baggage`, `traceparent`, and `tracestate` back; `sentry-trace` stays absent; `Host` is the upstream hostname.
+- P3.4: the webhook-receiver ASGI client sets `raise_app_exceptions=False`, so a failed publish is the HTTP 500 from the exception middleware.

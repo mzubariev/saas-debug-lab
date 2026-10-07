@@ -31,6 +31,15 @@ class StatusBody(BaseModel):
     status: str
 
 
+class InboundReceipt(BaseModel):
+    """`POST /webhooks/inbound` returns `status` and the echoed `event`."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    status: str
+    event: str
+
+
 class ProxiedBody(BaseModel):
     """JSON body the gateway passes through. The component double sets `marker`."""
 

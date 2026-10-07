@@ -60,3 +60,9 @@ auth-service (`tests/component/auth_service/conftest.py`): `service_app` sets `T
 api-gateway (`tests/component/api_gateway/conftest.py`): `service_app` enters `lifespan_context`. `client` is `httpx.AsyncClient` on `ASGITransport` (`raise_app_exceptions=False`) with `base_url="http://test"`. `gateway` is `GatewayFlow` over `HttpGatewayApi` and `GatewayUpstream` (respx).
 
 `GatewayFlow.through`, `open`, `tasks_as` (`missing`, `expired`, `tampered`, `alg_none`), `passthrough`, `when_upstream_fails` (`timeout`, `down`), `forwarded_headers`, `allowed_origin`, and `path_for` (`auth`, `tasks`, `tasks-item`, `webhooks`). `Routed` is the response plus the upstream `service` and `path` (`None` when the gateway did not proxy). `Forwarded` is the upstream header map plus the `request_id`, `marker`, `client_host`, `upstream_host`, `baggage`, `traceparent`, and `tracestate` this call sent. `HttpGatewayApi.request` and `preflight`. `GatewayUpstream.start`, `stop`, `respond`, `fail`, `last_request`. `ProxiedBody.marker` is the JSON body the upstream double returns.
+
+## P3.4 webhook-receiver
+
+webhook-receiver (`tests/component/webhook_receiver/conftest.py`): `service_app` enters `lifespan_context`. `client` is `httpx.AsyncClient` on `ASGITransport` (`raise_app_exceptions=False`) with `base_url="http://test"`. `inbound` is `InboundWebhook`.
+
+`InboundWebhook.accept`, `submit` (`missing-event`, `event-type`, `data-type`), and `published`. `Accepted` is the response plus the `event` and `data` sent. `HttpWebhookApi.receive` and `submit`. `WebhookDelivery.inbound` waits for `webhook.inbound` whose payload `event` is this call (`matches_inbound_event`). `InboundReceipt` is the 200 body (`status`, `event`).
