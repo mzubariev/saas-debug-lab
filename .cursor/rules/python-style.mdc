@@ -22,8 +22,9 @@ alwaysApply: false
 - Inject dependencies explicitly (constructor arguments or FastAPI `Depends`). Dependencies point inward: flows and use cases depend on abstractions, and adapters implement them.
 
 ## Package Exports & Facade Imports Rule
-- ALWAYS import public submodules, utilities, and classes directly from the root package's facade (the `__init__.py` file exposing them).
-- DO NOT bypass the module facade by importing deeply from internal files or submodules.
+- ALWAYS import public utilities, classes, and factories from the root package's facade (the `__init__.py`) ONLY when importing from OUTSIDE that package (e.g., from test files or other services).
+- DO NOT bypass the module facade when writing external code.
+- INTERNAL files within the same package (e.g., files inside `saas_testkit/factories/`) MUST import from each other directly or via relative imports to prevent circular dependencies.
 
 ## Patterns and hygiene
 - A factory is a function or a Polyfactory class (`ModelFactory`, `DataclassFactory`, `SQLAlchemyFactory`). A strategy is a `Callable`. Use a builder only for genuinely complex construction, a repository only when it hides real persistence detail, and treat a facade as a business flow.
