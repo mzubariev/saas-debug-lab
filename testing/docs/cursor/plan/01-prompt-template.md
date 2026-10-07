@@ -10,7 +10,7 @@ Task <id>: <title>
 Read only:
 - @testing-core.mdc
 - design documents: <@arch-....md from the phase's Attach: line>
-- facts about the system under test: @testing/docs/SUT_MAP.md and only the service files this task touches, for example @testing/docs/sut/<service>.md
+- facts about the system under test: @testing/docs/cursor/sut/SUT_MAP.md and only the service files this task touches, for example @testing/docs/cursor/sut/<service>.md
 - the files this task names. Do not scan the repository.
 Read and write: @testing/docs/cursor/KIT_MAP.md (the saas_testkit map): read it before creating any helper, fixture, flow or factory, and extend an existing one instead of duplicating it. At the end add only the new names to it.
 Follow the auto-attached rules.

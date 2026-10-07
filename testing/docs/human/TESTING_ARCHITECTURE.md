@@ -50,7 +50,7 @@ Self-contained design document for **this** monorepo (isolation, shared infra, C
 
 ## 3. System under test — cheat sheet
 
-(from ARCHITECTURE.md; **provisional until `SUT_MAP.md` is built in P0**, which wins on any conflict)
+(from ARCHITECTURE.md; **provisional until `testing/docs/cursor/sut/SUT_MAP.md` is built in P0**, which wins on any conflict)
 
 
 | Service | Kind | Talks to | Test-relevant facts |
@@ -104,7 +104,7 @@ testing/
 ├── conftest.py               # markers by path, --service, sys.path, controller infra, xdist hooks, failure links
 ├── compose.deps.yml          # optional: pg+redis for local runs (TEST_PG_URL / TEST_REDIS_URL)
 ├── contracts/                # committed snapshots: openapi/<svc>.json, events/*.schema.json
-├── docs/                     # this file, plan, SUT_MAP.md, cursor/ (agent-facing pack: design/, plan/, INDEX.md, KIT_MAP.md)
+├── docs/                     # human/, cursor/ (agent-facing pack: design/, plan/, INDEX.md, KIT_MAP.md, sut/)
 ├── src/
 │   └── saas_testkit/         # installable package (src-layout, hatchling, py.typed); `from saas_testkit.flows import ...`
 │       ├── config/               # settings.py (pydantic-settings), services.py (name → path, module, port, DI seams)

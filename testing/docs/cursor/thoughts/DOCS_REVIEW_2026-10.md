@@ -22,7 +22,7 @@ They should be fixed in both the originals and the pack before P0.2/P1 (list in 
 controller-owned Testcontainers + template DB per xdist worker, real Redpanda, exact contract snapshots,
 never-silence-500, sync Playwright with storage_state, SHA-pinned CI with a correct `ci-gate`). Gaps are
 listed in §8 and are mostly additive.
-- **Workflow is sound.** Rules = invariants, docs attached per phase, `SUT_MAP.md` as the compressed fact
+- **Workflow is sound.** Rules = invariants, docs attached per phase, `testing/docs/cursor/sut/SUT_MAP.md` as the compressed fact
 sheet, one task per chat with a runnable DoD and a `git restore` reset path, golden example then
 replicate, mutation spot-check. Nine practical hazards are listed in §10; none needs a redesign.
 
@@ -313,7 +313,7 @@ Items 14–21 implement the agent-workflow findings of §10:
 
 - Rules carry invariants and are small; docs carry rationale and skeletons and are attached per phase.
 The `Attach:` line of each phase file is an explicit context budget.
-- `SUT_MAP.md` is the single most valuable token-economy device: a compressed fact sheet instead of the
+- `testing/docs/cursor/sut/SUT_MAP.md` is the single most valuable token-economy device: a compressed fact sheet instead of the
 whole repository.
 - One task = one chat, commit per green task, time-boxes, "stop after 3 failed fixes", a ≤10-line report.
 These are the right guardrails for autonomous loops and keep a bad chat reversible with `git restore`.
@@ -340,7 +340,7 @@ enough), or stop maintaining the monolith. Never edit both by hand.
 Finding: `testing-core.mdc` states "Nginx /auth/ allows 5 req/min", a stale fact (see §6.2) baked into an
 invariant file.
 Why it hurts agents: agents treat rules as ground truth and do not re-verify them against the code.
-Fix: rules contain only policy; every SUT number belongs in `SUT_MAP.md`, and the rule says "see SUT_MAP".
+Fix: rules contain only policy; every SUT number belongs in `testing/docs/cursor/sut/SUT_MAP.md`, and the rule says "see SUT_MAP".
 
 #### 10.3 Glob-attached rules are not attached at chat start
 
@@ -362,7 +362,7 @@ never infer routes, fields, or selectors." Un-ignore what P0.1, P7 and P8.3 need
 
 #### 10.5 Nothing describes the testkit after P2
 
-Finding: `SUT_MAP.md` covers the system under test; nothing covers `saas_testkit` once it exists.
+Finding: `testing/docs/cursor/sut/SUT_MAP.md` covers the system under test; nothing covers `saas_testkit` once it exists.
 Why it hurts agents: from P3 on, an agent that does not know the kit's fixtures, flows, factories and
 markers re-creates helpers, producing duplicates and inconsistent patterns.
 Fix: add a 30–50-line `testing/docs/cursor/KIT_MAP.md` (public fixtures, flows, factories, markers, make

@@ -1,6 +1,6 @@
 # SUT map (common facts)
 
-Split into files for token economy. This file: facts shared by several services. One file per service: `testing/docs/sut/<service>.md` (attach only the service(s) a task touches). `sut/_prep.md`: production-prep candidates (P0.1 only). `sut/_recon-log.md`: evidence of the P0 scratch run (rarely needed).
+Split into files for token economy. This file: facts shared by several services. One file per service: `testing/docs/cursor/sut/<service>.md` (attach only the service(s) a task touches). `testing/docs/cursor/sut/_prep.md`: production-prep candidates (P0.1 only). `testing/docs/cursor/sut/_recon-log.md`: evidence of the P0 scratch run (rarely needed).
 
 Facts below come from the service code, `infra/nginx/nginx.conf`, `infra/docker-compose.yml`, and a scratch import on Python 3.14.6 (2026-10-05). Service images are `python:3.11-slim`. `docs/system-architechture/ARCHITECTURE.md` disagrees with this file in the places called out below; this file wins.
 

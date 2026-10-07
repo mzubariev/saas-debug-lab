@@ -6,4 +6,4 @@ Import of `app.core.celery` (before any broker connection) does all of the follo
 
 `retry_failed_webhooks` (every 60 s) imports kafka-python at import of `app.tasks.webhook_tasks` (`from kafka.errors import KafkaTimeoutError` and `KafkaConsumer` via `infrastructure/kafka/consumer.py`) but constructs the consumer only inside the task. Consumer: topic `webhook_dlq`, group `scheduler-worker`, `enable_auto_commit=True`, `auto_offset_reset=earliest`, `value_deserializer` JSON. Each message is `retry_single_webhook.delay(...)` after dropping the `error` field; `attempts` and `timestamp` stay on the body. `post_json_sync` is `httpx.Client.post` with no `Idempotency-Key`. `cleanup_old_tasks` uses a sync SQLAlchemy engine, `pool_pre_ping=True`, created on first use (`get_sync_engine`), driver psycopg2 through the DSN. SQL: `DELETE FROM tasks WHERE status = 'completed' AND updated_at < :cutoff`.
 
-Common facts (nginx, JWT, envelope, settings, timings, readiness, hazards): `testing/docs/SUT_MAP.md`.
+Common facts (nginx, JWT, envelope, settings, timings, readiness, hazards): `testing/docs/cursor/sut/SUT_MAP.md`.

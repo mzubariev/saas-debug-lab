@@ -1,5 +1,5 @@
 # P6: Integration stack and tests
-Attach: `design/arch-integration.md`, `SUT_MAP.md`, `KIT_MAP.md` and the `sut/<service>.md` files of the services a scenario touches.
+Attach: `design/arch-integration.md`, `sut/SUT_MAP.md`, `KIT_MAP.md` and the `sut/<service>.md` files of the services a scenario touches.
 
 ## P6.0: KRaft migration of the lab's Kafka (separate branch, before P6.1; use a strong model)
 Replace cp-kafka plus ZooKeeper with a single KRaft node (keep the existing external listener `PLAINTEXT_HOST://localhost:9093`, which the test override publishes; broker and controller roles, `CLUSTER_ID`, `controller.quorum.voters`, separate internal and external listeners) and remove the zookeeper service. This is infrastructure only, with no production code changes. Preserve the existing network settings, and make sure `kafka-exporter`, `kafka-ui` (if present) and the Python services still reach Kafka on the correct internal ports. Old ZooKeeper-era volumes are incompatible with KRaft, so drop them.

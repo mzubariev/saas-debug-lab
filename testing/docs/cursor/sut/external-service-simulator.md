@@ -9,4 +9,4 @@ Directory `services/external/external-service-simulator`. No startup handler, no
 
 Compose healthcheck curls `:8000/health`. No `depends_on`.
 
-Common facts (nginx, JWT, envelope, settings, timings, readiness, hazards): `testing/docs/SUT_MAP.md`.
+Common facts (nginx, JWT, envelope, settings, timings, readiness, hazards): `testing/docs/cursor/sut/SUT_MAP.md`.

@@ -9,4 +9,4 @@ Directory `services/core/auth-service`. Import builds `create_async_engine(postg
 
 DI: `get_db` yields `SessionLocal` (`app/dependencies.py`). `get_auth_service` builds `AuthService(db, request.app.state.redis)`. Passwords: passlib argon2 (`app/security.py`). Cache JSON stores `username`, `hashed_password`, `role`. Compose healthcheck: `curl -f http://localhost:8000/health`. Depends on postgres, redis, and migrations completed.
 
-Common facts (nginx, JWT, envelope, settings, timings, readiness, hazards): `testing/docs/SUT_MAP.md`.
+Common facts (nginx, JWT, envelope, settings, timings, readiness, hazards): `testing/docs/cursor/sut/SUT_MAP.md`.

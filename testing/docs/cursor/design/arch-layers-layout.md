@@ -24,7 +24,7 @@ testing/
   conftest.py      # markers by path, --service, sys.path, controller infra, xdist hooks, failure links
   compose.deps.yml # optional pg+redis(+redpanda) for local runs (TEST_PG_URL / TEST_REDIS_URL / TEST_KAFKA_BOOTSTRAP)
   contracts/       # committed snapshots: openapi/<svc>.json, events/*.schema.json
-  docs/            # human docs, SUT_MAP.md, cursor/ (agent-facing pack: design/, plan/, INDEX.md, KIT_MAP.md)
+  docs/            # human/, cursor/ (agent-facing pack: design/, plan/, INDEX.md, KIT_MAP.md, sut/)
   src/saas_testkit/   # installable package (src-layout, hatchling, py.typed): from saas_testkit.flows import ...
     config/      # settings.py (pydantic-settings), services.py (name -> path, module, port, DI seams; real paths are services/core/*, services/external/*, workers/*)
     domain/      # Pydantic v2 boundary models: tasks, users, webhooks, events (Envelope v1, payloads), enums
@@ -56,7 +56,7 @@ Plus testing/synthetic/k6/critical_path.js (non-Python asset for Grafana Synthet
 Every tests/<layer>/ has its own conftest.py (fixtures for that layer only); root conftest = cross-layer infra only.
 Service unit tests (later) live next to each service (services/core/<svc>/tests/unit, services/external/<svc>/tests/unit, workers/<svc>/tests/unit) and reuse saas_testkit.factories. Add the kit as a path dependency: `uv add --dev ../../../testing` from services/core/<svc> and services/external/<svc>, `uv add --dev ../../testing` from workers/<svc>. Fixtures stay in conftest.py; if services' unit tests need them, extract saas_testkit.pytest_plugin (entry point) then, not before.
 
-## SUT cheat sheet (from ARCHITECTURE.md; provisional until SUT_MAP.md is built in P0, which wins on any conflict)
+## SUT cheat sheet (from ARCHITECTURE.md; provisional until `testing/docs/cursor/sut/SUT_MAP.md` is built in P0, which wins on any conflict)
 - nginx :80 -> api-gateway. Rate-limit zones are keyed by the Authorization header, not by IP: API 20 r/s burst 100 (delayed) on /, burst 20 nodelay on /webhooks/; /auth/token 5 r/min burst 3. nginx does not account requests whose zone key is empty (nginx documentation), and a login request carries no Authorization header, so /auth/token is not limited at all in practice, although the documentation says 5 r/min. The first edge test (P6.2) confirms this empirically; if it holds, record BUG-1. /auth/me is not limited either. The API limit is per bearer token, so one shared token file means one shared bucket.
 - api-gateway :8000 (FastAPI) -> auth, task, webhook-receiver. JWT HS256 required only for /tasks/*; strips host/sentry-trace/baggage/traceparent/tracestate; maps downstream timeout to 504 and connection errors to 502; CORS not confirmed by SUT_MAP.
 - auth-service (FastAPI + PG + Redis db1): POST /auth/token (form), GET /auth/me; users admin/admin123, user/user123 (seed script, not automatic); user cache TTL 300.

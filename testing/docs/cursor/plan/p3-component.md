@@ -1,5 +1,5 @@
 # P3: Component tests (task-service fully first)
-Each sub-task is a new chat. Attach: `design/cat-component.md` (the line for that service), `SUT_MAP.md`, `sut/<service>.md`, `KIT_MAP.md` and the service's route and dependency files.
+Each sub-task is a new chat. Attach: `design/cat-component.md` (the line for that service), `sut/SUT_MAP.md`, `sut/<service>.md`, `KIT_MAP.md` and the service's route and dependency files.
 
 - P3.1 task-service: cover the full catalogue line. Record bugs as `xfail(strict=True)` plus a `KNOWN_ISSUES.md` entry. This is the golden example, so review it yourself.
   Optional, only after the P3.1 tests are green: one property-based state-machine test of the task lifecycle with Hypothesis `RuleBasedStateMachine` (Hypothesis is already a transitive dependency through Schemathesis). It generates transition sequences against the real service and complements the parametrised 409 matrix. Its invariant: an allowed transition succeeds, and an illegal one returns 409 without changing the task. Keep it in one file with a small `max_examples` and `deadline=None`.

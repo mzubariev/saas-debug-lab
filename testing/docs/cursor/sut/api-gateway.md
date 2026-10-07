@@ -4,4 +4,4 @@ Directory `services/core/api-gateway`. Entrypoint `app.main:app` (uvicorn `:8000
 
 Routes in `app/api/routes/proxy.py` (no response models). OpenAPI paths: `GET,POST,PUT,DELETE /auth/{path}`; `GET,POST,PUT,PATCH,DELETE /tasks` and `/tasks/{path}`; `GET,POST,PUT,PATCH,DELETE /webhooks/{path}`; plus `/health` and `/ready`. `/tasks` and `/tasks/{path}` depend on `verify_token` (`HTTPBearer`, `auto_error=False`). `/auth/*` and `/webhooks/*` do not. Proxy drops headers `host`, `sentry-trace`, `baggage`, `traceparent`, `tracestate`. Downstream timeout → 504 `Downstream timeout`. Other `httpx.RequestError` → 502 `Downstream unavailable`. Upstream status and body are passed through. Compose healthcheck: Python `urllib` `GET http://localhost:8000/health` (this image has no curl).
 
-Common facts (nginx, JWT, envelope, settings, timings, readiness, hazards): `testing/docs/SUT_MAP.md`.
+Common facts (nginx, JWT, envelope, settings, timings, readiness, hazards): `testing/docs/cursor/sut/SUT_MAP.md`.

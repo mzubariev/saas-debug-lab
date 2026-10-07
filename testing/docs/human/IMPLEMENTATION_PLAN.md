@@ -11,7 +11,7 @@
 
 **Context strategy — do NOT feed the whole lab.**
 
-- One-time recon (P0) turns the code into a ~150-400-line `SUT_MAP.md` (routes, DI seams, env vars, quirks). After that every task reads: rule (auto) + `SUT_MAP.md` + the one service file it touches.
+- One-time recon (P0) turns the code into a ~150-400-line `testing/docs/cursor/sut/SUT_MAP.md` (routes, DI seams, env vars, quirks). After that every task reads: rule (auto) + `testing/docs/cursor/sut/SUT_MAP.md` + the one service file it touches.
 - Rules auto-attach by glob: `python-style` (all `*.py`), `testing-core` (`testing/**`), `playwright` (UI dirs). You never paste rules. Attach `TESTING_ARCHITECTURE.md` only in P0–P2 and when a design question appears; otherwise paste just the task block from this file.
 - Add `.cursorignore`: `frontend/node_modules`, `observability/`, `load-tests/`, `chaos/`, `docs/incidents-playbooks/`, `**/*.lock`, `.venv`, `infra/**/grafana`, `**/__pycache__`, `test-results/`. (Unignore `frontend/src` only for P7.)
 - **One task = one new chat.** Name chats `P3.2 task-service component`. Commit after every green task (`git commit -m "P3.2 ..."`), so a bad chat is just `git restore`.
@@ -27,7 +27,7 @@
 - **Parallelise:** after the golden example P3.2–P3.6 are independent; use parallel agents/worktrees if available. Drop a chat after ~15 turns or 2 failed fixes (`git restore`, narrower prompt).
 - Use terminal output tails (`| tail -40`), `-x -q`, `--lf` to keep loops cheap.
 
-**SUT_MAP is split:** the common `testing/docs/SUT_MAP.md` (nginx, JWT, envelope, saas_shared, settings, timings, readiness, hazards) plus one file per service in `testing/docs/sut/` (`api-gateway.md`, `auth-service.md`, `task-service.md`, `webhook-receiver.md`, `external-service-simulator.md`, `webhook-dispatcher.md`, `notification-worker.md`, `scheduler-worker.md`), `_prep.md` (prep candidates, P0.1 only) and `_recon-log.md` (evidence, rarely needed). A task attaches the common file plus the service file(s) it touches.
+**SUT_MAP is split:** the common `testing/docs/cursor/sut/SUT_MAP.md` (nginx, JWT, envelope, saas_shared, settings, timings, readiness, hazards) plus one file per service in `testing/docs/cursor/sut/` (`api-gateway.md`, `auth-service.md`, `task-service.md`, `webhook-receiver.md`, `external-service-simulator.md`, `webhook-dispatcher.md`, `notification-worker.md`, `scheduler-worker.md`), `_prep.md` (prep candidates, P0.1 only) and `_recon-log.md` (evidence, rarely needed). A task attaches the common file plus the service file(s) it touches.
 
 **Keep the kit map and the decision log current:** `testing/docs/cursor/KIT_MAP.md` (what the kit already offers, so agents do not re-create helpers) and the "Decisions since the plan" section of `KNOWN_ISSUES.md` (one line per deviation, so a later chat does not undo it). Un-ignore in `.cursorignore` what a phase needs before it starts: `frontend/src`, `vite.config.*`, `frontend/Dockerfile` and `frontend/package.json` for P0.1 item 5 and P7, `load-tests/lib` for P8.3.
 
@@ -38,7 +38,7 @@
 ```
 You are Principal Software Development Engineer in Test (the main programming language is Python v3.14).
 Task <id>: <title>.
-Read only: @testing-core.mdc, testing/docs/SUT_MAP.md, testing/docs/sut/<service>.md (only the service(s) the task touches), testing/docs/cursor/KIT_MAP.md (from P3 on) and <files>.
+Read only: @testing-core.mdc, testing/docs/cursor/sut/SUT_MAP.md, testing/docs/cursor/sut/<service>.md (only the service(s) the task touches), testing/docs/cursor/KIT_MAP.md (from P3 on) and <files>.
 Follow the auto-attached rules.
 Deliver: <list>.
 Inner loop while working: `pytest <file> -x -q --lf -n 0`. Final DoD: <command(s)> pass (run once at the end; `make t-gate` for the 3x random-order run); ruff + pyright clean.
@@ -57,18 +57,18 @@ Output: no explanations. Run the final DoD command. If it fails, fix up to 3 tim
 
 
 
-## P0 — Recon (executable) → `SUT_MAP.md` (Agent mode)
+## P0 — Recon (executable) → `testing/docs/cursor/sut/SUT_MAP.md` (Agent mode)
 
 Attach: README, ARCHITECTURE, FILE_STRUCTURE (the 3 docs). Cursor reads the code **and runs it**.
 
-> Task: build `testing/docs/SUT_MAP.md` (~150–400 lines, one table per service) for: api-gateway, auth-service, task-service, webhook-receiver, external-service-simulator, webhook-dispatcher, notification-worker, scheduler-worker, migrations, saas_shared.
+> Task: build `testing/docs/cursor/sut/SUT_MAP.md` (~150–400 lines, one table per service) for: api-gateway, auth-service, task-service, webhook-receiver, external-service-simulator, webhook-dispatcher, notification-worker, scheduler-worker, migrations, saas_shared.
 >
 > 1. Read: entrypoint (`app.main:app`), routes + request/response models (file paths), auth requirements, DI seams (DB session, redis, kafka producer, http client, settings), lifespan side effects, Kafka topics + envelope helpers, Alembic `env.py` URL handling, seed users, JWT secret/alg config.
 > 2. **Run**: in a scratch venv install each service's requirements, import `app.main` with env from `.env.example`, call `/openapi.json` through `httpx.ASGITransport`, import each worker's entry module. Record what fails and why (import-time side effects: Kafka/Redis connect, Sentry, OTel, ddtrace, metric registration).
 > 3. Record per service: are DB/Redis/Kafka URLs, `WEBHOOK_URL`, JWT secret and SMTP host read **only from env**? Which timings are hard-coded (retry/backoff, beat and cleanup intervals)? Which sync/async DB and Kafka clients are used (note `psycopg2`/`kafka-python` in scheduler-worker)? Does `ddtrace` run at import?
 > 4. End with two lists: **hazards** and **PREP candidates** (small behaviour-neutral prod changes that would simplify the framework). No code changes.
 >
-> DoD: `SUT_MAP.md` exists; you skim it for wrong facts.
+> DoD: `testing/docs/cursor/sut/SUT_MAP.md` exists; you skim it for wrong facts.
 
 ---
 
@@ -76,7 +76,7 @@ Attach: README, ARCHITECTURE, FILE_STRUCTURE (the 3 docs). Cursor reads the code
 
 ## P0.1 — Prod prep (small, behaviour-neutral seams)
 
-Attach: `SUT_MAP.md`, `sut/_prep.md` (the recon's prep candidates), `testing-modify-prod.mdc`.
+Attach: `testing/docs/cursor/sut/SUT_MAP.md`, `testing/docs/cursor/sut/_prep.md` (the recon's prep candidates), `testing-modify-prod.mdc`.
 
 Goal: remove the obstacles the recon found **before** building the kit, so the framework stays simple (no monkeypatch hacks). Behaviour must stay identical. One commit per item with the prefix `testability:`. Run the manual lab smoke before the first change and after the last (login, create task, move task, email in MailHog, webhook delivered).
 
@@ -99,7 +99,7 @@ DoD: the lab starts via `docker compose` as before; manual smoke is green; each 
 
 Attach: `TESTING_ARCHITECTURE.md` §2, §5.
 
-1. Copy files into repo: `.cursor/rules/*.mdc` (4 files), `testing/docs/*`, `SUT_MAP.md` from P0. Create `.cursorignore`. [DONE]
+1. Copy files into repo: `.cursor/rules/*.mdc` (4 files), `testing/docs/*`, `testing/docs/cursor/sut/SUT_MAP.md` from P0. Create `.cursorignore`. [DONE]
 2. Also create `testing/KNOWN_ISSUES.md` with three sections: "Defects" (BUG-n), "Testability changes" (prod edits) and "Decisions since the plan" (one line per deviation from this plan, so later chats do not undo a deliberate choice).
 3. Prompt:
 
@@ -112,7 +112,7 @@ Attach: `TESTING_ARCHITECTURE.md` §2, §5.
 
 ## P1 — Infra core + first slice — strongest model
 
-Attach: `TESTING_ARCHITECTURE.md` §2, §6, `SUT_MAP.md`.
+Attach: `TESTING_ARCHITECTURE.md` §2, §6, `testing/docs/cursor/sut/SUT_MAP.md`.
 
 1. `src/saas_testkit/config` (`settings.py`, `services.py`), `context.py`, `polling.py`, `infra/{containers,template_db,app_loader,xdist}.py` (Testcontainers Postgres with the ADR-18 flags + tmpfs), root `conftest.py` (markers by path, `--service`, controller infra, `pytest_configure_node`, `needs_infra`, ignore other services), `tests/component/conftest.py` (`worker_db`, `session_maker`, `db`, `service_env`, `flush_redis`, `clean_db`, Redpanda/`KafkaEventReader`), template DB with touched-table tracking (architecture §6.2).
 2. Domain models for tasks/users/envelope, concrete `HttpTaskApi`, `TaskLifecycle` flow, `TaskCreateFactory` (Polyfactory `ModelFactory`), `TaskRowFactory` (`SQLAlchemyFactory`) and the `rows` fixture binding row factories to the test session (`create_async`).
@@ -124,7 +124,7 @@ Review yourself carefully: this is the heart of the kit.
 
 ## P2 — Adapters, factories, flows for the rest
 
-Attach: rule, `SUT_MAP.md`, `TESTING_ARCHITECTURE.md` §6.3, §6.5.
+Attach: rule, `testing/docs/cursor/sut/SUT_MAP.md`, `TESTING_ARCHITECTURE.md` §6.3, §6.5.
 
 > Add concrete `HttpAuthApi` (no Protocol), `KafkaEventReader` (concrete, real Redpanda/Kafka), `Envelope`/payload models for `task_created`, `task_updated`, `webhook_inbound`, `webhook_dlq`, JWT factory (valid/expired/tampered/alg-none), `UserRowFactory` (cached argon2 hash), `auth` flow, `WebhookDelivery` flow skeleton.
 > DoD: unit self-tests for factories/models green; pyright clean; `testing/docs/cursor/KIT_MAP.md` updated (public fixtures, flows, factories, markers, make targets; 30–50 lines).
@@ -133,7 +133,7 @@ Attach: rule, `SUT_MAP.md`, `TESTING_ARCHITECTURE.md` §6.3, §6.5.
 
 ## P3 — Component tests — do task-service fully first
 
-Each sub-task = new chat. Attach: rule, SUT_MAP, KIT_MAP, the service's route/deps files, and the catalogue line from `TESTING_ARCHITECTURE.md` §7.
+Each sub-task = new chat. Attach: rule, `testing/docs/cursor/sut/SUT_MAP.md`, KIT_MAP, the service's route/deps files, and the catalogue line from `TESTING_ARCHITECTURE.md` §7.
 
 - **P3.1 task-service:** full catalogue list. Bugs → `xfail(strict)` + `KNOWN_ISSUES.md`.
   *Optional, only after the P3.1 tests are green:* one property-based state-machine test of the task lifecycle (Hypothesis `RuleBasedStateMachine`, already a transitive dependency through Schemathesis). It generates transition sequences against the real service and complements the parametrised 409 matrix; its invariant is that an allowed transition succeeds and an illegal one returns 409 without changing the task. Keep it in one file with a small `max_examples` and `deadline=None`.
@@ -148,7 +148,7 @@ DoD each: `make t-component SERVICE=<x>` green ×3 random order, `-n auto`; cove
 
 ## P4 — Contract tests
 
-Attach: rule, SUT_MAP, `TESTING_ARCHITECTURE.md` §7 (contract lines) + §7.1 (contract principles) + §11 (Schemathesis fallback).
+Attach: rule, `testing/docs/cursor/sut/SUT_MAP.md`, `TESTING_ARCHITECTURE.md` §7 (contract lines) + §7.1 (contract principles) + §11 (Schemathesis fallback).
 
 - P4.1 `contract/events`: Envelope + payload schema tests, JSON-schema snapshots, legacy → `unknown`, producers' captured events validate (captured through `KafkaEventReader` on Redpanda).
 - P4.2 `contract/http`: OpenAPI validity, exact committed snapshots (ADR-17, `make contracts-update` for explicit updates), Schemathesis per service (`SCHEMA_EXAMPLES` env; a 500 is never filtered away: `xfail(strict)` + `KNOWN_ISSUES.md`), consumer-side `model_validate` of real responses (§7.1).
@@ -169,7 +169,7 @@ Attach: rule, `TESTING_ARCHITECTURE.md` §9 and §9.2 (the corrected `ci.yml` sk
 
 ## P6 — Integration stack + tests
 
-Attach: rule, SUT_MAP, `TESTING_ARCHITECTURE.md` §6.7, §7 (integration).
+Attach: rule, `testing/docs/cursor/sut/SUT_MAP.md`, `TESTING_ARCHITECTURE.md` §6.7, §7 (integration).
 
 - **P6.0 KRaft migration of the lab's Kafka (separate branch, before P6.1).** Replace cp-kafka + ZooKeeper with a single KRaft node (keep the existing external listener `PLAINTEXT_HOST://localhost:9093`, which the test override publishes) (broker + controller roles, `CLUSTER_ID`, `controller.quorum.voters`, separate internal and external listeners) and remove the zookeeper service. This is infrastructure-only: no production code changes. Preserve the existing network settings and make sure `kafka-exporter`, `kafka-ui` (if present) and the Python services still reach Kafka on the correct internal ports; old ZooKeeper-era volumes are incompatible, so drop them. Do it now because it removes a container and shortens the integration-stack boot, which pays back through P6 to P9; it does not affect P0 to P5, because component and contract tests use Redpanda. Definition of done: the whole lab works as before (manual smoke: login, create a task, move a task, email in MailHog, webhook delivered) and `kafka-exporter` sees the broker. If it takes more than about two hours, stop, `git restore`, and keep ZooKeeper for now (the item stays in F.4). Use a strong model.
 - **P6.1 (strong model):** `infra/docker-compose.test.yml` (gateway published on :8001, Postgres, Redis, Kafka `:9093` and the workers' metrics ports published on distinct host ports (the base compose keeps them internal), WireMock, `WEBHOOK_URL` of dispatcher AND scheduler → WireMock, timing knobs, `postgres` with ADR-18 `command` + tmpfs; **nginx is not relaxed**), explicit service list, readiness per service kind (FastAPI `/health`, workers `:9100/metrics`, migrations exit code 0, hard timeout plus `docker compose logs --tail` on failure), `src/saas_testkit/infra/compose.py` (`BASE_URL` env-or-up, `KEEP_STACK`), seed + login once per run (FileLock, token file with expiry check), adapters: Kafka reader, MailHog, WireMock, real-network `HttpTaskApi`/`HttpAuthApi`, `tests/integration/conftest.py`.
@@ -182,7 +182,7 @@ DoD: `make t-int` green ×2, no test uses `sleep`, all data unique, works with `
 
 ## P7 — Playwright UI
 
-Attach: rule, SUT_MAP, `frontend/src` (pages + components only), `TESTING_ARCHITECTURE.md` §7 (e2e_ui).
+Attach: rule, `testing/docs/cursor/sut/SUT_MAP.md`, `frontend/src` (pages + components only), `TESTING_ARCHITECTURE.md` §7 (e2e_ui).
 
 1. prod Frontend code (if needed for Playwright POM/POC): accessible names / `data-testid` on login form, board columns, task cards.
 

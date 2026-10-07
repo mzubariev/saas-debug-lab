@@ -1,5 +1,5 @@
 # P7: Playwright UI tests
-Attach: `design/cat-ui.md`, `SUT_MAP.md`, `sut/api-gateway.md`, `KIT_MAP.md` and `frontend/src` (pages and components only). Un-ignore `frontend/src` first.
+Attach: `design/cat-ui.md`, `sut/SUT_MAP.md`, `sut/api-gateway.md`, `KIT_MAP.md` and `frontend/src` (pages and components only). Un-ignore `frontend/src` first.
 
 Must do:
 1. If Playwright page objects need it, add accessible names or `data-testid` to the login form, the board columns and the task cards, following `testing-modify-prod.mdc`.

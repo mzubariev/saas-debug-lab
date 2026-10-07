@@ -6,4 +6,4 @@ Routes `app/api/routes/tasks.py`, models `app/schemas/task.py` (`TaskCreate.titl
 
 Transitions: `start` only from `created`, `complete` only from `in_progress`. Else 409 `Cannot start task in status '{status}'. Expected 'created'.` or the complete equivalent with `in_progress`. Missing row: 404 `Task not found`. A cache hit returns the stored JSON dict; a miss returns the ORM row. `response_model` is `TaskOut` either way. Publish happens after the DB commit, then the list key (and the item key on transition) is deleted. Compose healthcheck curls `:8000/health`. Depends on postgres, kafka, redis, migrations.
 
-Common facts (nginx, JWT, envelope, settings, timings, readiness, hazards): `testing/docs/SUT_MAP.md`.
+Common facts (nginx, JWT, envelope, settings, timings, readiness, hazards): `testing/docs/cursor/sut/SUT_MAP.md`.

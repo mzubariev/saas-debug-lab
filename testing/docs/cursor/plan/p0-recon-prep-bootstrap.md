@@ -1,19 +1,19 @@
 # P0, P0.1, P0.2: recon, production prep, bootstrap
 
-## P0: Recon (Agent mode). Result: `testing/docs/SUT_MAP.md`
+## P0: Recon (Agent mode). Result: `testing/docs/cursor/sut/SUT_MAP.md`
 Attach: the lab's README, `ARCHITECTURE.md`, `FILE_STRUCTURE.md` and `SERVICE_MAP.md` (all under `docs/system-architechture/`). No design documents from this pack are needed. The agent reads the code and runs it.
 
 Task prompt:
-Build `testing/docs/SUT_MAP.md` (about 150–400 lines, one table per service) for: api-gateway, auth-service, task-service, webhook-receiver, external-service-simulator, webhook-dispatcher, notification-worker, scheduler-worker, migrations and saas_shared. Derive every fact from the code, not from `ARCHITECTURE.md`, which is partly stale.
+Build `testing/docs/cursor/sut/SUT_MAP.md` (about 150–400 lines, one table per service) for: api-gateway, auth-service, task-service, webhook-receiver, external-service-simulator, webhook-dispatcher, notification-worker, scheduler-worker, migrations and saas_shared. Derive every fact from the code, not from `ARCHITECTURE.md`, which is partly stale.
 1. Read each service's entrypoint (`app.main:app`), its routes with request and response models (file paths), its auth requirements, its DI seams (DB session, Redis, Kafka producer, HTTP client, settings), its lifespan side effects, the Kafka topics and envelope helpers, how Alembic's `env.py` handles the database URL, the seed users, and the JWT secret and algorithm configuration. Also read `infra/nginx/nginx.conf` and record the exact rate-limit zones, their keys and burst settings.
 2. Run the code. In a scratch venv install each service's requirements, import `app.main` with the environment from `.env.example`, call `/openapi.json` through `httpx.ASGITransport`, and import each worker's entry module. Record what fails and why, especially import-time side effects (Kafka or Redis connect, Sentry, OTel, ddtrace, metric registration).
 3. For each service record: whether the database, Redis and Kafka URLs, `WEBHOOK_URL`, the JWT secret and the SMTP host are read only from the environment; which timings are hard-coded (retry and backoff, beat and cleanup intervals); which sync or async database and Kafka clients are used (note `psycopg2` and `kafka-python` in scheduler-worker); whether ddtrace runs at import; the real directory of each service (`services/core`, `services/external`, `workers`); the readiness mechanism of each worker (HTTP port, metrics port); and the Postgres major version used by `infra/docker-compose.yml`.
 4. End with two lists: hazards, and candidates for production prep (small behaviour-neutral changes that would simplify the framework). Do not change any code.
 
-Definition of done: `SUT_MAP.md` exists and you have skimmed it for wrong facts. A wrong line here is copied into every later task, so fix it immediately.
+Definition of done: `testing/docs/cursor/sut/SUT_MAP.md` exists and you have skimmed it for wrong facts. A wrong line here is copied into every later task, so fix it immediately.
 
 ## P0.1: Production prep (small, behaviour-neutral seams)
-Attach: `SUT_MAP.md`, `sut/_prep.md` (the recon's prep candidates) and `testing-modify-prod.mdc` (with `@`).
+Attach: `sut/SUT_MAP.md`, `sut/_prep.md` (the recon's prep candidates) and `testing-modify-prod.mdc` (with `@`).
 
 Goal: remove the obstacles the recon found before building the kit, so the framework stays simple and needs no monkeypatch hacks. Behaviour must stay identical. Make one commit per item with the prefix `testability:`. Run the manual lab smoke (login, create a task, move a task, see the email in MailHog, see the webhook delivered) before the first change and after the last. Keep every edit compatible with the Python 3.11 that the service images run.
 
@@ -34,7 +34,7 @@ Time-box: justify a production seam only when the test-side patch would cost mor
 Attach: `design/arch-adr.md` and `design/arch-layers-layout.md`.
 
 Steps:
-1. Copy the files into the repository. Put `.cursor/rules/*.mdc` (the four rules) in place, keep the human documents in `testing/docs/`, place this pack in `testing/docs/cursor/` (with `design/`, `plan/` and `INDEX.md`), and add `SUT_MAP.md` from P0. Update `.cursorignore` as `00-workflow.md` describes. (Done.)
+1. Copy the files into the repository. Put `.cursor/rules/*.mdc` (the four rules) in place, keep the human documents in `testing/docs/`, place this pack in `testing/docs/cursor/` (with `design/`, `plan/` and `INDEX.md`), and add `testing/docs/cursor/sut/SUT_MAP.md` from P0. Update `.cursorignore` as `00-workflow.md` describes. (Done.)
 2. Create `testing/KNOWN_ISSUES.md` with three sections: "Defects" (BUG-n entries), "Testability changes" (production edits made under `testing-modify-prod.mdc`) and "Decisions since the plan" (one line per deviation from this plan).
 3. Run this prompt:
 
