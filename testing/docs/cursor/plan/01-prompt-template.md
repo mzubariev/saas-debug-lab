@@ -4,13 +4,12 @@ Paste this at the start of every task chat and fill in the angle-bracket parts f
 
 ```
 You are Senior Software Development Engineer in Test (the main programming language is Python v3.14).
-
 Task <id>: <title>.
 Read only: @testing-core.mdc, testing/docs/SUT_MAP.md, testing/docs/sut/<service>.md (only the service(s) the task touches), testing/docs/cursor/KIT_MAP.md (from P3 on) and <files>.
 Follow the auto-attached rules.
 Deliver: <list>.
 Inner loop while working: `pytest <file> -x -q --lf -n 0`.
-Final DoD: <command(s)> pass (run once at the end; `make t-gate` for the 3x random-order run); ruff + pyright clean.
+Final DoD: <command(s)> pass (run once at the end; `make t-gate` for the random-order run); ruff + pyright clean.
 Output: no explanations. Run the final DoD command. If it fails, fix up to 3 times, then stop and show the last 40 lines. Final report <= 10 lines. Give me a name for a commit message to highlight what was done.
 ```
 

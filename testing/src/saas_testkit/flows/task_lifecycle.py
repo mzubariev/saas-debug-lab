@@ -1,6 +1,5 @@
 """Task steps in business language. Preconditions check; the test checks the rest."""
 
-from collections.abc import Callable
 from uuid import UUID
 
 from saas_testkit.adapters.http.tasks import HttpTaskApi
@@ -9,9 +8,7 @@ from saas_testkit.domain.events import Envelope
 from saas_testkit.domain.http import ApiResponse
 from saas_testkit.domain.tasks import Task
 from saas_testkit.factories.payloads import TaskCreateFactory
-from saas_testkit.polling import eventually
-
-_TASK_CREATED = "task.created"
+from saas_testkit.flows.webhook_delivery import WebhookDelivery
 
 
 class TaskLifecycle:
@@ -52,26 +49,13 @@ class TaskLifecycle:
         return completed.data
 
     async def task_created_event(self, task: Task) -> Envelope:
+        """Delegates to `WebhookDelivery.task_created` (same topic, same id match)."""
         if self._events is None:
             raise RuntimeError("TaskLifecycle has no KafkaEventReader")
-        task_id = str(task.id)
-        reader = self._events
-        return await eventually(
-            lambda: reader.wait_for("task_created", match=_task_id(task_id), timeout=0.2),
-            timeout=10,
-            interval=0,
-            message=f"no {_TASK_CREATED} for {task_id}",
-        )
+        return await WebhookDelivery(self._events).task_created(task.id)
 
 
 def _detail(response: ApiResponse[Task]) -> object:
     if response.error is None:
         return None
     return response.error.detail
-
-
-def _task_id(task_id: str) -> Callable[[Envelope], bool]:
-    def match(envelope: Envelope) -> bool:
-        return envelope.event_type == _TASK_CREATED and envelope.payload.get("id") == task_id
-
-    return match

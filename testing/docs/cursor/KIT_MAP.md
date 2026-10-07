@@ -20,13 +20,19 @@ task-service (`tests/component/task_service/conftest.py`): `service_app` enters 
 
 ## Flows and adapters
 
-`TaskLifecycle.create`, `get`, and `start` return `ApiResponse` and do not assert. `new_task` and `move_to_completed` are preconditions and may assert. `task_created_event` waits with `eventually`.
+`TaskLifecycle.create`, `get`, and `start` return `ApiResponse` and do not assert. `new_task` and `move_to_completed` are preconditions and may assert. `task_created_event` delegates to `WebhookDelivery.task_created` (same `task_created` wait, id compared as `str(task_id)`).
 
-`HttpTaskApi`: `create`, `get`, `start`, `complete`. `KafkaEventReader`: `start`, `stop`, `wait_for`.
+`AuthFlow.login` and `me` return `ApiResponse` and do not assert. `logged_in` is a precondition and may assert.
+
+`WebhookDelivery.task_created` and `dead_letter` wait with `eventually` and do not assert. No WireMock journal and no retry timing.
+
+`HttpTaskApi`: `create`, `get`, `start`, `complete`. `HttpAuthApi`: `login` (`POST /auth/token` form), `me` (`GET /auth/me` bearer). `KafkaEventReader`: `start`, `stop`, `wait_for`.
 
 ## Factories
 
 `TaskCreateFactory` (`ModelFactory`; `title` comes from `unique_title("task")`). `TaskRowFactory` (`SQLAlchemyFactory`, `__set_relationships__ = False`, `status` created, aware datetimes). `UserRowFactory` (one argon2 hash of `user123` in `hashed_password`; `username` fits `varchar(64)`). `.build()` does no I/O. Bind a `RunContext` before building a task factory. One `Factory.seed_random` per run, from pytest-randomly.
+
+Envelope factories (`TaskCreated`, `TaskUpdated`, `WebhookInbound`, `WebhookDlq`) build a v1 `Envelope`. Payload models are `TaskCreatedPayload`, `TaskUpdatedPayload` (`id`, `title`, `status`), `WebhookInboundPayload` (`event`, `data`), and `WebhookDlqPayload` (task fields plus `error`, `attempts`, `timestamp`). `JwtFactory` mints `sub` / `role` / `exp` tokens: `valid`, `expired`, `tampered` (payload changed, signature kept), `alg_none`. Default secret is the lab `dev-secret-change-in-production`.
 
 ## Markers
 
