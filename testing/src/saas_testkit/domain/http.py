@@ -31,6 +31,14 @@ class StatusBody(BaseModel):
     status: str
 
 
+class ProxiedBody(BaseModel):
+    """JSON body the gateway passes through. The component double sets `marker`."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    marker: str
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ApiResponse[T]:
     status: int

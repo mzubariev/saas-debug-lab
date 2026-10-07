@@ -48,3 +48,5 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P3.1: the task lifecycle state machine runs Hypothesis on a worker thread and schedules each step on the session loop. `RuleBasedStateMachine` rules are synchronous, and the app clients belong to that loop.
 - P3.2: the auth-service ASGI client sets `raise_app_exceptions=False`, so a failed login dependency is the HTTP 500 from the exception middleware.
 - P3.2: the auth component sets `TOKEN_EXPIRE_MINUTES=45` before import. Issued-token `exp` is checked against that value.
+- P3.3: the api-gateway ASGI client sets `raise_app_exceptions=False`, matching the task-service and auth-service component clients.
+- P3.3: the header test pins the request respx sees. The proxy omits `host`, `sentry-trace`, `baggage`, `traceparent`, and `tracestate`. With `OTLP_ENDPOINT` empty, the httpx instrumentor puts the client's `baggage`, `traceparent`, and `tracestate` back; `sentry-trace` stays absent; `Host` is the upstream hostname.

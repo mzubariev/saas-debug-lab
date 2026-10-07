@@ -20,8 +20,6 @@ T1:
 
 T3: health/ready/metrics (smoke).
 
-
-
 ## auth-service
 
 T1:
@@ -56,8 +54,7 @@ T2: `trace_id` propagation (only if the code propagates it; otherwise skip).
 
 ## external-service-simulator
 
-T1: `fail_rate` 0 and 1, custom `status` (parametrized); idempotency dedupe (same key twice -> `duplicate`; a failed attempt is not recorded).
-T2: `delay` (sleep patched); `/trigger-event` posts to the configured URL (respx) with retry.
+T1: idempotency dedupe (same key twice -> `duplicate`; a failed attempt is not recorded).
 
 ## webhook-dispatcher, notification-worker, scheduler-worker
 

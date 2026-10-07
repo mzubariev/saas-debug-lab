@@ -54,3 +54,9 @@ Repo root, via `testing/testing.mk`. `TEST_PG_URL`, `TEST_REDIS_URL`, and `TEST_
 auth-service (`tests/component/auth_service/conftest.py`): `service_app` sets `TOKEN_EXPIRE_MINUTES=45` before import and enters `lifespan_context`. `client` is `httpx.AsyncClient` on `ASGITransport` (`raise_app_exceptions=False`) with `base_url="http://test"`. `user_cache` is `UserCache`. `auth` is `AuthFlow`.
 
 `AuthFlow.submit_login`, `me_as` (`valid`, `expired`, `tampered`, `alg_none`, `missing`, `malformed`), `ready`, `cached_user`, `replace_cached_role`. `HttpAuthApi.submit_login`, `me_header`, `ready`. `UserCache.user` and `put` (`user:{username}`, TTL 300 s). `ApiResponse.document` is the parsed JSON body. `StatusBody` is the `/ready` body.
+
+## P3.3 api-gateway
+
+api-gateway (`tests/component/api_gateway/conftest.py`): `service_app` enters `lifespan_context`. `client` is `httpx.AsyncClient` on `ASGITransport` (`raise_app_exceptions=False`) with `base_url="http://test"`. `gateway` is `GatewayFlow` over `HttpGatewayApi` and `GatewayUpstream` (respx).
+
+`GatewayFlow.through`, `open`, `tasks_as` (`missing`, `expired`, `tampered`, `alg_none`), `passthrough`, `when_upstream_fails` (`timeout`, `down`), `forwarded_headers`, `allowed_origin`, and `path_for` (`auth`, `tasks`, `tasks-item`, `webhooks`). `Routed` is the response plus the upstream `service` and `path` (`None` when the gateway did not proxy). `Forwarded` is the upstream header map plus the `request_id`, `marker`, `client_host`, `upstream_host`, `baggage`, `traceparent`, and `tracestate` this call sent. `HttpGatewayApi.request` and `preflight`. `GatewayUpstream.start`, `stop`, `respond`, `fail`, `last_request`. `ProxiedBody.marker` is the JSON body the upstream double returns.
