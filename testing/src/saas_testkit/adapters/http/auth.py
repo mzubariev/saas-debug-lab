@@ -6,7 +6,7 @@ import httpx
 from pydantic import BaseModel
 
 from saas_testkit.context import RunContext
-from saas_testkit.domain.http import ApiResponse, ProblemBody
+from saas_testkit.domain.http import ApiResponse, ProblemBody, StatusBody
 from saas_testkit.domain.users import TokenResponse, UserInfo
 
 
@@ -16,17 +16,31 @@ class HttpAuthApi:
         self._ctx = ctx
 
     async def login(self, username: str, password: str) -> ApiResponse[TokenResponse]:
+        return await self.submit_login({"username": username, "password": password})
+
+    async def submit_login(self, fields: dict[str, str]) -> ApiResponse[TokenResponse]:
+        """POST `/auth/token` with a caller-built form (missing-field cases)."""
         response = await self._client.post(
             "/auth/token",
             headers=self._ctx.headers(),
-            data={"username": username, "password": password},
+            data=fields,
         )
         return _read(response, TokenResponse)
 
     async def me(self, token: str) -> ApiResponse[UserInfo]:
-        headers = {**self._ctx.headers(), "Authorization": f"Bearer {token}"}
+        return await self.me_header(f"Bearer {token}")
+
+    async def me_header(self, authorization: str | None) -> ApiResponse[UserInfo]:
+        """GET `/auth/me`. `None` omits `Authorization`."""
+        headers = self._ctx.headers()
+        if authorization is not None:
+            headers = {**headers, "Authorization": authorization}
         response = await self._client.get("/auth/me", headers=headers)
         return _read(response, UserInfo)
+
+    async def ready(self) -> ApiResponse[StatusBody]:
+        response = await self._client.get("/ready", headers=self._ctx.headers())
+        return _read(response, StatusBody)
 
 
 def _read[T: BaseModel](response: httpx.Response, model: type[T]) -> ApiResponse[T]:
@@ -40,6 +54,7 @@ def _read[T: BaseModel](response: httpx.Response, model: type[T]) -> ApiResponse
             error=None,
             headers=headers,
             elapsed=elapsed,
+            document=parsed,
         )
     return ApiResponse(
         status=response.status_code,
@@ -47,4 +62,5 @@ def _read[T: BaseModel](response: httpx.Response, model: type[T]) -> ApiResponse
         error=ProblemBody.model_validate(parsed),
         headers=headers,
         elapsed=elapsed,
+        document=parsed,
     )

@@ -7,7 +7,7 @@ from saas_testkit.domain.events import (
     WebhookDlqPayload,
     WebhookInboundPayload,
 )
-from saas_testkit.domain.http import ApiResponse, ProblemBody
+from saas_testkit.domain.http import ApiResponse, ProblemBody, StatusBody
 from saas_testkit.domain.tasks import Task, TaskCreate, TaskStatus
 from saas_testkit.domain.users import TokenResponse, UserInfo
 
@@ -15,6 +15,7 @@ __all__ = [
     "ApiResponse",
     "Envelope",
     "ProblemBody",
+    "StatusBody",
     "Task",
     "TaskCreate",
     "TaskCreatedPayload",

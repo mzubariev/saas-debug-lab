@@ -23,6 +23,14 @@ class ProblemBody(BaseModel):
     detail: str | list[ProblemDetail]
 
 
+class StatusBody(BaseModel):
+    """`GET /ready` returns `{"status": "ready"}`."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    status: str
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ApiResponse[T]:
     status: int
@@ -30,3 +38,4 @@ class ApiResponse[T]:
     error: ProblemBody | None
     headers: dict[str, str]
     elapsed: float
+    document: object | None = None
