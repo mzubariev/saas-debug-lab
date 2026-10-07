@@ -62,9 +62,9 @@ Service unit tests (later) live next to each service (services/core/<svc>/tests/
 - auth-service (FastAPI + PG + Redis db1): POST /auth/token (form), GET /auth/me; users admin/admin123, user/user123 (seed script, not automatic); user cache TTL 300.
 - task-service (FastAPI + PG + Redis db0 + Kafka producer): /tasks CRUD, PATCH /tasks/{id}/start (other transition routes: SUT_MAP); list/item cache in Redis; emits task_created / task_updated.
 - webhook-receiver (FastAPI + Kafka producer): POST /webhooks/inbound -> topic webhook_inbound.
-- webhook-dispatcher (Kafka consumer, no HTTP, metrics :9100) -> WEBHOOK_URL: consumes task_created/updated; POST with Idempotency-Key; MAX_RETRIES attempts (default 3); the sleep after attempt n is 1*2^(n-1) s plus 0..+10 % jitter (about 1 s and 2 s with the defaults); 4xx no retry; permanent failure -> webhook_dlq.
+- webhook-dispatcher (`services/core/webhook-dispatcher`, `config/services.py`): Kafka consumer, no HTTP, metrics :9100 -> WEBHOOK_URL: consumes task_created/updated; POST with Idempotency-Key; MAX_RETRIES attempts (default 3); the sleep after attempt n is `WEBHOOK_BACKOFF_BASE` * 2^(n-1) s plus 0..+10 % jitter (about 1 s and 2 s with the defaults); 4xx no retry; permanent failure -> webhook_dlq.
 - external-service-simulator (FastAPI): /receive-webhook (fail_rate, delay, status, idempotency dedupe), /trigger-event -> gateway /webhooks/inbound.
-- notification-worker (Kafka consumer) -> Toxiproxy -> MailHog: task_created -> email (MIME text+html); MailHog API :8025.
-- scheduler-worker (Celery + Beat; Redis db2, Kafka, PG): retry_failed_webhooks every 60 s (drain DLQ), cleanup_old_tasks every 5 min.
+- notification-worker (`workers/notification-worker`, `config/services.py`): Kafka consumer -> Toxiproxy -> MailHog: task_created -> email (MIME text+html); MailHog API :8025.
+- scheduler-worker (`workers/scheduler-worker`, `config/services.py`; Celery + Beat; Redis db2, Kafka, PG): retry_failed_webhooks every `DLQ_REPLAY_INTERVAL_SECONDS` (default 60 s), cleanup_old_tasks every `CLEANUP_INTERVAL_SECONDS` (default 300 s).
 - Kafka envelope v1: event_type, version, trace_id, timestamp, payload; legacy raw JSON -> event_type="unknown".
 - frontend :5173 (React Kanban) -> gateway: drag-and-drop between columns, login page.

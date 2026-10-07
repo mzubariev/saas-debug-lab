@@ -20,8 +20,6 @@
 `Output: no explanations. Run the DoD command. If it fails, fix up to 3 times, then stop and show the last 40 lines. Final report ≤ 10 lines.`
 - Ask for **the pattern once, then reuse**: for P3, do task-service fully, review it yourself, then tell Cursor "replicate the structure of tests/component/task_service for auth-service" (cheap, consistent).
 - Review what matters: conftest/fixtures/flows/ports. Skim generated tests; run them 3× random order.
-- **Golden example, then replicate:** finish task-service, review it yourself, then "replicate `@tests/component/task_service` for auth-service".
-- **Plan first on hard tasks:** P1, P2, P6 start in Plan/Ask mode (short plan, you approve), then Agent.
 - **Free quality gate:** `make t-check` (ruff + pyright + quick pytest) plus a pre-commit hook running the same; Cursor runs `make t-check` as part of DoD.
 - **Mutation spot-check:** per service, break one prod line or flip one assertion; a test must go red. Catches tautological AI tests.
 - **Parallelise:** after the golden example P3.2–P3.6 are independent; use parallel agents/worktrees if available. Drop a chat after ~15 turns or 2 failed fixes (`git restore`, narrower prompt).
@@ -135,18 +133,20 @@ Attach: rule, `testing/docs/cursor/sut/SUT_MAP.md`, `TESTING_ARCHITECTURE.md` §
 
 Each sub-task = new chat. Attach: rule, `testing/docs/cursor/sut/SUT_MAP.md`, KIT_MAP, the service's route/deps files, and the catalogue line from `TESTING_ARCHITECTURE.md` §7.
 
-- **P3.1 task-service:** full catalogue list. Bugs → `xfail(strict)` + `KNOWN_ISSUES.md`.
+- **P3.1 task-service:** T1 only, T2 on request. Full T1 catalogue list. Bugs → `xfail(strict)` + `KNOWN_ISSUES.md`.
   *Optional, only after the P3.1 tests are green:* one property-based state-machine test of the task lifecycle (Hypothesis `RuleBasedStateMachine`, already a transitive dependency through Schemathesis). It generates transition sequences against the real service and complements the parametrised 409 matrix; its invariant is that an allowed transition succeeds and an illegal one returns 409 without changing the task. Keep it in one file with a small `max_examples` and `deadline=None`.
 - **P3.2 auth-service:** replicate structure of P3.1.
 - **P3.3 api-gateway:** respx upstreams, JWT matrix.
 - **P3.4 webhook-receiver + external-service-simulator.**
-- **P3.5 webhook-dispatcher + notification-worker:** worker components; patch `asyncio.sleep`/jitter. Coupled to internal functions: do it after the worker refactor (section F) or cover the behaviour black-box in integration (S1–S4) first.
-- **P3.6 scheduler-worker:** real PG for cleanup (`clean_db`); respx for replay. Same note: do it after the scheduler refactor, cover cleanup and DLQ replay in integration with the shortened timing knobs meanwhile.
+- **P3.5 webhook-dispatcher + notification-worker:** deferred to F. Coupled to internals the refactor changes; until then the behaviour is covered black-box by integration S1, S2a, S2b, S6.
+- **P3.6 scheduler-worker:** deferred to F. Same reason; cleanup and DLQ replay stay in integration with the shortened timing knobs until then.
 DoD each: `make t-component SERVICE=<x>` green ×3 random order, `-n auto`; coverage of the service's routes/services printed (`--cov=<service path>`).
 
 
 
 ## P4 — Contract tests
+
+T1 only, T2 on request.
 
 Attach: rule, `testing/docs/cursor/sut/SUT_MAP.md`, `TESTING_ARCHITECTURE.md` §7 (contract lines) + §7.1 (contract principles) + §11 (Schemathesis fallback).
 
@@ -169,11 +169,13 @@ Attach: rule, `TESTING_ARCHITECTURE.md` §9 and §9.2 (the corrected `ci.yml` sk
 
 ## P6 — Integration stack + tests
 
+T1 only, T2 on request.
+
 Attach: rule, `testing/docs/cursor/sut/SUT_MAP.md`, `TESTING_ARCHITECTURE.md` §6.7, §7 (integration).
 
 - **P6.0 KRaft migration of the lab's Kafka (separate branch, before P6.1).** Replace cp-kafka + ZooKeeper with a single KRaft node (keep the existing external listener `PLAINTEXT_HOST://localhost:9093`, which the test override publishes) (broker + controller roles, `CLUSTER_ID`, `controller.quorum.voters`, separate internal and external listeners) and remove the zookeeper service. This is infrastructure-only: no production code changes. Preserve the existing network settings and make sure `kafka-exporter`, `kafka-ui` (if present) and the Python services still reach Kafka on the correct internal ports; old ZooKeeper-era volumes are incompatible, so drop them. Do it now because it removes a container and shortens the integration-stack boot, which pays back through P6 to P9; it does not affect P0 to P5, because component and contract tests use Redpanda. Definition of done: the whole lab works as before (manual smoke: login, create a task, move a task, email in MailHog, webhook delivered) and `kafka-exporter` sees the broker. If it takes more than about two hours, stop, `git restore`, and keep ZooKeeper for now (the item stays in F.4). Use a strong model.
-- **P6.1 (strong model):** `infra/docker-compose.test.yml` (gateway published on :8001, Postgres, Redis, Kafka `:9093` and the workers' metrics ports published on distinct host ports (the base compose keeps them internal), WireMock, `WEBHOOK_URL` of dispatcher AND scheduler → WireMock, timing knobs, `postgres` with ADR-18 `command` + tmpfs; **nginx is not relaxed**), explicit service list, readiness per service kind (FastAPI `/health`, workers `:9100/metrics`, migrations exit code 0, hard timeout plus `docker compose logs --tail` on failure), `src/saas_testkit/infra/compose.py` (`BASE_URL` env-or-up, `KEEP_STACK`), seed + login once per run (FileLock, token file with expiry check), adapters: Kafka reader, MailHog, WireMock, real-network `HttpTaskApi`/`HttpAuthApi`, `tests/integration/conftest.py`.
-DoD: KIT_MAP.md updated with the integration fixtures; `make stack-up` healthy; one test (`login → create task → task readable`) green with `-n 3`.
+- **P6.1 (strong model):** `infra/docker-compose.test.yml` (gateway published on :8001, Postgres, Redis, Kafka `:9093` and the workers' metrics ports published on distinct host ports (the base compose keeps them internal), WireMock, `WEBHOOK_URL` of dispatcher AND scheduler → WireMock, timing knobs, `postgres` with ADR-18 `command` + tmpfs; **nginx is not relaxed**), explicit service list, readiness per service kind (FastAPI `/health`, workers `:9100/metrics`, migrations exit code 0, hard timeout plus `docker compose logs --tail` on failure), `src/saas_testkit/infra/compose.py` (`BASE_URL` env-or-up, `KEEP_STACK`), `make stack-up` and `make stack-down`, seed + login once per run (FileLock, token file with expiry check), adapters: Kafka reader, MailHog, WireMock, real-network `HttpTaskApi`/`HttpAuthApi`, `tests/integration/conftest.py`.
+DoD: KIT_MAP.md updated with the integration fixtures; `make stack-up` is healthy and `make stack-down` removes the stack; one test (`login → create task → task readable`) green with `-n 3`.
 - **P6.2** `integration/services`: health via gateway, auth→gateway→task JWT flow, nginx dedicated (`xdist_group("serial")`, `--dist loadgroup`; the auth-burst test is characterised and likely becomes BUG-1), `/metrics` series.
 - **P6.3** `integration/scenarios`: S1, S3, S4 first (fast); S2 and S5 marked `slow`/`chaos`.
 DoD: `make t-int` green ×2, no test uses `sleep`, all data unique, works with `KEEP_STACK=1`.
@@ -181,6 +183,8 @@ DoD: `make t-int` green ×2, no test uses `sleep`, all data unique, works with `
 
 
 ## P7 — Playwright UI
+
+T1 only, T2 on request.
 
 Attach: rule, `testing/docs/cursor/sut/SUT_MAP.md`, `frontend/src` (pages + components only), `TESTING_ARCHITECTURE.md` §7 (e2e_ui).
 
@@ -192,6 +196,8 @@ Attach: rule, `testing/docs/cursor/sut/SUT_MAP.md`, `frontend/src` (pages + comp
 
 
 ## P8 — Smoke + synthetic
+
+T1 only, T2 on request.
 
 - **P8.1 smoke:** `tests/smoke/` per catalogue (health of all services via gateway, login both roles, create+read, metrics, frontend 200). Reads `SMOKE_BASE_URL`. `make t-smoke`. `.github/workflows/smoke.yml` (`workflow_call` + `workflow_dispatch`; reused by CI after the stack is up).
 DoD: `SMOKE_BASE_URL=http://localhost make t-smoke` green; wrong URL → fails fast with a clear message.

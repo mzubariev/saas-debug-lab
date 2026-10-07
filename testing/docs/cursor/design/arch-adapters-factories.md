@@ -11,7 +11,8 @@ class HttpTaskApi:
     async def create(self, body: TaskCreate) -> ApiResponse[Task]: ...
     async def start(self, task_id: UUID) -> ApiResponse[Task]: ...
 
-# adapters/kafka/reader.py: real Redpanda/Kafka consumer, same class at component and integration
+# adapters/kafka/reader.py: real Redpanda/Kafka consumer, same class at component and integration.
+# auto_offset_reset is "latest". The controller does not pre-create topics.
 class KafkaEventReader:
     async def wait_for(self, topic: str, *, match: Callable[[Envelope], bool], timeout: float) -> Envelope: ...
 
@@ -69,5 +70,5 @@ Notes (binding rules for session binding, seeding and argon2 caching: testing-co
 2. One seed per run: a session fixture calls Factory.seed_random(config.getoption("randomly_seed")), so the number printed by pytest-randomly reproduces both the test order and the factory data (Polyfactory has its own Random instance that pytest-randomly does not reseed). There is no separate run_seed; the failure report prints this seed.
 3. Random data may violate business rules: override constrained fields (status, FKs, unique titles).
 4. Faker is bundled (Factory.__faker__); custom providers in factories/providers.py (unique_title, jwt_claims).
-5. UserRow.password_hash = one cached argon2 hash.
+5. UserRow.hashed_password = one cached argon2 hash (the `users.hashed_password` column).
 6. Event factories (ModelFactory[Envelope[TaskCreatedPayload]]) build envelopes; a Builder only for Envelope/webhook bodies with many optional parts. Internal trusted dataclasses use DataclassFactory.

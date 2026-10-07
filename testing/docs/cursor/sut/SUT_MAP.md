@@ -1,6 +1,6 @@
 # SUT map (common facts)
 
-Split into files for token economy. This file: facts shared by several services. One file per service: `testing/docs/cursor/sut/<service>.md` (attach only the service(s) a task touches). `testing/docs/cursor/sut/_prep.md`: production-prep candidates (P0.1 only). `testing/docs/cursor/sut/_recon-log.md`: evidence of the P0 scratch run (rarely needed).
+Split into files for token economy. This file: facts shared by several services. One file per service: `testing/docs/cursor/sut/<service>.md` (attach only the service(s) a task touches). `testing/docs/cursor/sut/_prep.md`: P0.1 seams that were applied. `testing/docs/cursor/sut/_recon-log.md`: evidence of the P0 scratch run, including the removed Datadog notes (rarely needed).
 
 Facts below come from the service code, `infra/nginx/nginx.conf`, `infra/docker-compose.yml`, and a scratch import on Python 3.14.6 (2026-10-05). Service images are `python:3.11-slim`. `docs/system-architechture/ARCHITECTURE.md` disagrees with this file in the places called out below; this file wins.
 
@@ -86,6 +86,21 @@ Base Dockerfiles run uvicorn or `python -m`. Datadog (`ddtrace`, `docker-compose
 | SMTP host | none | none | none | none | none | `SMTP_HOST` required, port default `11025` | none |
 
 Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE_URL`, `TASK_SERVICE_URL`; simulator `INTEGRATION_SERVICE_WEBHOOK_URL`. Alembic requires `POSTGRES_HOST` (`POSTGRES_PORT` still defaults to `5432`). Every FastAPI service, webhook-dispatcher, and both workers still default `OTLP_ENDPOINT` to `http://otel-collector:4317` (tests set it empty; not a connection seam).
+
+## Env a component session must set per service
+
+`service_env` already sets `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `REDIS_URL`, `KAFKA_BOOTSTRAP_SERVERS`, `SERVICE_NAME`, `OTLP_ENDPOINT=""`, and `SENTRY_DSN=""`. The session must still set every other required variable (no default) before the service is imported.
+
+| Service | Set besides `service_env` |
+| --- | --- |
+| api-gateway | `JWT_SECRET`, `AUTH_SERVICE_URL`, `TASK_SERVICE_URL`, `INTEGRATION_SERVICE_URL` |
+| auth-service | `JWT_SECRET` |
+| task-service | none |
+| webhook-receiver | none |
+| external-service-simulator | `INTEGRATION_SERVICE_WEBHOOK_URL` |
+| webhook-dispatcher | `WEBHOOK_URL` |
+| notification-worker | `SMTP_HOST` |
+| scheduler-worker | `WEBHOOK_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` |
 
 ## Hard-coded timings
 

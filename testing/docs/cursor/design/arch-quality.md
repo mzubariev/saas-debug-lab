@@ -6,7 +6,7 @@
 - Nightly stretch: OWASP ZAP baseline against the compose stack.
 
 ## 10. Flake and quality policy
---strict-markers, pytest-randomly, pytest-timeout (component 30 s, integration 120 s), --reruns 1 only for integration/e2e_ui and always reported; web-first assertions; no sleeps; every xfail is strict and linked to KNOWN_ISSUES.md. New tests must pass 3x with random order and -n auto.
+--strict-markers, pytest-randomly, pytest-timeout (component 30 s, contract 120 s, integration 120 s, e2e_ui 120 s), --reruns 1 only for integration/e2e_ui and always reported; web-first assertions; no sleeps; every xfail is strict and linked to KNOWN_ISSUES.md. New tests must pass 3x with random order and -n auto.
 
 ## 11. Risks and fallbacks (decide within 30 min, then take the fallback)
 - Python 3.14 wheels missing (unlikely as of 2026-10) -> venv on 3.13 (15 min, ADR-12).

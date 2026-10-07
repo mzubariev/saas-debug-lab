@@ -23,3 +23,9 @@ Scratch run: one venv, each service's `requirements.txt`, plus `shared[services]
 `/health` and `/ready` returned 200 on every FastAPI app without lifespan. `/metrics` returned 200 `text/plain; version=0.0.4` (httpx does not send the OpenMetrics Accept header). Gateway OpenAPI generation warned: duplicate operation IDs `proxy_auth_auth__path__put`, `proxy_tasks_root_tasks_delete`, `proxy_tasks_tasks__path__delete`, `proxy_webhooks_webhooks__path__delete`.
 
 First structlog event after a successful import loads `ddtrace` (4.15.4, 144 submodules) via `saas_shared.logging._inject_dd_trace_context`. It did not add a thread and did not fail the log. Fresh pins from this venv, not from an image lock: SQLAlchemy 2.1.3, FastAPI 0.142.2, Pydantic 2.13.5, aiokafka 0.14.0, Celery 5.3.1, kafka-python 3.0.11, psycopg2-binary 2.9.13, asyncpg 0.31.0, httpx 0.28.1. `opentelemetry-instrumentation-sqlalchemy` 0.66b0 supports `sqlalchemy>=1.0,<2.1` and logged that 2.1.3 was not instrumented. `redis` 8.1.0 warned that the `asyncio` extra does not exist; `redis.asyncio` still imported.
+
+## Moved out of the living maps (pre-P0.1)
+
+The scratch paragraph above is the Datadog evidence. P0.1 removed `ddtrace`, `ddtrace-run`, `infra/docker-compose.datadog.yml`, and `_inject_dd_trace_context`. With the package absent, that processor added `dd_trace_error` to every log line. The living SUT maps no longer list that hazard.
+
+Production-prep candidates that used to close `SUT_MAP_FULL.md` are applied and recorded in `_prep.md`: delete the `ddtrace` import together with the requirement; leave OpenTelemetry at import (tests set `OTLP_ENDPOINT=""`); require connection hosts with no Docker DNS default; add `WEBHOOK_BACKOFF_BASE`, `DLQ_REPLAY_INTERVAL_SECONDS`, and `CLEANUP_INTERVAL_SECONDS`; keep the metrics port as the worker readiness signal.

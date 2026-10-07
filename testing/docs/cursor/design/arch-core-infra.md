@@ -24,13 +24,13 @@ def pytest_ignore_collect(collection_path, config) -> bool | None:   # skip othe
 def pytest_collection_modifyitems(items) -> None:                # tests/<layer>/... -> marker
     ...
 ```
-needs_infra: false when INFRA=off, or all args are under tests/unit, or -m unit. (The controller does not collect under xdist: use args/markexpr, not item markers.)
+needs_infra: true only when `--service` is set or `INFRA=on`. It is never true for `integration`, `e2e_ui`, `smoke`, or `synthetic`, even if one of those switches is set.
 
 ## 6.2 Template DB, worker DB, real commits (async)
 ```python
 @pytest.fixture(scope="session")
 def worker_db(infra: Infra, worker_id: str) -> DbUrls:            # sync fixture; sync psycopg for DDL
-    name = f"test_{infra.service}_{infra.layer}_{worker_id}"      # service + layer in name: parallel runs share one PG safely
+    name = f"test_{infra.service}_{infra.layer}_{worker_id}".replace("-", "_")  # hyphens become underscores
     with admin_engine(infra.pg_admin_url).connect() as c:         # AUTOCOMMIT
         c.execute(text(f'DROP DATABASE IF EXISTS "{name}"'))
         c.execute(text(f'CREATE DATABASE "{name}" TEMPLATE {infra.template_db}'))
@@ -54,6 +54,7 @@ def service_env(infra: Infra, worker_db: DbUrls, worker_id: str) -> Iterator[Non
         mp.setenv(key, value)
     mp.setenv("REDIS_URL", infra.redis_url_for(worker_index(worker_id)))   # auth/task; scheduler-worker reads CELERY_BROKER_URL / CELERY_RESULT_BACKEND instead
     mp.setenv("KAFKA_BOOTSTRAP_SERVERS", infra.kafka_bootstrap)
+    mp.setenv("SERVICE_NAME", infra.service)                      # task-service Settings requires it and has no default
     mp.setenv("OTLP_ENDPOINT", "")                                # empty = no OTLP exporter; otherwise import starts a thread dialling otel-collector:4317
     mp.setenv("SENTRY_DSN", "")                                   # empty = Sentry stays inert
     yield
@@ -71,11 +72,11 @@ async def clean_db(session_maker) -> None:                        # via @pytest.
             await s.execute(text(f"TRUNCATE {', '.join(quote_ident(t) for t in tables)} RESTART IDENTITY CASCADE"))
         await s.commit()
 ```
-Template. The controller runs alembic upgrade head into a template DB (with cwd=migrations/, because script_location is relative; Alembic builds its URL from POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, POSTGRES_HOST (default postgres) and POSTGRES_PORT, and does not read DATABASE_URL), runs the single-head + drift check, then installs touched-table tracking, then disposes all connections. The template is built once and reused: name = app_template_<alembic head revision>; the controller takes pg_advisory_lock(<const>), checks pg_database and builds only if missing (concurrent per-service sessions, local re-runs and make deps-up all reuse it; a new migration changes the head -> new template, old ones dropped by make deps-clean). Worker DBs are test_<service>_<layer>_<worker_id> (layer = component|contract), dropped before create and at session end. CREATE DATABASE ... TEMPLATE needs no open connections to the template, so nobody connects to it.
+Template. The controller migrates `app_template_<head>_building` (cwd `migrations/`, because `script_location` is relative; Alembic requires `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and `POSTGRES_HOST`, and `POSTGRES_PORT` defaults to 5432; it does not read `DATABASE_URL`), then renames that database to `app_template_<head>` after every connection to the scratch database is gone. A leftover `_building` database is dropped first. The controller takes `pg_advisory_lock`, checks `pg_database`, and builds only if the final name is missing (concurrent per-service sessions, local re-runs and `make deps-up` all reuse it; a new migration changes the head -> new template, old ones dropped by `make deps-clean`). Worker DBs are `test_<service>_<layer>_<worker_id>` with hyphens replaced by underscores (layer = component|contract), dropped before create and at session end. `CREATE DATABASE ... TEMPLATE` needs no open connections to the source, which is why the build uses the `_building` name.
 
 Touched-table tracking (test-only DDL, only in the template, prod migrations untouched). Table _touched(tbl text primary key); function _mark() doing INSERT INTO _touched VALUES (TG_TABLE_NAME) ON CONFLICT DO NOTHING; statement-level AFTER INSERT OR UPDATE OR DELETE trigger on every table of schema public except alembic_version and _touched. Triggers see writes from the app, the scheduler and the tests alike (pg_stat_* counters are not reliable per test). clean_db truncates only tables touched since the last cleanup (TRUNCATE also empties indexes; CASCADE follows foreign keys), so cost is proportional to what a test used. Default = no cleanup (unique data); use clean_db only for tests asserting global state (e.g. scheduler cleanup). If a table is tiny, DELETE can beat TRUNCATE: measure before optimizing.
 
-Redis. One Redis server; each xdist worker uses its own DB index (redis://host:6379/<n>, via env, no production change) and FLUSHDB runs before every test (list/item caches are shared keys within a DB, so flush rather than namespace). Keep -n <= 8 so indexes stay within the default 16.
+Redis. One Redis server per pytest session. `service_env` sets `REDIS_URL` from `redis_url_for(worker_index)` (`gw0` is DB 0) and `FLUSHDB` runs before every test (list/item caches are shared keys within a DB, so flush rather than namespace). `make t-component-all` runs services in parallel against one `TEST_REDIS_URL`, so auth and task share that server and the same worker indexes. The code has no per-service index offset. Keep `-n` <= 8 so indexes stay within the default 16.
 
 Postgres tuning for tests (ADR-18). Start every test Postgres with `postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=200`, data dir on tmpfs. max_connections: each worker holds its own app engine plus the test engine; default 100 runs out at -n 8 with several pools.
 - Testcontainers (controller): PostgresContainer(image).with_command("postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=200").with_tmpfs_mount(PGDATA_PARENT) (Testcontainers 4.x; verify the method name in the installed version).

@@ -17,7 +17,7 @@ DAG on push/PR: lint (ruff, pyright), security (ruff S, audit, gitleaks), unit (
 
 ### 9.2 `ci.yml` skeleton (P5; adapt names to SUT_MAP, resolve action SHAs)
 
-Differences from the usual boilerplate, on purpose: no `merge_group` (no merge queue on personal repos), no image build/push to GHCR (integration builds inside the job, P9), service containers include Redis and Redpanda, `uv sync --locked` (fails when `uv.lock` is stale; `--frozen` would hide it), every third-party action pinned by commit SHA, `permissions` minimal, `timeout-minutes` on every job.
+Differences from the usual boilerplate, on purpose: no `merge_group` (no merge queue on personal repos), no image build/push to GHCR (integration builds inside the job, P9), service containers include Redis and Redpanda, `uv sync --locked` in CI (fails when `uv.lock` is stale; `--frozen` would hide it), local runs use `uv sync --all-groups` (`make t-component-all` does this; a plain `uv sync` does not install service groups), every third-party action pinned by commit SHA, `permissions` minimal, `timeout-minutes` on every job. Service-agnostic `tests/contract/events` runs once, not in every matrix leg.
 
 ```yaml
 name: ci
@@ -65,7 +65,7 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff check --select S .
       - run: |
-          uv export --locked --no-hashes --no-emit-project > /tmp/req.txt
+          uv export --locked --all-groups --no-emit-package saas-shared --no-hashes --no-emit-project > /tmp/req.txt
           uv run pip-audit -r /tmp/req.txt --no-deps --disable-pip
       - uses: gitleaks/gitleaks-action@<SHA>    # vX
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
@@ -124,13 +124,15 @@ jobs:
         with: { enable-cache: true, cache-dependency-glob: testing/uv.lock }
       - run: uv sync --locked --group ${{ matrix.service }}
       - id: svc                                 # service directory comes from config/services.py (services/core/..., workers/...)
-        run: echo "path=$(uv run python -c 'from saas_testkit.config.services import SERVICES; print(SERVICES["${{ matrix.service }}"].path)')" >> "$GITHUB_OUTPUT"
+        run: echo "path=$(uv run python -c 'from saas_testkit.config import SERVICES; print(SERVICES["${{ matrix.service }}"].path)')" >> "$GITHUB_OUTPUT"
       - name: Wait for Redpanda
         run: timeout 60 bash -c 'until (echo > /dev/tcp/localhost/9092) 2>/dev/null; do sleep 1; done'
       - run: >-
-          uv run pytest tests/component tests/contract --service ${{ matrix.service }}
+          uv run pytest tests/component tests/contract/http --service ${{ matrix.service }}
           -n auto -q --cov=../${{ steps.svc.outputs.path }} --cov-report=
           --junitxml=reports/junit-${{ matrix.service }}.xml
+      - if: matrix.service == 'task-service'   # service-agnostic contract/events, once per CI run
+        run: uv run pytest tests/contract/events -q --junitxml=reports/junit-events.xml
       - uses: actions/upload-artifact@<SHA>     # vX
         if: ${{ !cancelled() }}
         with:

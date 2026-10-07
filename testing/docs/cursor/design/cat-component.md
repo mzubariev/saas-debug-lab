@@ -44,7 +44,7 @@ T1:
 - JWT required for `/tasks*` only: 401 missing / invalid / expired, bodies from SUT_MAP (parametrized); `/auth/*` and `/webhooks/*` open.
 - header handling: `host`, `sentry-trace`, `baggage`, `traceparent`, `tracestate` are not forwarded; others are.
 - upstream 5xx and 4xx passthrough (status and body); timeout -> 504 `Downstream timeout`; connection error -> 502 `Downstream unavailable`.
-- CORS preflight for `localhost:5173` only if the gateway configures CORS (SUT_MAP does not confirm it).
+- CORS: `CORSMiddleware` allows `http://localhost:5173`, `http://127.0.0.1:5173`, and `http://localhost`.
 T3: health/metrics (smoke); duplicate operation IDs in OpenAPI (a snapshot already pins them).
 
 

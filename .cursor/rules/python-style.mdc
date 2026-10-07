@@ -19,7 +19,7 @@ alwaysApply: false
 ## Data and boundaries
 - Use `@dataclass(frozen=True, slots=True, kw_only=True)` for trusted internal and domain data.
 - Use Pydantic v2 at every external boundary: HTTP bodies, Kafka messages and settings (`pydantic-settings`). Be strict (`extra="forbid"`, `frozen=True`) for what we send or own: request models, Kafka envelopes and settings. Be a tolerant reader (`extra="ignore"`) for response models we only consume, so additive API changes do not break tests.
-- Inject dependencies explicitly (constructor arguments or FastAPI `Depends`). Dependencies point inward: flows and use cases depend on abstractions, and adapters implement them.
+- Inject dependencies explicitly (constructor arguments or FastAPI `Depends`). Flows take the concrete adapter they are given. Add a `Protocol` only when a second implementation exists.
 
 ## Package Exports & Facade Imports Rule
 - ALWAYS import public utilities, classes, and factories from the root package's facade (the `__init__.py`) ONLY when importing from OUTSIDE that package (e.g., from test files or other services).

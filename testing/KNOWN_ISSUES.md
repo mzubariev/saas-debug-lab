@@ -2,6 +2,19 @@
 
 ## Defects
 
+### Candidates to confirm
+
+No BUG-n yet. Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xfail(strict=True)`.
+
+- Dispatcher `Idempotency-Key` is `str(payload.get("id", ""))`. `task_created` and `task_updated` for one task both carry that task id, so the two deliveries share one key.
+- Scheduler DLQ replay is final on any `httpx.HTTPStatusError` (`autoretry_for` is only `httpx.RequestError`). The DLQ consumer sets `enable_auto_commit=True` and `process_dlq` commits by consuming and closing before the Celery task performs the HTTP call, so a rejected replay is not returned to `webhook_dlq`.
+- Dispatcher `_produce` logs `kafka_produce_failed` and does not re-raise. Notification-worker catches `aiosmtplib.SMTPException` and `OSError`, counts them, and does not re-raise.
+- task-service commits in the repository, then calls `publish_event`. A Kafka failure raises after the commit (the route returns 500), the task row remains, the event is not published, and `cache_delete` does not run.
+- The `role` claim is written at login and copied by gateway `verify_token` and `/auth/me`. No route checks it. There is no authZ.
+- Auth login cache writes `username`, `hashed_password`, and `role` to Redis (`user:{username}`, TTL 300 s).
+- `GET /tasks` returns every row (`list_all`; no limit or offset).
+- nginx `location /auth/token` sets `limit_req zone=auth` (`5r/m`), and the zone key is `$http_authorization`. A login sends no `Authorization` header, so the key is empty and nginx does not account the request. Confirm in P6.2; if it holds, record BUG-1.
+
 ## Testability changes
 
 - `infra/docker-compose.datadog.yml`, service `requirements.txt`, `saas_shared.logging`, `saas_shared.sentry_setup`, `saas_shared.telemetry`: removed Datadog (`ddtrace-run`, the `ddtrace` requirement, the log processor, and the Sentry hooks) so a missing package does not stamp `dd_trace_error` on every log line.

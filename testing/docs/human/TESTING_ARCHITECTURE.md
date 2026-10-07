@@ -56,14 +56,14 @@ Self-contained design document for **this** monorepo (isolation, shared infra, C
 | Service | Kind | Talks to | Test-relevant facts |
 |---|---|---|---|
 | nginx :80 | proxy | api-gateway | Rate-limit zones are keyed by the `Authorization` header, not by IP: API 20 r/s with burst 100 (delayed) on `/`, burst 20 nodelay on `/webhooks/`; `/auth/token` 5 r/min burst 3. nginx does not account requests whose zone key is empty (nginx documentation), and a login request carries no `Authorization` header, so `/auth/token` is **not limited at all** in practice, although the documentation says 5 r/min. The first edge test (P6.2) confirms this empirically; if it holds, record BUG-1. `/auth/me` is not limited either. The API limit is per bearer token, so one shared token file means one shared bucket |
-| api-gateway :8000 | FastAPI | auth, task, webhook-receiver | JWT HS256 required only for `/tasks/*`; strips Host/sentry-trace/baggage; CORS not confirmed by SUT_MAP; JWT secret and 30 min TTL come from env |
+| api-gateway :8000 | FastAPI | auth, task, webhook-receiver | JWT HS256 required only for `/tasks/*`; drops `host`, `sentry-trace`, `baggage`, `traceparent`, `tracestate`; CORS allows `http://localhost:5173`, `http://127.0.0.1:5173`, and `http://localhost`; `JWT_SECRET` is required; TTL default 30 min |
 | auth-service | FastAPI + PG + Redis(db1) | | `POST /auth/token` (form), `GET /auth/me`; users admin/admin123, user/user123 (seed script, not automatic); user cache TTL 300 |
 | task-service | FastAPI + PG + Redis(db0) + Kafka producer | | `/tasks` CRUD, `PATCH /tasks/{id}/start` (other transition routes: SUT_MAP); list/item cache in Redis; emits `task_created` / `task_updated` |
 | webhook-receiver | FastAPI + Kafka producer | | `POST /webhooks/inbound` → topic `webhook_inbound` |
-| webhook-dispatcher | Kafka consumer (no HTTP; metrics :9100) | `WEBHOOK_URL` | consumes `task_created/updated`; POST with `Idempotency-Key`; `MAX_RETRIES` attempts (default 3); the sleep after attempt n is 1·2^(n−1) s plus 0..+10 % jitter (so about 1 s and 2 s with the defaults); 4xx no retry; permanent failure → `webhook_dlq` (a DLQ produce error is logged and swallowed) |
+| webhook-dispatcher | `services/core/webhook-dispatcher` (Kafka consumer, no HTTP; metrics :9100) | `WEBHOOK_URL` | consumes `task_created/updated`; POST with `Idempotency-Key`; `MAX_RETRIES` (default 3); sleep is `WEBHOOK_BACKOFF_BASE` * 2^(n−1) s plus 0..+10 % jitter; 4xx no retry; permanent failure → `webhook_dlq` (a DLQ produce error is logged and swallowed) |
 | external-service-simulator | FastAPI | | `/receive-webhook` (`fail_rate`,`delay`,`status`, idempotency dedupe), `/trigger-event` → gateway `/webhooks/inbound` |
-| notification-worker | Kafka consumer | Toxiproxy → MailHog | `task_created` → email (MIME text+html); MailHog API :8025 |
-| scheduler-worker | Celery + Beat | Redis(db2), Kafka, PG | `retry_failed_webhooks` every 60 s (drain DLQ), `cleanup_old_tasks` every 5 m |
+| notification-worker | `workers/notification-worker` | Toxiproxy → MailHog | `task_created` → email (MIME text+html); MailHog API :8025; `SMTP_HOST` required |
+| scheduler-worker | `workers/scheduler-worker` (Celery + Beat) | Redis(db2), Kafka, PG | `retry_failed_webhooks` every `DLQ_REPLAY_INTERVAL_SECONDS` (default 60 s); `cleanup_old_tasks` every `CLEANUP_INTERVAL_SECONDS` (default 300 s) |
 | Kafka envelope v1 | | | `event_type, version, trace_id, timestamp, payload`; legacy raw JSON → `event_type="unknown"` |
 | frontend :5173 | React Kanban | gateway | drag-and-drop between columns, login page |
 
@@ -171,14 +171,14 @@ def pytest_collection_modifyitems(items) -> None:                # tests/<layer>
     ...
 ```
 
-`needs_infra`: false when `INFRA=off`, or all args are under `tests/unit`, or `-m unit`. (Controller does not collect under xdist, so use args/markexpr, not item markers.)
+`needs_infra`: true only when `--service` is set or `INFRA=on`. It is never true for `integration`, `e2e_ui`, `smoke`, or `synthetic`, even if one of those switches is set.
 
 ### 6.2 Template DB, worker DB, real commits (async)
 
 ```python
 @pytest.fixture(scope="session")
 def worker_db(infra: Infra, worker_id: str) -> DbUrls:            # sync fixture; sync psycopg for DDL
-    name = f"test_{infra.service}_{infra.layer}_{worker_id}"      # service + layer in the name: parallel runs share one PG safely
+    name = f"test_{infra.service}_{infra.layer}_{worker_id}".replace("-", "_")  # hyphens become underscores
     with admin_engine(infra.pg_admin_url).connect() as c:         # AUTOCOMMIT
         c.execute(text(f'DROP DATABASE IF EXISTS "{name}"'))
         c.execute(text(f'CREATE DATABASE "{name}" TEMPLATE {infra.template_db}'))
@@ -202,6 +202,7 @@ def service_env(infra: Infra, worker_db: DbUrls, worker_id: str) -> Iterator[Non
         mp.setenv(key, value)
     mp.setenv("REDIS_URL", infra.redis_url_for(worker_index(worker_id)))   # auth/task; scheduler-worker reads CELERY_BROKER_URL / CELERY_RESULT_BACKEND instead
     mp.setenv("KAFKA_BOOTSTRAP_SERVERS", infra.kafka_bootstrap)
+    mp.setenv("SERVICE_NAME", infra.service)                      # task-service Settings requires it and has no default
     mp.setenv("OTLP_ENDPOINT", "")                                # empty = no OTLP exporter; otherwise import starts a thread dialling otel-collector:4317
     mp.setenv("SENTRY_DSN", "")                                   # empty = Sentry stays inert
     yield
@@ -219,11 +220,11 @@ async def clean_db(session_maker) -> None:                        # applied via 
             await s.execute(text(f"TRUNCATE {', '.join(quote_ident(t) for t in tables)} RESTART IDENTITY CASCADE"))
         await s.commit()
 ```
-**Template.** The controller runs `alembic upgrade head` into a template DB (with `cwd=migrations/`, because `script_location` is relative; Alembic builds its URL from `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_HOST` (default `postgres`) and `POSTGRES_PORT`, and does not read `DATABASE_URL`), runs the single-head + drift check, **then installs touched-table tracking**, then disposes all connections. The template is built once and reused: name = `app_template_<alembic head revision>`; the controller takes `pg_advisory_lock(<const>)`, checks `pg_database` and builds it only if missing (concurrent per-service sessions, local re-runs and `make deps-up` all reuse it; a new migration changes the head → new template, old ones are dropped by `make deps-clean`). Worker DBs are named `test_<service>_<layer>_<worker_id>` (layer = component|contract), dropped before create and at session end. `CREATE DATABASE ... TEMPLATE` needs no open connections to the template, so nobody connects to it.
+**Template.** The controller migrates `app_template_<head>_building` (`cwd=migrations/`, because `script_location` is relative; Alembic requires `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and `POSTGRES_HOST`, and `POSTGRES_PORT` defaults to 5432; it does not read `DATABASE_URL`), then renames that database to `app_template_<head>` after every connection to the scratch database is gone. A leftover `_building` database is dropped first. The controller takes `pg_advisory_lock`, checks `pg_database`, and builds only if the final name is missing (concurrent per-service sessions, local re-runs and `make deps-up` all reuse it; a new migration changes the head → new template, old ones are dropped by `make deps-clean`). Worker DBs are named `test_<service>_<layer>_<worker_id>` with hyphens replaced by underscores (layer = component|contract), dropped before create and at session end. `CREATE DATABASE ... TEMPLATE` needs no open connections to the source, which is why the build uses the `_building` name.
 
 **Touched-table tracking (test-only DDL, only in the template, prod migrations untouched).** Table `_touched(tbl text primary key)`, a function `_mark()` that does `INSERT INTO _touched VALUES (TG_TABLE_NAME) ON CONFLICT DO NOTHING`, and a statement-level `AFTER INSERT OR UPDATE OR DELETE` trigger on every table of schema `public` except `alembic_version` and `_touched`. Triggers see writes from the app, the scheduler and the tests alike (`pg_stat_*` counters are not reliable per test). `clean_db` truncates only the tables touched since the last cleanup (`TRUNCATE` also empties the table's indexes; `CASCADE` follows foreign keys), so the cost stays proportional to what a test actually used, not to the schema or the number of tests. Default is **no cleanup** (unique data); use `clean_db` only for tests that assert on global state (e.g. scheduler cleanup). If a table is tiny, `DELETE` can beat `TRUNCATE`: measure before optimizing.
 
-**Redis.** One Redis server; each xdist worker uses its own DB index (`redis://host:6379/<n>`, set via env, so no production change) and `FLUSHDB` runs before every test (list/item caches are shared keys within a DB, so flush rather than namespace). Keep `-n` ≤ 8 so indexes stay within the default 16.
+**Redis.** One Redis server per pytest session. `service_env` sets `REDIS_URL` from `redis_url_for(worker_index)` (`gw0` is DB 0) and `FLUSHDB` runs before every test (list/item caches are shared keys within a DB, so flush rather than namespace). `make t-component-all` runs services in parallel against one `TEST_REDIS_URL`, so auth and task share that server and the same worker indexes. The code has no per-service index offset. Keep `-n` ≤ 8 so indexes stay within the default 16.
 
 **Postgres tuning for tests (ADR-18).** Start every test Postgres with `postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=200` and put the data dir on tmpfs. `max_connections`: each worker holds its own app engine plus the test engine, and the default 100 runs out at `-n 8` with several pools.
 - Testcontainers (controller): `PostgresContainer(image).with_command("postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=200").with_tmpfs_mount(PGDATA_PARENT)` (Testcontainers 4.x; verify the method in the installed version).
@@ -243,7 +244,8 @@ class HttpTaskApi:
     async def create(self, body: TaskCreate) -> ApiResponse[Task]: ...
     async def start(self, task_id: UUID) -> ApiResponse[Task]: ...
 
-# adapters/kafka/reader.py — real Redpanda/Kafka consumer, same class at component and integration
+# adapters/kafka/reader.py — real Redpanda/Kafka consumer, same class at component and integration.
+# auto_offset_reset is "latest". The controller does not pre-create topics.
 class KafkaEventReader:
     async def wait_for(self, topic: str, *, match: Callable[[Envelope], bool], timeout: float) -> Envelope: ...
 
@@ -320,7 +322,7 @@ def rows(db: AsyncSession) -> Rows:
 task = await rows.task.create_async(status=TaskStatus.COMPLETED)     # really committed to the worker DB; unique values keep it isolated
 ```
 
-Notes: (1) Polyfactory's SQLAlchemy persistence commits by default: rows are really committed, so the app's own engine, the scheduler and other processes see them. (2) Bind per test via a subclass in a fixture; do not mutate a shared class attribute or rely on a `ContextVar` (async fixtures and tests may run in different contexts). (3) Reproducibility: one seed per run. A session fixture calls `Factory.seed_random(config.getoption("randomly_seed"))`, so the number printed by pytest-randomly reproduces both the test order and the factory data (Polyfactory has its own `Random` instance, which pytest-randomly does not reseed); there is no separate `run_seed`. The failure report prints that seed. (4) Random data may violate business rules: override constrained fields (status, FKs, unique titles) explicitly. (5) Faker is bundled (`Factory.__faker__`); custom providers in `factories/providers.py` (`unique_title`, `jwt_claims`). (6) `UserRow.password_hash` = one cached argon2 hash. (7) Event factories (`ModelFactory[Envelope[TaskCreatedPayload]]`) build envelopes; a Builder only for `Envelope`/webhook bodies with many optional parts. Internal trusted dataclasses use `DataclassFactory`.
+Notes: (1) Polyfactory's SQLAlchemy persistence commits by default: rows are really committed, so the app's own engine, the scheduler and other processes see them. (2) Bind per test via a subclass in a fixture; do not mutate a shared class attribute or rely on a `ContextVar` (async fixtures and tests may run in different contexts). (3) Reproducibility: one seed per run. A session fixture calls `Factory.seed_random(config.getoption("randomly_seed"))`, so the number printed by pytest-randomly reproduces both the test order and the factory data (Polyfactory has its own `Random` instance, which pytest-randomly does not reseed); there is no separate `run_seed`. The failure report prints that seed. (4) Random data may violate business rules: override constrained fields (status, FKs, unique titles) explicitly. (5) Faker is bundled (`Factory.__faker__`); custom providers in `factories/providers.py` (`unique_title`, `jwt_claims`). (6) `UserRow.hashed_password` = one cached argon2 hash (the `users.hashed_password` column). (7) Event factories (`ModelFactory[Envelope[TaskCreatedPayload]]`) build envelopes; a Builder only for `Envelope`/webhook bodies with many optional parts. Internal trusted dataclasses use `DataclassFactory`.
 
 ### 6.6 Polling, correlation, resilience helpers
 
@@ -345,14 +347,12 @@ Notes: (1) Polyfactory's SQLAlchemy persistence commits by default: rows are rea
 
 Characterise first; record surprises in `KNOWN_ISSUES.md`.
 
-**task-service (component, deepest):** create (201, schema, `status=created`, `task.created` envelope emitted & schema-valid); validation (empty/oversize/wrong-type title → 422); get 200/404/bad-uuid 422; list ordering by `created_at`, filter/pagination if present; state machine via `PATCH /tasks/{id}/start` and `/complete`: created→in_progress→completed, and 409 for every illegal transition (parametrized matrix), 404 unknown id; `task.updated` event on each transition; cache: 2nd `GET` served from Redis (keys `tasks:list` 60 s and `tasks:{id}` 120 s; a hit returns the stored dict, a miss the ORM row, same `response_model`), invalidated on create/transition; Redis down → falls through to DB; Kafka publish failure → characterised behaviour; DB error → 5xx shape; race: N concurrent `start` on one task → exactly one success; health/ready/metrics.
+**task-service (component, deepest):** create (201, schema, `status=created`, `task.created` envelope emitted & schema-valid); validation (empty/oversize/wrong-type title → 422); get 200/404/bad-uuid 422; list is unpaginated (`list_all`); state machine via `PATCH /tasks/{id}/start` and `/complete`: created→in_progress→completed, and 409 for every illegal transition (parametrized matrix), 404 unknown id; `task.updated` event on each transition; cache: 2nd `GET` served from Redis (keys `tasks:list` 60 s and `tasks:{id}` 120 s; a hit returns the stored dict, a miss the ORM row, same `response_model`), invalidated on create/transition; Redis down → falls through to DB; Kafka publish failure → characterised behaviour; DB error → 5xx shape; race: N concurrent `start` on one task → exactly one success; health/ready/metrics.
 **auth-service:** token OK for both roles, JWT claims/exp; wrong password / unknown user → 401 (same body); missing fields 422; `/me`: valid, expired, tampered signature, `alg=none`, missing/malformed header; password never leaked, hash is argon2; user cache hit on 2nd login; Redis down OK; `/auth/me` decodes the token only (no database read); `/health` and `/ready` are static JSON and stay 200 when dependencies are down (characterise it as a hazard, do not assert readiness semantics).
-**api-gateway (respx upstreams):** routing per prefix; JWT required for `/tasks/*` only (401 missing/invalid/expired); header stripping/forwarding; upstream 5xx passthrough, timeout and connection error mapping; CORS preflight for `localhost:5173` only if the gateway configures CORS (SUT_MAP does not confirm it); 504 `Downstream timeout` and 502 `Downstream unavailable`; dropped headers `host`, `sentry-trace`, `baggage`, `traceparent`, `tracestate`; health/metrics.
+**api-gateway (respx upstreams):** routing per prefix; JWT required for `/tasks/*` only (401 missing/invalid/expired); header stripping/forwarding; upstream 5xx passthrough, timeout and connection error mapping; CORS allows `http://localhost:5173`, `http://127.0.0.1:5173`, and `http://localhost`; 504 `Downstream timeout` and 502 `Downstream unavailable`; dropped headers `host`, `sentry-trace`, `baggage`, `traceparent`, `tracestate`; health/metrics.
 **webhook-receiver:** valid inbound → published envelope `webhook.inbound`; invalid body 422; producer failure → 5xx; correlation id propagation.
 **external-service-simulator:** `fail_rate` 0/1, `status`, `delay` (sleep patched), idempotency dedupe (same key twice → `duplicate`; failed attempt not recorded), `/trigger-event` posts to gateway URL (respx) with retry.
-**webhook-dispatcher (worker component; fake consumer/producer, respx):** envelope decode; `Idempotency-Key = payload.id`; 2xx success; 5xx/network → retries up to `MAX_RETRIES` (default 3) with sleeps of 1·2^(n−1) s plus 0..+10 % jitter, so two sleeps with the defaults; 4xx → no retry; exhausted → DLQ envelope `webhook.dlq`; legacy raw JSON handled; poison message skipped.
-**notification-worker:** MIME multipart (text+html) contains task title; SMTP failure handling; legacy message.
-**scheduler-worker:** `cleanup_old_tasks` on real PG (only `completed` rows with `updated_at < now - CLEANUP_COMPLETED_TASKS_MINUTES`, default 5 minutes; boundary; `0` disables; in_progress untouched); `retry_failed_webhooks` (DLQ message → HTTP replay via respx; offsets auto-committed regardless; envelope + legacy; the replay sends no `Idempotency-Key`; Celery retries only `httpx.RequestError` (max 5, backoff), any `HTTPStatusError`, 4xx and 5xx, is final).
+**webhook-dispatcher, notification-worker, scheduler-worker:** deferred to F. They live at `services/core/webhook-dispatcher`, `workers/notification-worker`, and `workers/scheduler-worker` (`config/services.py`). The behaviour list is in `design/cat-component.md`.
 **contract/http:** per service — OpenAPI valid; committed exact snapshot (any diff fails, ADR-17, §7.1); Schemathesis (25–50 examples PR, 500+ nightly, `not_a_server_error` + schema conformance); consumer-side Pydantic models validate real responses.
 **contract/events:** Envelope v1 model; payload schema per topic (`task_created`, `task_updated`, `webhook_inbound`, `webhook_dlq`); JSON-schema snapshots in `contracts/events`; producers' captured events validate; legacy → `unknown`.
 **integration/services:** every service `/health` through gateway; auth→gateway→task with real JWT; nginx edge behaviour (dedicated, `xdist_group("serial")`): characterise the auth-burst limit (documentation says 429, the nginx config suggests none: a mismatch is a defect, not a test problem) and forwarded headers; `/metrics` exposes expected series after traffic.
@@ -418,7 +418,7 @@ Free plan includes 100k synthetic executions/month (verify current limits on the
 
 ### 9.2 `ci.yml` skeleton (P5; adapt names to SUT_MAP, resolve action SHAs)
 
-Differences from the usual boilerplate, on purpose: no `merge_group` (no merge queue on personal repos), no image build/push to GHCR (integration builds inside the job, P9), service containers include **Redis and Redpanda**, `uv sync --locked` (fails when `uv.lock` is stale; `--frozen` would hide it), every third-party action pinned by commit SHA, `permissions` minimal, `timeout-minutes` on every job.
+Differences from the usual boilerplate, on purpose: no `merge_group` (no merge queue on personal repos), no image build/push to GHCR (integration builds inside the job, P9), service containers include **Redis and Redpanda**, `uv sync --locked` in CI (fails when `uv.lock` is stale; `--frozen` would hide it), local runs use `uv sync --all-groups` (`make t-component-all` does this; a plain `uv sync` does not install service groups), every third-party action pinned by commit SHA, `permissions` minimal, `timeout-minutes` on every job. Service-agnostic `tests/contract/events` runs once, not in every matrix leg.
 
 ```yaml
 name: ci
@@ -466,7 +466,7 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff check --select S .
       - run: |
-          uv export --locked --no-hashes --no-emit-project > /tmp/req.txt
+          uv export --locked --all-groups --no-emit-package saas-shared --no-hashes --no-emit-project > /tmp/req.txt
           uv run pip-audit -r /tmp/req.txt --no-deps --disable-pip
       - uses: gitleaks/gitleaks-action@<SHA>    # vX
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
@@ -525,13 +525,15 @@ jobs:
         with: { enable-cache: true, cache-dependency-glob: testing/uv.lock }
       - run: uv sync --locked --group ${{ matrix.service }}
       - id: svc                                 # service directory comes from config/services.py (services/core/..., workers/...)
-        run: echo "path=$(uv run python -c 'from saas_testkit.config.services import SERVICES; print(SERVICES["${{ matrix.service }}"].path)')" >> "$GITHUB_OUTPUT"
+        run: echo "path=$(uv run python -c 'from saas_testkit.config import SERVICES; print(SERVICES["${{ matrix.service }}"].path)')" >> "$GITHUB_OUTPUT"
       - name: Wait for Redpanda
         run: timeout 60 bash -c 'until (echo > /dev/tcp/localhost/9092) 2>/dev/null; do sleep 1; done'
       - run: >-
-          uv run pytest tests/component tests/contract --service ${{ matrix.service }}
+          uv run pytest tests/component tests/contract/http --service ${{ matrix.service }}
           -n auto -q --cov=../${{ steps.svc.outputs.path }} --cov-report=
           --junitxml=reports/junit-${{ matrix.service }}.xml
+      - if: matrix.service == 'task-service'   # service-agnostic contract/events, once per CI run
+        run: uv run pytest tests/contract/events -q --junitxml=reports/junit-events.xml
       - uses: actions/upload-artifact@<SHA>     # vX
         if: ${{ !cancelled() }}
         with:
@@ -587,7 +589,7 @@ The job runs the compose stack on the runner host, so a job-level container (`mc
 
 ## 10. Flake and quality policy
 
-`--strict-markers`, `pytest-randomly`, `pytest-timeout` (component 30 s, integration 120 s), `--reruns 1` only for `integration`/`e2e_ui` and always reported; web-first assertions; no sleeps; every `xfail` is strict and linked to `KNOWN_ISSUES.md`. New tests must pass 3× with random order and `-n auto`.
+`--strict-markers`, `pytest-randomly`, `pytest-timeout` (component 30 s, contract 120 s, integration 120 s, e2e_ui 120 s), `--reruns 1` only for `integration`/`e2e_ui` and always reported; web-first assertions; no sleeps; every `xfail` is strict and linked to `KNOWN_ISSUES.md`. New tests must pass 3× with random order and `-n auto`.
 
 ## 11. Risks and fallbacks
 

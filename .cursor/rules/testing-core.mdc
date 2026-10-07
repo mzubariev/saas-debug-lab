@@ -9,8 +9,8 @@ This file holds policy only. Facts about the system under test (routes, ports, r
 
 ## Scope and working method
 - Write only in `testing/`, `.github/workflows/`, `infra/docker-compose.test.yml` and the root `Makefile` (which includes `testing/testing.mk`). Never change or relax the nginx configuration.
+- `infra/docker-compose.yml` may be edited only in task P6.0 (KRaft).
 - Edit production code only to add a testability seam, and only as `testing-modify-prod.mdc` describes. Never fix bugs or change behaviour. When observed behaviour contradicts the documented specification, mark the test `xfail(strict=True, reason="BUG-n: ...")` and add a line under "Defects" in `testing/KNOWN_ISSUES.md`. When behaviour is unspecified, pin it and add a `# characterization` comment.
-- Ignore Datadog everywhere; it is removed in a separate step.
 - Characterise first: read the route, call it, then assert. Never invent endpoints, fields, status codes, selectors or helper names. If a fact is missing from SUT_MAP, read that one file. If a file you need is unreadable (for example blocked by `.cursorignore`) or the fact is not in SUT_MAP, stop and report it instead of guessing.
 - Record every deliberate deviation from the plan as one line under "Decisions since the plan" in `testing/KNOWN_ISSUES.md`, so later chats do not undo it.
 - Work on one task per chat and stop when its definition of done is green. Report in at most 10 lines, do not print files back, and on failure show only the last 40 lines of output.
