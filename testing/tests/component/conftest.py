@@ -15,9 +15,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from saas_testkit.adapters.kafka.reader import KafkaEventReader
+from saas_testkit.config.services import redis_db_index, service_environment
 from saas_testkit.context import RunContext, using_context
 from saas_testkit.factories.rows import Rows, TaskRowFactory, UserRowFactory
-from saas_testkit.infra.containers import Infra, InfraHandle
+from saas_testkit.infra.containers import KAFKA_TOPICS, Infra, InfraHandle
 from saas_testkit.infra.template_db import (
     DbUrls,
     create_worker_database,
@@ -29,9 +30,11 @@ from saas_testkit.infra.xdist import is_worker, worker_index
 
 logger = logging.getLogger("saas_testkit.component")
 
-# Topic names from SUT_MAP (Kafka envelope table).
-_TOPICS = ("task_created", "task_updated", "webhook_inbound", "webhook_dlq")
 _DELETE_TOUCHED = text('DELETE FROM "_touched" RETURNING tbl')
+
+
+def _worker_redis_url(infra: Infra, worker_id: str) -> str:
+    return infra.redis_url_for(redis_db_index(infra.service, worker_index(worker_id)))
 
 
 def _infra(config: pytest.Config) -> Infra:
@@ -82,14 +85,17 @@ async def db(session_maker: async_sessionmaker[AsyncSession]) -> AsyncIterator[A
 def service_env(infra: Infra, worker_db: DbUrls, worker_id: str) -> Iterator[None]:
     """Point the service at this worker. Import the app only after this runs."""
     patch = pytest.MonkeyPatch()
+    redis_url = _worker_redis_url(infra, worker_id)
     try:
         for key, value in worker_db.postgres_env().items():
             patch.setenv(key, value)
-        patch.setenv("REDIS_URL", infra.redis_url_for(worker_index(worker_id)))
+        patch.setenv("REDIS_URL", redis_url)
         patch.setenv("KAFKA_BOOTSTRAP_SERVERS", infra.kafka_bootstrap)
         patch.setenv("SERVICE_NAME", infra.service)
         patch.setenv("OTLP_ENDPOINT", "")
         patch.setenv("SENTRY_DSN", "")
+        for key, value in service_environment(infra.service, redis_url=redis_url).items():
+            patch.setenv(key, value)
         yield
     finally:
         patch.undo()
@@ -98,7 +104,7 @@ def service_env(infra: Infra, worker_db: DbUrls, worker_id: str) -> Iterator[Non
 @pytest.fixture(autouse=True)
 async def flush_redis(infra: Infra, worker_id: str) -> None:
     """FLUSHDB on this worker's Redis index before each test."""
-    client: Redis = Redis.from_url(infra.redis_url_for(worker_index(worker_id)))
+    client: Redis = Redis.from_url(_worker_redis_url(infra, worker_id))
     try:
         await client.flushdb()
     finally:
@@ -162,7 +168,7 @@ async def events(infra: Infra, worker_id: str) -> AsyncIterator[KafkaEventReader
     """Subscribe before any test produces. Each worker has its own group."""
     group_id = f"{infra.service}-{infra.layer}-{worker_id}-{uuid4().hex}"
     reader = KafkaEventReader(infra.kafka_bootstrap, group_id=group_id)
-    await reader.start(*_TOPICS)
+    await reader.start(*KAFKA_TOPICS)
     try:
         yield reader
     finally:

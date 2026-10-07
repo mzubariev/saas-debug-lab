@@ -77,7 +77,7 @@ def _open_consumer(bootstrap: str, group_id: str, topics: tuple[str, ...]) -> ob
             *topics,
             bootstrap_servers=bootstrap,
             group_id=group_id,
-            auto_offset_reset="latest",
+            auto_offset_reset="earliest",
             enable_auto_commit=True,
         ),
     )

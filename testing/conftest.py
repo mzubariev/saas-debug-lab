@@ -23,6 +23,12 @@ _MARKERS: dict[str, pytest.MarkDecorator] = {
     "smoke": pytest.mark.smoke,
     "synthetic": pytest.mark.synthetic,
 }
+_LAYER_TIMEOUTS = {
+    "component": 30,
+    "contract": 120,
+    "integration": 120,
+    "e2e_ui": 120,
+}
 _INFRA_LAYERS = frozenset({"component", "contract"})
 
 
@@ -90,16 +96,27 @@ def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     root = config.rootpath
     for item in items:
-        marker = _marker_for(root, item.path)
+        layer = _layer_name(root, item.path)
+        if layer is None:
+            continue
+        marker = _MARKERS.get(layer)
         if marker is not None:
             item.add_marker(marker)
+        _apply_layer_timeout(item, layer)
 
 
-def _marker_for(root: Path, path: Path) -> pytest.MarkDecorator | None:
+def _layer_name(root: Path, path: Path) -> str | None:
     try:
         relative = path.relative_to(root)
     except ValueError:
         return None
     if len(relative.parts) < 2 or relative.parts[0] != "tests":
         return None
-    return _MARKERS.get(relative.parts[1])
+    return relative.parts[1]
+
+
+def _apply_layer_timeout(item: pytest.Item, layer: str) -> None:
+    seconds = _LAYER_TIMEOUTS.get(layer)
+    if seconds is None or item.get_closest_marker("timeout") is not None:
+        return
+    item.add_marker(pytest.mark.timeout(seconds))

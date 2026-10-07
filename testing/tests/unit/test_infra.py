@@ -6,7 +6,7 @@ import types
 import pytest
 
 from saas_testkit.config.paths import repo_root
-from saas_testkit.config.services import SERVICES
+from saas_testkit.config.services import SERVICES, redis_db_index
 from saas_testkit.infra.app_loader import import_service_app, install_service_paths
 from saas_testkit.infra.containers import Infra, redis_url_for
 from saas_testkit.infra.template_db import (
@@ -64,6 +64,25 @@ def test_redis_url_for_replaces_any_existing_index() -> None:
 def test_redis_url_for_rejects_indexes_past_the_default_database_count() -> None:
     with pytest.raises(ValueError, match=r"outside 0\.\.15"):
         redis_url_for("redis://localhost:6379", 16)
+
+
+def test_redis_db_index_keeps_task_and_auth_apart() -> None:
+    task = [redis_db_index("task-service", worker) for worker in range(8)]
+    auth = [redis_db_index("auth-service", worker) for worker in range(8)]
+
+    assert task == list(range(8))
+    assert auth == list(range(8, 16))
+    assert set(task).isdisjoint(auth)
+
+
+def test_redis_db_index_for_worker_zero_stays_in_range() -> None:
+    for name in SERVICES:
+        assert 0 <= redis_db_index(name, 0) <= 15
+
+
+def test_redis_db_index_rejects_an_index_above_15() -> None:
+    with pytest.raises(ValueError, match=r"exceeds 15 \(auth-service block 8 \+ worker 8\)"):
+        redis_db_index("auth-service", 8)
 
 
 def test_worker_index_maps_gw_and_master() -> None:

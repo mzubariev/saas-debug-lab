@@ -30,16 +30,19 @@ GATE_N = $(or $(N),$(N_$(LAYER)),auto)
 t-unit:
 	cd $(TESTING_DIR) && uv run pytest tests/unit -n auto --maxprocesses=8 -q
 
-# One service per session. Install its group first: uv sync --group <svc> (or --all-groups).
-# Run "make deps-up" first: TEST_* above always point at compose.deps.yml. Unset them to let Testcontainers start the infra instead.
+# One service per session. `uv sync --group <svc>` installs that group.
+# t-component-all sets SKIP_SYNC=1 after one `uv sync --all-groups`.
+# N overrides xdist workers (default auto). Run "make deps-up" first.
 t-component:
 	@test -n "$(SERVICE)" || (echo "Usage: make t-component SERVICE=task-service" >&2; exit 1)
-	cd $(TESTING_DIR) && $(UV_RUN) pytest tests/component --service $(SERVICE) -n auto --maxprocesses=8 -q
+	cd $(TESTING_DIR) && $(if $(SKIP_SYNC),:,uv sync --group $(SERVICE))
+	cd $(TESTING_DIR) && $(UV_RUN) pytest tests/component --service $(SERVICE) -n $(or $(N),auto) --maxprocesses=8 -q$(if $(ALLOW_NO_TESTS), || [ $$? -eq 5 ])
 
 # Sync once, then run the services in parallel without letting each uv run re-sync the environment.
+# ALLOW_NO_TESTS: a service with no component tests yet exits 5; that is not a failure here.
 t-component-all:
 	cd $(TESTING_DIR) && uv sync --all-groups
-	printf '%s\n' $(SERVICES) | xargs -P 4 -I{} $(MAKE) t-component SERVICE={} UV_RUN="uv run --no-sync"
+	printf '%s\n' $(SERVICES) | xargs -P 4 -I{} $(MAKE) t-component SERVICE={} UV_RUN="uv run --no-sync" SKIP_SYNC=1 ALLOW_NO_TESTS=1
 
 deps-up:
 	docker compose -f $(TESTING_DIR)/compose.deps.yml up -d --wait
