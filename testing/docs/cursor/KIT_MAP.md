@@ -66,3 +66,9 @@ api-gateway (`tests/component/api_gateway/conftest.py`): `service_app` enters `l
 webhook-receiver (`tests/component/webhook_receiver/conftest.py`): `service_app` enters `lifespan_context`. `client` is `httpx.AsyncClient` on `ASGITransport` (`raise_app_exceptions=False`) with `base_url="http://test"`. `inbound` is `InboundWebhook`.
 
 `InboundWebhook.accept`, `submit` (`missing-event`, `event-type`, `data-type`), and `published`. `Accepted` is the response plus the `event` and `data` sent. `HttpWebhookApi.receive` and `submit`. `WebhookDelivery.inbound` waits for `webhook.inbound` whose payload `event` is this call (`matches_inbound_event`). `InboundReceipt` is the 200 body (`status`, `event`).
+
+## P3.4 external-service-simulator
+
+external-service-simulator (`tests/component/external_service_simulator/conftest.py`): `service_app` enters `lifespan_context`. `client` is `httpx.AsyncClient` on `ASGITransport` (`raise_app_exceptions=False`) with `base_url="http://test"`. `simulator` is `ExternalReceiver`.
+
+`ExternalReceiver.receive`, `receive_again`, and `fail` (`simulated` is `fail_rate=1`, `custom` asks for status 503). `Delivery` is the response plus the idempotency `key` and `payload` sent. `HttpSimulatorApi.receive` posts `/receive-webhook` with `Idempotency-Key`. `SimulatorReceipt` is that body (`status`, and `payload`, `idempotency_key`, `reason`, or `code`).

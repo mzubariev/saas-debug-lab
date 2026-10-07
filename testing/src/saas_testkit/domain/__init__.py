@@ -12,6 +12,7 @@ from saas_testkit.domain.http import (
     InboundReceipt,
     ProblemBody,
     ProxiedBody,
+    SimulatorReceipt,
     StatusBody,
 )
 from saas_testkit.domain.tasks import Task, TaskCreate, TaskStatus
@@ -23,6 +24,7 @@ __all__ = [
     "InboundReceipt",
     "ProblemBody",
     "ProxiedBody",
+    "SimulatorReceipt",
     "StatusBody",
     "Task",
     "TaskCreate",

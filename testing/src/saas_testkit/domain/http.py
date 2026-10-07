@@ -40,6 +40,18 @@ class InboundReceipt(BaseModel):
     event: str
 
 
+class SimulatorReceipt(BaseModel):
+    """`POST /receive-webhook` body. Which fields are set depends on the outcome."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    status: str
+    payload: dict[str, object] | None = None
+    idempotency_key: str | None = None
+    reason: str | None = None
+    code: int | None = None
+
+
 class ProxiedBody(BaseModel):
     """JSON body the gateway passes through. The component double sets `marker`."""
 

@@ -52,3 +52,4 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P3.3: the api-gateway ASGI client sets `raise_app_exceptions=False`, matching the task-service and auth-service component clients.
 - P3.3: the header test pins the request respx sees. The proxy omits `host`, `sentry-trace`, `baggage`, `traceparent`, and `tracestate`. With `OTLP_ENDPOINT` empty, the httpx instrumentor puts the client's `baggage`, `traceparent`, and `tracestate` back; `sentry-trace` stays absent; `Host` is the upstream hostname.
 - P3.4: the webhook-receiver ASGI client sets `raise_app_exceptions=False`, so a failed publish is the HTTP 500 from the exception middleware.
+- P3.4.2: the external-service-simulator ASGI client sets `raise_app_exceptions=False`, matching the other component clients.
