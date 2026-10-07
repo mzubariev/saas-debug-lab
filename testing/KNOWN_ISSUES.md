@@ -2,14 +2,18 @@
 
 ## Defects
 
+### Confirmed
+
+- BUG-2: task-service `TaskCreate.title` is an unconstrained string. `POST /tasks` stores an empty title and a 10000-character title and returns 201. Expected 422. `xfail(strict=True)` on those two cases. A non-string title does return 422.
+- BUG-3: task-service commits in the repository, then calls `publish_event`. A Kafka failure returns 500, the task row remains (a create stays stored, a start stays `in_progress`), the event is not published, and `cache_delete` does not run. `xfail(strict=True)` on create and start.
+
 ### Candidates to confirm
 
-No BUG-n yet. Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xfail(strict=True)`.
+Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xfail(strict=True)`.
 
 - Dispatcher `Idempotency-Key` is `str(payload.get("id", ""))`. `task_created` and `task_updated` for one task both carry that task id, so the two deliveries share one key.
 - Scheduler DLQ replay is final on any `httpx.HTTPStatusError` (`autoretry_for` is only `httpx.RequestError`). The DLQ consumer sets `enable_auto_commit=True` and `process_dlq` commits by consuming and closing before the Celery task performs the HTTP call, so a rejected replay is not returned to `webhook_dlq`.
 - Dispatcher `_produce` logs `kafka_produce_failed` and does not re-raise. Notification-worker catches `aiosmtplib.SMTPException` and `OSError`, counts them, and does not re-raise.
-- task-service commits in the repository, then calls `publish_event`. A Kafka failure raises after the commit (the route returns 500), the task row remains, the event is not published, and `cache_delete` does not run.
 - The `role` claim is written at login and copied by gateway `verify_token` and `/auth/me`. No route checks it. There is no authZ.
 - Auth login cache writes `username`, `hashed_password`, and `role` to Redis (`user:{username}`, TTL 300 s).
 - `GET /tasks` returns every row (`list_all`; no limit or offset).
@@ -40,3 +44,5 @@ No BUG-n yet. Confirm in the layer that can observe the behaviour, then assign a
 - P2.6: each xdist worker has its own Kafka consumer group (`service-layer-worker-uuid`). `KafkaEventReader` uses `auto_offset_reset=earliest` and waits still keep only the test's own id. The controller pre-creates `task_created`, `task_updated`, `webhook_inbound`, and `webhook_dlq`. The adapter plan used `latest` and did not pre-create topics.
 - P2.6: `service_env` applies the catalogue `env` map. Gateway and auth `JWT_SECRET` are `LAB_JWT_SECRET`, the `JwtFactory` default. Scheduler `CELERY_*` uses that worker's Redis URL (`{redis_url}`), not lab index 2.
 - P2.6: `t-component-all` treats pytest exit 5 (nothing collected) as success. Services without a component suite must not fail the parallel run. `make t-component SERVICE=...` still fails on exit 5.
+- P3.1: the task-service ASGI client sets `raise_app_exceptions=False`, so a failed Kafka publish is the HTTP 500 from the exception middleware.
+- P3.1: the task lifecycle state machine runs Hypothesis on a worker thread and schedules each step on the session loop. `RuleBasedStateMachine` rules are synchronous, and the app clients belong to that loop.

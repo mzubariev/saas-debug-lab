@@ -8,6 +8,7 @@ from saas_testkit.domain.events import Envelope
 from saas_testkit.polling import eventually
 
 _TASK_CREATED = "task.created"
+_TASK_UPDATED = "task.updated"
 _WEBHOOK_DLQ = "webhook.dlq"
 
 
@@ -37,6 +38,20 @@ class WebhookDelivery:
             timeout=10,
             interval=0,
             message=f"no {_TASK_CREATED} for {task_id}",
+        )
+
+    async def task_updated(self, task_id: UUID) -> Envelope:
+        """Wait for `task.updated` whose payload id is this task. Does not assert."""
+        reader = self._events
+        return await eventually(
+            lambda: reader.wait_for(
+                "task_updated",
+                match=matches_task_id(task_id, _TASK_UPDATED),
+                timeout=0.2,
+            ),
+            timeout=10,
+            interval=0,
+            message=f"no {_TASK_UPDATED} for {task_id}",
         )
 
     async def dead_letter(self, task_id: UUID) -> Envelope:

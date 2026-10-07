@@ -1,3 +1,5 @@
 """Redis adapters."""
 
-__all__: list[str] = []
+from saas_testkit.adapters.redis.tasks import TaskCache
+
+__all__ = ["TaskCache"]

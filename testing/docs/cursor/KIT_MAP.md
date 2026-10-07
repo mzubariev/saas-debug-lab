@@ -16,17 +16,17 @@ Component session (`tests/component/conftest.py`). The controller stores an `Inf
 - `rows`: per-test `TaskRowFactory` and `UserRowFactory` subclasses with `__async_session__` set to `db`. `create_async` commits.
 - `events`: `KafkaEventReader` on `task_created`, `task_updated`, `webhook_inbound`, `webhook_dlq`, one consumer group per worker.
 
-task-service (`tests/component/task_service/conftest.py`): `service_app` enters `lifespan_context`, `client` is `httpx.AsyncClient` on `ASGITransport` with `base_url="http://test"`, `lifecycle` is `TaskLifecycle` over `HttpTaskApi`.
+task-service (`tests/component/task_service/conftest.py`): `service_app` enters `lifespan_context`, `client` is `httpx.AsyncClient` on `ASGITransport` (`raise_app_exceptions=False`) with `base_url="http://test"`, `task_cache` is `TaskCache` on `app.state.redis`, `lifecycle` is `TaskLifecycle` over `HttpTaskApi`, `events`, and `task_cache`.
 
 ## Flows and adapters
 
-`TaskLifecycle.create`, `get`, and `start` return `ApiResponse` and do not assert. `new_task` and `move_to_completed` are preconditions and may assert. `task_created_event` delegates to `WebhookDelivery.task_created` (same `task_created` wait, id compared as `str(task_id)`).
+`TaskLifecycle.create`, `submit_title`, `list_tasks`, `get`, `start`, `complete`, `move`, and `move_missing` return `ApiResponse` and do not assert. `new_task`, `move_to_completed`, and `at_status` are preconditions and may assert. `task_created_event` delegates to `WebhookDelivery.task_created`; `task_updated_event` delegates to `WebhookDelivery.task_updated` (same id compare, `str(task_id)`). `replace_cached_title`, `replace_cached_list`, `drop_cached_task`, and `drop_cached_list` read or write the task Redis keys.
 
 `AuthFlow.login` and `me` return `ApiResponse` and do not assert. `logged_in` is a precondition and may assert.
 
-`WebhookDelivery.task_created` and `dead_letter` wait with `eventually` and do not assert. No WireMock journal and no retry timing.
+`WebhookDelivery.task_created`, `task_updated`, and `dead_letter` wait with `eventually` and do not assert. No WireMock journal and no retry timing.
 
-`HttpTaskApi`: `create`, `get`, `start`, `complete`. `HttpAuthApi`: `login` (`POST /auth/token` form), `me` (`GET /auth/me` bearer). `KafkaEventReader`: `start`, `stop`, `wait_for`.
+`HttpTaskApi`: `create`, `submit` (JSON object for a bad title), `list_tasks`, `get` (UUID or string id), `start`, `complete`. `HttpAuthApi`: `login` (`POST /auth/token` form), `me` (`GET /auth/me` bearer). `KafkaEventReader`: `start`, `stop`, `wait_for`. `TaskCache`: `item`, `put_item`, `drop_item` (`tasks:{id}`), `put_list`, `drop_list` (`tasks:list`).
 
 ## Factories
 
