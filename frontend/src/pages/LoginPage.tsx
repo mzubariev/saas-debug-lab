@@ -40,7 +40,7 @@ export default function LoginPage(): React.JSX.Element {
           <div className="login-card__subtitle">Distributed Systems Training Platform</div>
         </div>
 
-        {error && <div className="alert alert--error">{error}</div>}
+        {error && <div className="alert alert--error" role="alert">{error}</div>}
 
         <form onSubmit={handleSubmit} autoComplete="off">
           <div className="form-group">
