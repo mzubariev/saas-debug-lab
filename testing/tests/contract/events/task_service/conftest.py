@@ -9,9 +9,4 @@ from tests.component.conftest import (  # noqa: F401
     service_env,
     worker_db,
 )
-from tests.component.task_service.conftest import (  # noqa: F401
-    client,
-    lifecycle,
-    service_app,
-    task_cache,
-)
+from tests.component.task_service.conftest import client, lifecycle, task_cache  # noqa: F401

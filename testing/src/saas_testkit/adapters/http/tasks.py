@@ -76,6 +76,7 @@ class HttpTaskApi:
                 error=None,
                 headers=headers,
                 elapsed=elapsed,
+                document=parsed,
             )
         return ApiResponse(
             status=status,
@@ -83,6 +84,7 @@ class HttpTaskApi:
             error=ProblemBody.model_validate(parsed),
             headers=headers,
             elapsed=elapsed,
+            document=parsed,
         )
 
 

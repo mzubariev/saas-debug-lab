@@ -7,7 +7,8 @@
 - BUG-2: task-service `TaskCreate.title` is an unconstrained string. `POST /tasks` stores an empty title and a 10000-character title and returns 201. Expected 422. `xfail(strict=True)` on those two cases. A non-string title does return 422.
 - BUG-3: task-service commits in the repository, then calls `publish_event`. A Kafka failure returns 500, the task row remains (a create stays stored, a start stays `in_progress`), the event is not published, and `cache_delete` does not run. `xfail(strict=True)` on create and start.
 - BUG-4: auth-service login writes `hashed_password` to Redis (`user:{username}`, TTL 300 s) before it checks the password. `xfail(strict=True)` expects that cache entry to omit the hash. A second login reads the cached row.
-- BUG-5: webhook-receiver `receive_inbound` logs `event=<payload event>` after a successful publish, and the failure log does the same. structlog already takes that name as the message, so the call raises `TypeError` and the route returns 500 instead of 200. The Kafka message is published before the success log. `xfail(strict=True)` on the 200 response.
+- BUG-5: webhook-receiver `receive_inbound` logs `event=<payload event>` after a successful publish, and the failure log does the same. structlog already takes that name as the message, so the call raises `TypeError` and the route returns 500 instead of 200. The Kafka message is published before the success log. `xfail(strict=True)` on the 200 response, on the consumer-model check, and on Schemathesis for `POST /webhooks/inbound`.
+- BUG-6: api-gateway OpenAPI reuses operationIds across methods (`proxy_auth_auth__path__post`, and the same pattern on `/tasks`, `/tasks/{path}`, and `/webhooks/{path}`). Which method name wins changes between processes. `openapi-spec-validator` rejects the document. `GET /openapi.json` is still 200. `xfail(strict=True)` on document validity. The snapshot rewrites a duplicated operationId to `method path` and pins the rest.
 
 ### Candidates to confirm
 
@@ -55,3 +56,5 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P3.4.2: the external-service-simulator ASGI client sets `raise_app_exceptions=False`, matching the other component clients.
 - P4.1: `Envelope` is `extra="forbid"`. cat-contract calls the v1 model strict. `KafkaEventReader` still builds it from the known fields, so a non-v1 message stays `event_type="unknown"`.
 - P4.1: captured producer tests are collected only when `--service` is that producer. Schema and legacy tests stay in every `tests/contract` session.
+- P4.2: `HttpTaskApi` sets `ApiResponse.document`, matching the other HTTP adapters, so a contract test can `model_validate` the raw body.
+- P4.2: Schemathesis sends on the pytest session loop via `httpx`. `from_asgi` drives a second lifespan and another loop, which breaks the async engine. `SCHEMA_EXAMPLES` defaults to 40. `POST /webhooks/inbound` is omitted from the shared fuzz test and run on its own under `xfail` BUG-5.

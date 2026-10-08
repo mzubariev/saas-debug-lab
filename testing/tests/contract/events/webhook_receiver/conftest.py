@@ -9,8 +9,4 @@ from tests.component.conftest import (  # noqa: F401
     service_env,
     worker_db,
 )
-from tests.component.webhook_receiver.conftest import (  # noqa: F401
-    client,
-    inbound,
-    service_app,
-)
+from tests.component.webhook_receiver.conftest import client, inbound  # noqa: F401
