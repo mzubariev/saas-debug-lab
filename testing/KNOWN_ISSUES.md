@@ -10,12 +10,13 @@
 - BUG-4: auth-service login writes `hashed_password` to Redis (`user:{username}`, TTL 300 s) before it checks the password. `xfail(strict=True)` expects that cache entry to omit the hash. A second login reads the cached row.
 - BUG-5: webhook-receiver `receive_inbound` logs `event=<payload event>` after a successful publish, and the failure log does the same. structlog already takes that name as the message, so the call raises `TypeError` and the route returns 500 instead of 200. The Kafka message is published before the success log. `xfail(strict=True)` on the 200 response, on the consumer-model check, and on Schemathesis for `POST /webhooks/inbound`.
 - BUG-6: api-gateway OpenAPI reuses operationIds across methods (`proxy_auth_auth__path__post`, and the same pattern on `/tasks`, `/tasks/{path}`, and `/webhooks/{path}`). Which method name wins changes between processes. `openapi-spec-validator` rejects the document. `GET /openapi.json` is still 200. `xfail(strict=True)` on document validity. The snapshot rewrites a duplicated operationId to `method path` and pins the rest.
+- BUG-7: webhook-dispatcher sets `Idempotency-Key` to `str(payload.id)`. `task_created` and both `task_updated` deliveries for one task share that key.
+- BUG-8: external-service-simulator `trigger_event` logs `event=body.event`. structlog already uses that name, so the call raises `TypeError` and `POST /trigger-event` returns 500 instead of 202. The background POST is scheduled before the log. `xfail(strict=True)` on the 202 response.
 
 ### Candidates to confirm
 
 Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xfail(strict=True)`.
 
-- Dispatcher `Idempotency-Key` is `str(payload.get("id", ""))`. `task_created` and `task_updated` for one task both carry that task id, so the two deliveries share one key.
 - Scheduler DLQ replay is final on any `httpx.HTTPStatusError` (`autoretry_for` is only `httpx.RequestError`). The DLQ consumer sets `enable_auto_commit=True` and `process_dlq` commits by consuming and closing before the Celery task performs the HTTP call, so a rejected replay is not returned to `webhook_dlq`.
 - Dispatcher `_produce` logs `kafka_produce_failed` and does not re-raise. Notification-worker catches `aiosmtplib.SMTPException` and `OSError`, counts them, and does not re-raise.
 - The `role` claim is written at login and copied by gateway `verify_token` and `/auth/me`. No route checks it. There is no authZ.
@@ -67,3 +68,6 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P6.2: `make t-int` passes `--dist loadgroup` so the nginx `serial` group stays on one worker.
 - P6.2: health through the gateway and the `/metrics` series stay in smoke. `arch-integration.md` lists them as T2.
 - P6.2: `X-Forwarded-For`, `X-Forwarded-Proto`, and `Host` are not on the HTTP response, and Jaeger is not in the test stack. The edge test sends a foreign Host plus those headers and asserts `/health` is 200 and `X-Request-ID` is echoed.
+- P6.3: S4 stays inside S1 (the shared `Idempotency-Key`). S5 is not in the integration catalogue, so there is no chaos scenario. S2a is not `slow`; only the DLQ replay (S2b) is.
+- P6.3: webhook stubs match the task title. The title is known before create; `payload.id` is assigned on insert, and the dispatcher can POST before a stub on that id exists.
+- P6.3: the test stack sets the simulator `INTEGRATION_SERVICE_WEBHOOK_URL` to `http://api-gateway:8000/webhooks/inbound`. The lab value `http://localhost/webhooks/inbound` is the simulator itself inside its container.

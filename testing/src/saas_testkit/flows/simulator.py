@@ -22,6 +22,10 @@ class ExternalReceiver:
     def __init__(self, api: HttpSimulatorApi) -> None:
         self._api = api
 
+    async def trigger(self, event: str, data: dict[str, object]) -> ApiResponse[SimulatorReceipt]:
+        """Ask the simulator to POST this event inward. The caller asserts on the response."""
+        return await self._api.trigger(event, data)
+
     async def receive(self) -> Delivery:
         """POST a unique body with a new idempotency key. Defaults store the key."""
         return await self._send()

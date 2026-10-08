@@ -3,9 +3,10 @@
 from typing import cast
 
 import httpx
+from pydantic import ValidationError
 
 from saas_testkit.context import RunContext
-from saas_testkit.domain.http import ApiResponse, SimulatorReceipt
+from saas_testkit.domain.http import ApiResponse, ProblemBody, SimulatorReceipt
 
 
 class HttpSimulatorApi:
@@ -32,6 +33,16 @@ class HttpSimulatorApi:
         )
         return _read(response)
 
+    async def trigger(self, event: str, data: dict[str, object]) -> ApiResponse[SimulatorReceipt]:
+        """POST `/trigger-event`. `delay=0` so a retry does not sleep."""
+        response = await self._client.post(
+            "/trigger-event",
+            headers=self._ctx.headers(),
+            json={"event": event, "data": data},
+            params={"retry": "2", "delay": "0"},
+        )
+        return _trigger(response)
+
 
 def _query(*, fail_rate: float | None, status_code: int | None) -> dict[str, str] | None:
     params: dict[str, str] = {}
@@ -42,6 +53,36 @@ def _query(*, fail_rate: float | None, status_code: int | None) -> dict[str, str
     if not params:
         return None
     return params
+
+
+def _trigger(response: httpx.Response) -> ApiResponse[SimulatorReceipt]:
+    """`/trigger-event` returns its receipt, or a problem body when the route raises."""
+    parsed = _json(response)
+    data: SimulatorReceipt | None
+    try:
+        data = SimulatorReceipt.model_validate(parsed)
+    except ValidationError:
+        data = None
+    error = None if data is not None else _problem(parsed)
+    return ApiResponse(
+        status=response.status_code,
+        data=data,
+        error=error,
+        headers={key: value for key, value in response.headers.items()},
+        elapsed=response.elapsed.total_seconds(),
+        document=parsed,
+    )
+
+
+def _json(response: httpx.Response) -> object:
+    return cast(object, response.json())
+
+
+def _problem(parsed: object) -> ProblemBody | None:
+    try:
+        return ProblemBody.model_validate(parsed)
+    except ValidationError:
+        return None
 
 
 def _read(response: httpx.Response) -> ApiResponse[SimulatorReceipt]:

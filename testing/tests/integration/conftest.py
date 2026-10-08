@@ -7,12 +7,12 @@ import httpx
 import pytest
 from polyfactory.factories.base import BaseFactory
 
-from saas_testkit.adapters.http import HttpAuthApi, HttpTaskApi
+from saas_testkit.adapters.http import HttpAuthApi, HttpSimulatorApi, HttpTaskApi
 from saas_testkit.adapters.kafka import KafkaEventReader
 from saas_testkit.adapters.mail import MailHogInbox
 from saas_testkit.adapters.wiremock import WireMockSink
 from saas_testkit.context import RunContext, using_context
-from saas_testkit.flows import AuthFlow, TaskLifecycle
+from saas_testkit.flows import AuthFlow, ExternalReceiver, TaskLifecycle, WebhookDelivery
 from saas_testkit.infra import KAFKA_TOPICS, read_session
 
 _factories_seeded = False
@@ -96,3 +96,21 @@ def mail() -> MailHogInbox:
 @pytest.fixture
 def wiremock() -> WireMockSink:
     return WireMockSink("http://127.0.0.1:8089")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _webhook_catch_all() -> None:
+    """One low-priority 200 so another test's webhook is not a 404."""
+    WireMockSink("http://127.0.0.1:8089").install_catch_all()
+
+
+@pytest.fixture
+def delivery(events: KafkaEventReader) -> WebhookDelivery:
+    return WebhookDelivery(events)
+
+
+@pytest.fixture
+async def simulator(run_context: RunContext) -> AsyncIterator[ExternalReceiver]:
+    """Simulator on the published host port. It POSTs inbound events to the gateway."""
+    async with httpx.AsyncClient(base_url="http://127.0.0.1:8000", timeout=30) as http:
+        yield ExternalReceiver(HttpSimulatorApi(http, run_context))

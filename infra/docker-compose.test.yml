@@ -56,6 +56,11 @@ services:
     ports:
       - "9102:9100"
 
+  external-service-simulator:
+    # localhost inside this container is not the gateway. The lab file uses that host URL.
+    environment:
+      INTEGRATION_SERVICE_WEBHOOK_URL: http://api-gateway:8000/webhooks/inbound
+
   scheduler-worker:
     environment:
       WEBHOOK_URL: http://wiremock:8080/external/receive-webhook

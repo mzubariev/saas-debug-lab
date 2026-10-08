@@ -69,6 +69,10 @@ Repo root, via `testing/testing.mk`. `TEST_PG_URL`, `TEST_REDIS_URL`, and `TEST_
 
 `test_login_burst_without_a_bearer_is_not_limited` and `test_foreign_host_with_forwarded_headers_reaches_the_gateway` (`xdist_group("serial")`, nginx). `make t-int` uses `--dist loadgroup`.
 
+## P6.3 integration/scenarios
+
+`WireMockSink.stub_for_title` and `stub_sequence`. `HttpSimulatorApi.trigger` and `ExternalReceiver.trigger`. Fixtures `delivery` (`WebhookDelivery`) and `simulator` (`ExternalReceiver` on `:8000`). A session catch-all 200 is installed once. `test_created_task_reaches_kafka_mail_and_webhooks`, `test_webhook_retries_then_delivers`, `test_permanent_failure_is_replayed_without_an_idempotency_key` (`slow`), `test_triggered_event_is_published`, `test_trigger_event_is_accepted` (`xfail` BUG-8).
+
 ## P3.2 auth-service
 
 auth-service (`tests/component/auth_service/conftest.py`): `service_app` sets `TOKEN_EXPIRE_MINUTES=45` before import and enters `lifespan_context`. `client` is `httpx.AsyncClient` on `ASGITransport` (`raise_app_exceptions=False`) with `base_url="http://test"`. `user_cache` is `UserCache`. `auth` is `AuthFlow`.

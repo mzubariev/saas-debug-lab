@@ -48,6 +48,22 @@ class WireMockSink:
             }
         )
 
+    async def stub_for_title(self, title: str, *, status: int = 200) -> None:
+        """Match this test's task title. The title is known before the task id exists."""
+        await self._post_mapping_async(_titled(title, status=status))
+
+    async def stub_sequence(self, title: str, *, scenario: str, statuses: tuple[int, ...]) -> None:
+        """Return `statuses` in order for this title, then stop matching."""
+        if not statuses:
+            raise ValueError("statuses is empty")
+        state = "Started"
+        for index, status in enumerate(statuses):
+            nxt = f"step-{index + 1}"
+            await self._post_mapping_async(
+                _titled(title, status=status, scenario=scenario, state=state, nxt=nxt)
+            )
+            state = nxt
+
     async def calls_for(self, payload_id: str) -> tuple[RecordedCall, ...]:
         """Journal entries for this payload id."""
         async with httpx.AsyncClient(timeout=5) as client:
@@ -104,6 +120,30 @@ class _Entry(BaseModel):
 
 def _no_requests() -> list[_Entry]:
     return []
+
+
+def _titled(
+    title: str,
+    *,
+    status: int,
+    scenario: str | None = None,
+    state: str | None = None,
+    nxt: str | None = None,
+) -> dict[str, object]:
+    document: dict[str, object] = {
+        "priority": 1,
+        "request": {
+            "method": "POST",
+            "urlPath": _PATH,
+            "bodyPatterns": [{"matchesJsonPath": f"$[?(@.title == '{title}')]"}],
+        },
+        "response": {"status": status},
+    }
+    if scenario is not None:
+        document["scenarioName"] = scenario
+        document["requiredScenarioState"] = state
+        document["newScenarioState"] = nxt
+    return document
 
 
 class _Journal(BaseModel):
