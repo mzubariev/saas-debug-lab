@@ -12,7 +12,7 @@ from saas_testkit.adapters.redis import UserCache
 from saas_testkit.config import SERVICES
 from saas_testkit.context import RunContext
 from saas_testkit.flows import AuthFlow
-from saas_testkit.infra import import_service_app
+from saas_testkit.infra import import_service_app, open_app_lifespan
 
 # Distinct from the 30-minute default so a hardcoded lifetime fails.
 _TOKEN_EXPIRE_MINUTES = "45"
@@ -26,7 +26,7 @@ async def service_app(service_env: None) -> AsyncIterator[FastAPI]:
         app = import_service_app(SERVICES["auth-service"])
         if not isinstance(app, FastAPI):
             raise RuntimeError("auth-service did not expose a FastAPI app")
-        async with app.router.lifespan_context(app):
+        async with open_app_lifespan(app):
             yield app
     finally:
         patch.undo()

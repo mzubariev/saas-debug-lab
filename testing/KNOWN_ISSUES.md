@@ -60,3 +60,5 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P4.2: Schemathesis sends on the pytest session loop via `httpx`. `from_asgi` drives a second lifespan and another loop, which breaks the async engine. `SCHEMA_EXAMPLES` defaults to 40. `POST /webhooks/inbound` is omitted from the shared fuzz test and run on its own under `xfail` BUG-5.
 - P5: `ci-gate` sets `working-directory` to the workspace. The workflow default is `testing/`, and that job does not checkout, so the directory would be missing.
 - P5: `setup-uv` sets `python-version` 3.14. The kit requires it, and setup-uv looks for `pyproject.toml` in the repo root, which has none.
+- P5: `open_app_lifespan` enters the service lifespan once. Component and contract each have a session fixture, and one pytest process runs both; a second startup replaces the Kafka producer.
+- P5: `worker_db` clones once per process, and `_seed_factories` seeds once. The contract conftest imports the component fixtures, so pytest registers them again. A second clone runs `pg_terminate_backend` (`connection is closed`). A second `seed_random` rewinds ids already inserted in that database.

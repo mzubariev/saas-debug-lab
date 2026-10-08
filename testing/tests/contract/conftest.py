@@ -7,7 +7,7 @@ import pytest
 from fastapi import FastAPI
 
 from saas_testkit.config import SERVICES
-from saas_testkit.infra import import_service_app
+from saas_testkit.infra import import_service_app, open_app_lifespan
 
 # Captured-event directories keep their own filter. HTTP producer dirs match `--service`.
 _HTTP_SERVICES = {
@@ -53,7 +53,7 @@ async def service_app(
         app = import_service_app(SERVICES[service])
         if not isinstance(app, FastAPI):
             raise RuntimeError(f"{service} did not expose a FastAPI app")
-        async with app.router.lifespan_context(app):
+        async with open_app_lifespan(app):
             yield app
     finally:
         patch.undo()

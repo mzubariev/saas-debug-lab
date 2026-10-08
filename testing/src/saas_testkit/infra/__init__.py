@@ -1,6 +1,10 @@
 """Session infrastructure."""
 
-from saas_testkit.infra.app_loader import import_service_app, install_service_paths
+from saas_testkit.infra.app_loader import (
+    import_service_app,
+    install_service_paths,
+    open_app_lifespan,
+)
 from saas_testkit.infra.containers import (
     KAFKA_TOPICS,
     Infra,
@@ -42,6 +46,7 @@ __all__ = [
     "install_service_paths",
     "is_worker",
     "needs_infra",
+    "open_app_lifespan",
     "quote_ident",
     "read_alembic_head",
     "redis_url_for",

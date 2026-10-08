@@ -1,7 +1,9 @@
 # P5: CI v1
+
 Attach: `design/arch-ci.md` (sections 9 and 9.2 only).
 
-Must do: create `.github/workflows/ci.yml` with these jobs:
+Must do: create or update `.github/workflows/ci.yml` with these jobs:
+
 - `lint`, `security` (ruff `S`, pip-audit, gitleaks) and `unit`.
 - `component-contract`, a matrix over the services. It declares service containers for Postgres, Redis and Redpanda (Redpanda with a `command`, see section 9.2), sets `TEST_KAFKA_BOOTSTRAP`, `TEST_PG_URL`, `TEST_REDIS_URL` and `SCHEMA_EXAMPLES=40`, and uploads coverage and JUnit artifacts.
 - `ci-gate`, built with the idiom from section 9.2: `if: always()` plus a `toJSON(needs)` check with `jq` that accepts `success` and `skipped`.

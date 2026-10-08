@@ -83,4 +83,4 @@ One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_
 
 ## P5 CI
 
-`.github/workflows/ci.yml`: `lint`, `security`, `unit`, `component-contract` (matrix `task-service`, `auth-service`, `api-gateway`, `webhook-receiver`, `external-service-simulator`), `ci-gate`.
+`.github/workflows/ci.yml`: `lint`, `security`, `unit`, `component-contract` (matrix `task-service`, `auth-service`, `api-gateway`, `webhook-receiver`, `external-service-simulator`), `ci-gate`. `open_app_lifespan` enters a service lifespan once per process.

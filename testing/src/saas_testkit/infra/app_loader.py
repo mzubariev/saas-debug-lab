@@ -7,6 +7,8 @@ selected with ``--service``. Import the app after ``service_env`` has set
 
 import importlib
 import sys
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from types import ModuleType
 
@@ -28,6 +30,27 @@ def install_service_paths(spec: ServiceSpec) -> None:
         while entry in sys.path:
             sys.path.remove(entry)
     sys.path[:0] = entries
+
+
+@asynccontextmanager
+async def open_app_lifespan(app: object) -> AsyncGenerator[None]:
+    """Enter lifespan once. Component and contract each have a session fixture."""
+    state = getattr(app, "state", None)
+    if state is not None and getattr(state, "test_lifespan_open", False):
+        yield
+        return
+    router = getattr(app, "router", None)
+    enter = getattr(router, "lifespan_context", None)
+    if enter is None:
+        raise RuntimeError("service app has no lifespan")
+    async with enter(app):
+        if state is not None:
+            state.test_lifespan_open = True
+        try:
+            yield
+        finally:
+            if state is not None:
+                state.test_lifespan_open = False
 
 
 def import_service_app(spec: ServiceSpec) -> object:

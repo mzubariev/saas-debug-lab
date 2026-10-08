@@ -34,6 +34,9 @@ from saas_testkit.infra import (
 logger = logging.getLogger("saas_testkit.component")
 
 _DELETE_TOUCHED = text('DELETE FROM "_touched" RETURNING tbl')
+# Contract re-imports these fixtures, so one process registers each of them twice.
+_worker_databases: set[str] = set()
+_factories_seeded = False
 
 
 def _worker_redis_url(infra: Infra, worker_id: str) -> str:
@@ -57,14 +60,23 @@ def infra(pytestconfig: pytest.Config) -> Infra:
 
 @pytest.fixture(scope="session")
 def worker_db(infra: Infra, worker_id: str) -> Iterator[DbUrls]:
-    """Clone ``test_<service>_<layer>_<worker>`` and drop it at session end."""
+    """Clone ``test_<service>_<layer>_<worker>`` and drop it at session end.
+
+    A second registration in the same process must not clone again.
+    ``create_worker_database`` terminates every session on that name.
+    """
     name = worker_database_name(infra.service, infra.layer, worker_id)
-    logger.info("creating worker database %s from %s", name, infra.template_db)
-    urls = create_worker_database(infra.pg_admin_url, infra.template_db, name)
+    if name not in _worker_databases:
+        logger.info("creating worker database %s from %s", name, infra.template_db)
+        create_worker_database(infra.pg_admin_url, infra.template_db, name)
+        _worker_databases.add(name)
+    urls = DbUrls.for_database(infra.pg_admin_url, name)
     try:
         yield urls
     finally:
-        drop_database(infra.pg_admin_url, name)
+        if name in _worker_databases:
+            _worker_databases.discard(name)
+            drop_database(infra.pg_admin_url, name)
 
 
 @pytest.fixture(scope="session")
@@ -133,11 +145,19 @@ async def clean_db(
 
 @pytest.fixture(scope="session", autouse=True)
 def _seed_factories(pytestconfig: pytest.Config) -> None:
-    """One seed per run, so the pytest-randomly number reproduces factory data too."""
+    """One seed per run, so the pytest-randomly number reproduces factory data too.
+
+    A second registration must not call ``seed_random`` again. That rewinds ids
+    already inserted into the shared worker database.
+    """
+    global _factories_seeded
+    if _factories_seeded:
+        return
     seed = pytestconfig.getoption("randomly_seed")
     if not isinstance(seed, int):
         raise RuntimeError("pytest-randomly did not provide an integer seed")
     BaseFactory.seed_random(seed)
+    _factories_seeded = True
 
 
 @pytest.fixture(scope="session")

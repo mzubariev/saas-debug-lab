@@ -13,7 +13,7 @@ from saas_testkit.adapters.redis import TaskCache
 from saas_testkit.config import SERVICES
 from saas_testkit.context import RunContext
 from saas_testkit.flows import TaskLifecycle
-from saas_testkit.infra import import_service_app
+from saas_testkit.infra import import_service_app, open_app_lifespan
 
 
 @pytest.fixture(scope="session")
@@ -21,7 +21,7 @@ async def service_app(service_env: None) -> AsyncIterator[FastAPI]:
     app = import_service_app(SERVICES["task-service"])
     if not isinstance(app, FastAPI):
         raise RuntimeError("task-service did not expose a FastAPI app")
-    async with app.router.lifespan_context(app):
+    async with open_app_lifespan(app):
         yield app
 
 

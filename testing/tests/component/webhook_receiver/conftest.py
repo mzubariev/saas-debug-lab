@@ -11,7 +11,7 @@ from saas_testkit.adapters.kafka import KafkaEventReader
 from saas_testkit.config import SERVICES
 from saas_testkit.context import RunContext
 from saas_testkit.flows import InboundWebhook, WebhookDelivery
-from saas_testkit.infra import import_service_app
+from saas_testkit.infra import import_service_app, open_app_lifespan
 
 
 @pytest.fixture(scope="session")
@@ -19,7 +19,7 @@ async def service_app(service_env: None) -> AsyncIterator[FastAPI]:
     app = import_service_app(SERVICES["webhook-receiver"])
     if not isinstance(app, FastAPI):
         raise RuntimeError("webhook-receiver did not expose a FastAPI app")
-    async with app.router.lifespan_context(app):
+    async with open_app_lifespan(app):
         yield app
 
 
