@@ -58,3 +58,5 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P4.1: captured producer tests are collected only when `--service` is that producer. Schema and legacy tests stay in every `tests/contract` session.
 - P4.2: `HttpTaskApi` sets `ApiResponse.document`, matching the other HTTP adapters, so a contract test can `model_validate` the raw body.
 - P4.2: Schemathesis sends on the pytest session loop via `httpx`. `from_asgi` drives a second lifespan and another loop, which breaks the async engine. `SCHEMA_EXAMPLES` defaults to 40. `POST /webhooks/inbound` is omitted from the shared fuzz test and run on its own under `xfail` BUG-5.
+- P5: `ci-gate` sets `working-directory` to the workspace. The workflow default is `testing/`, and that job does not checkout, so the directory would be missing.
+- P5: `setup-uv` sets `python-version` 3.14. The kit requires it, and setup-uv looks for `pyproject.toml` in the repo root, which has none.

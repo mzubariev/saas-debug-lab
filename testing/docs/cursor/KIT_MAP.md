@@ -80,3 +80,7 @@ external-service-simulator (`tests/component/external_service_simulator/conftest
 ## P4.2 contract/http
 
 One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_MINUTES=45` before import); event capture uses that same lifespan. `client` is the HTTP client. `fuzz_schema` is the served OpenAPI document. `check_openapi` runs Schemathesis (`not_a_server_error` and `response_schema_conformance`) on the session loop. `schema_examples` reads `SCHEMA_EXAMPLES`, default 40. Snapshots: `contracts/openapi/<service>.json` (`servers` dropped; a duplicated operationId is rewritten to `method path`). `test_openapi_document_is_valid` (api-gateway `xfail` BUG-6), `test_openapi_matches_snapshot`, `test_generated_calls_match_openapi` (task, auth, webhook-receiver; gateway and simulator skip). `test_inbound_generated_calls_are_not_server_errors` is webhook-receiver only, `xfail` BUG-5. Consumer checks: `test_created_task_matches_consumer_model`, `test_token_matches_consumer_model`, `test_me_matches_consumer_model`, `test_inbound_receipt_matches_consumer_model` (`xfail` BUG-5), `test_received_webhook_matches_consumer_model`, `test_proxied_body_matches_consumer_model`. `HttpTaskApi` sets `document` on the response.
+
+## P5 CI
+
+`.github/workflows/ci.yml`: `lint`, `security`, `unit`, `component-contract` (matrix `task-service`, `auth-service`, `api-gateway`, `webhook-receiver`, `external-service-simulator`), `ci-gate`.
