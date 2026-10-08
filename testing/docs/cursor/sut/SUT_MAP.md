@@ -21,7 +21,7 @@ Zones are keyed by `$http_authorization`, not by client IP. Both zones use `10m`
 | none | | `location /auth/` (so `/auth/me`) | no `limit_req` |
 | none | | `location /external/` | proxy to `external-service-simulator:8000/`, prefix stripped |
 
-A request with no `Authorization` header has an empty zone key. nginx does not account requests with an empty key (limit_req_zone documentation), so unauthenticated requests, including `POST /auth/token` (a login carries no `Authorization` header), are effectively not limited, whatever the `5r/m` setting says. This is unverified empirically: the P6.2 edge test sends about 10 logins within a minute and expects no 429; if confirmed, record it as BUG-1 (the documentation claims 5 requests per minute). `/` and `/webhooks/` are separate locations; the longer prefix wins.
+A request with no `Authorization` header has an empty zone key. nginx does not account requests with an empty key (limit_req_zone documentation), so unauthenticated requests, including `POST /auth/token` (a login carries no `Authorization` header), are effectively not limited, whatever the `5r/m` setting says. Confirmed as BUG-1: ten logins within a minute all return 200 (the documentation claims 5 requests per minute). `/` and `/webhooks/` are separate locations; the longer prefix wins.
 
 ## Postgres, Redis, Kafka images
 
@@ -150,7 +150,7 @@ Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE
 
 ## Hazards
 
-- nginx limits by the `Authorization` value. One shared bearer token is one `20r/s` bucket on `location /`. `/auth/token` carries no `Authorization` header, so its key is empty and nginx does not account it: the `5r/m` limit is probably inactive (BUG-1 candidate, confirm in P6.2). `/auth/me` is not limited. `/webhooks/` is `20r/s` burst 20 `nodelay`, not the `location /` burst of 100.
+- nginx limits by the `Authorization` value. One shared bearer token is one `20r/s` bucket on `location /`. `/auth/token` carries no `Authorization` header, so its key is empty and nginx does not account it: the `5r/m` limit is inactive (BUG-1). `/auth/me` is not limited. `/webhooks/` is `20r/s` burst 20 `nodelay`, not the `location /` burst of 100.
 - `GET /ready` stays 200 when Redis, Kafka, or Postgres is down. Compose treats that as healthy for the FastAPI services.
 - Importing any FastAPI `app.main` starts `OtelBatchSpanRecordProcessor` and it tries `OTLP_ENDPOINT` (`http://otel-collector:4317` if unset). The scratch run logged `StatusCode.UNAVAILABLE` for that DNS name after `/openapi.json`.
 - Every service package is named `app`. Two services cannot be imported in one process. `prometheus_metrics` registers global collectors at import. Scheduler import sets `PROMETHEUS_MULTIPROC_DIR` and creates that directory.

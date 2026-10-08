@@ -65,6 +65,10 @@ Repo root, via `testing/testing.mk`. `TEST_PG_URL`, `TEST_REDIS_URL`, and `TEST_
 - `mail`: `MailHogInbox`. `containing` returns messages whose subject or body includes the text.
 - `wiremock`: `WireMockSink`. `install_catch_all` (priority 10, 200), `stub_for_payload` (JSONPath on `id`, unique scenario), `calls_for` (journal filtered by that id).
 
+## P6.2 integration/services
+
+`test_login_burst_without_a_bearer_is_not_limited` and `test_foreign_host_with_forwarded_headers_reaches_the_gateway` (`xdist_group("serial")`, nginx). `make t-int` uses `--dist loadgroup`.
+
 ## P3.2 auth-service
 
 auth-service (`tests/component/auth_service/conftest.py`): `service_app` sets `TOKEN_EXPIRE_MINUTES=45` before import and enters `lifespan_context`. `client` is `httpx.AsyncClient` on `ASGITransport` (`raise_app_exceptions=False`) with `base_url="http://test"`. `user_cache` is `UserCache`. `auth` is `AuthFlow`.

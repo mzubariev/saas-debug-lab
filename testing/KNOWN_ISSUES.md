@@ -4,6 +4,7 @@
 
 ### Confirmed
 
+- BUG-1: nginx `location /auth/token` is `limit_req zone=auth` at `5r/m` burst 3, keyed by `$http_authorization`. Ten logins within a few seconds, with no `Authorization` header, all return 200. An empty zone key is not accounted, so the documented limit does not apply.
 - BUG-2: task-service `TaskCreate.title` is an unconstrained string. `POST /tasks` stores an empty title and a 10000-character title and returns 201. Expected 422. `xfail(strict=True)` on those two cases. A non-string title does return 422.
 - BUG-3: task-service commits in the repository, then calls `publish_event`. A Kafka failure returns 500, the task row remains (a create stays stored, a start stays `in_progress`), the event is not published, and `cache_delete` does not run. `xfail(strict=True)` on create and start.
 - BUG-4: auth-service login writes `hashed_password` to Redis (`user:{username}`, TTL 300 s) before it checks the password. `xfail(strict=True)` expects that cache entry to omit the hash. A second login reads the cached row.
@@ -19,7 +20,6 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - Dispatcher `_produce` logs `kafka_produce_failed` and does not re-raise. Notification-worker catches `aiosmtplib.SMTPException` and `OSError`, counts them, and does not re-raise.
 - The `role` claim is written at login and copied by gateway `verify_token` and `/auth/me`. No route checks it. There is no authZ.
 - `GET /tasks` returns every row (`list_all`; no limit or offset).
-- nginx `location /auth/token` sets `limit_req zone=auth` (`5r/m`), and the zone key is `$http_authorization`. A login sends no `Authorization` header, so the key is empty and nginx does not account the request. Confirm in P6.2; if it holds, record BUG-1.
 
 ## Testability changes
 
@@ -64,3 +64,6 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P5: `worker_db` clones once per process, and `_seed_factories` seeds once. The contract conftest imports the component fixtures, so pytest registers them again. A second clone runs `pg_terminate_backend` (`connection is closed`). A second `seed_random` rewinds ids already inserted in that database.
 - P6.1: host Postgres is `5433` and Redis is `6380`, because `compose.deps.yml` already binds `5432` and `6379`. `DATABASE_URL` overrides the seed URL. `WEBHOOK_BACKOFF_BASE=0.2`, `DLQ_REPLAY_INTERVAL_SECONDS=5`, `CLEANUP_INTERVAL_SECONDS=10`. `CLEANUP_COMPLETED_TASKS_MINUTES` stays at the default 5.
 - P6.1: Postgres keeps `shared_preload_libraries=pg_stat_statements` so `infra/postgres/init.sql` still runs, and adds the ADR-18 flags. The data directory is `PGDATA=/tmp/pgdata` on tmpfs. Compose 2.19 appends volumes, so the base `postgres_data` mount cannot be removed. `test-stack.services` drops ZooKeeper and adds WireMock.
+- P6.2: `make t-int` passes `--dist loadgroup` so the nginx `serial` group stays on one worker.
+- P6.2: health through the gateway and the `/metrics` series stay in smoke. `arch-integration.md` lists them as T2.
+- P6.2: `X-Forwarded-For`, `X-Forwarded-Proto`, and `Host` are not on the HTTP response, and Jaeger is not in the test stack. The edge test sends a foreign Host plus those headers and asserts `/health` is 200 and `X-Request-ID` is echoed.

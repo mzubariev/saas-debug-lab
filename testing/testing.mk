@@ -64,7 +64,7 @@ contracts-update:
 	cd $(TESTING_DIR) && uv run pytest tests/contract $(if $(SERVICE),--service $(SERVICE)) -q --update-contracts
 
 t-int:
-	cd $(TESTING_DIR) && uv run pytest tests/integration -n 3 -q
+	cd $(TESTING_DIR) && uv run pytest tests/integration -n 3 --dist loadgroup -q
 
 stack-up:
 	cd $(TESTING_DIR) && uv run python -c "from saas_testkit.infra import stack_up; stack_up()"
