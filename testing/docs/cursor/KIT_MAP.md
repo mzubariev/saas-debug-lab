@@ -30,7 +30,7 @@ task-service (`tests/component/task_service/conftest.py`): `service_app` enters 
 
 ## Factories
 
-`TaskCreateFactory` (`ModelFactory`; `title` comes from `unique_title("task")`). `TaskRowFactory` (`SQLAlchemyFactory`, `__set_relationships__ = False`, `status` created, aware datetimes). `UserRowFactory` (one argon2 hash of `user123` in `hashed_password`; `username` fits `varchar(64)`). `.build()` does no I/O. Bind a `RunContext` before building a task factory. One `Factory.seed_random` per run, from pytest-randomly.
+`TaskCreateFactory` (`ModelFactory`; `title` comes from `unique_title("task")`). `TaskRowFactory` (`SQLAlchemyFactory`, `__set_relationships__ = False`, `status` created, aware datetimes). `UserRowFactory` (one argon2 hash of `user123` in `hashed_password`; `username` fits `varchar(64)`). `.build()` does no I/O. Bind a `RunContext` before building a task factory. `seed_factories_once` calls `Factory.seed_random` once per process, from pytest-randomly. Component, contract, integration, and e2e_ui all use it.
 
 Envelope factories (`TaskCreated`, `TaskUpdated`, `WebhookInbound`, `WebhookDlq`) build a v1 `Envelope`. Payload models are `TaskCreatedPayload`, `TaskUpdatedPayload` (`id`, `title`, `status`), `WebhookInboundPayload` (`event`, `data`), and `WebhookDlqPayload` (task fields plus `error`, `attempts`, `timestamp`). `JwtFactory` mints `sub` / `role` / `exp` tokens: `valid`, `expired`, `tampered` (payload changed, signature kept), `alg_none`. Default secret is the lab `dev-secret-change-in-production`.
 
@@ -104,6 +104,12 @@ external-service-simulator (`tests/component/external_service_simulator/conftest
 ## P4.2 contract/http
 
 One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_MINUTES=45` before import); event capture uses that same lifespan. `client` is the HTTP client. `fuzz_schema` is the served OpenAPI document. `check_openapi` runs Schemathesis (`not_a_server_error` and `response_schema_conformance`) on the session loop. `schema_examples` reads `SCHEMA_EXAMPLES`, default 40. Snapshots: `contracts/openapi/<service>.json` (`servers` dropped; a duplicated operationId is rewritten to `method path`). `test_openapi_document_is_valid` (api-gateway `xfail` BUG-6), `test_openapi_matches_snapshot`, `test_generated_calls_match_openapi` (task, auth, webhook-receiver; gateway and simulator skip). `test_inbound_generated_calls_are_not_server_errors` is webhook-receiver only, `xfail` BUG-5. Consumer checks: `test_created_task_matches_consumer_model`, `test_token_matches_consumer_model`, `test_me_matches_consumer_model`, `test_inbound_receipt_matches_consumer_model` (`xfail` BUG-5), `test_received_webhook_matches_consumer_model`, `test_proxied_body_matches_consumer_model`. `HttpTaskApi` sets `document` on the response.
+
+## P7 e2e_ui
+
+`tests/e2e_ui/conftest.py`. `base_url` and the `storage_state` origin are both `KitSettings.ui_url` (`UI_URL`, default `http://127.0.0.1:5173`). `browser_context_args` sets `service_workers=block` and `storage_state` from `session.json` (`saas_debug_token`, `frontend/src/lib/apiClient.ts`) unless the test is `@pytest.mark.anonymous`. A failure keeps a trace and a screenshot (`--tracing retain-on-failure`, `--screenshot only-on-failure`). `admin` is the seeded user. `login` is `LoginPage`. `board` is `BoardPage`. `tasks` is `UiTasks` (sync httpx on the gateway): `create` may assert, `find` returns the first title match and raises when a second exists.
+
+`LoginPage.open`, `sign_in`, `expect_form`, `expect_login_page`, `expect_invalid_credentials`, `expect_board`. `BoardPage.open`, `reload`, `create_task`, `move_task`, `expect_open`, `expect_task`, `task_id`. `move_task` drags with `mouse.move(..., steps=25)`. `KanbanColumn.reveal` walks the 10-card pages. `TaskCard.expect_visible` and `task_id` (the card's `title` attribute).
 
 ## P5 CI
 

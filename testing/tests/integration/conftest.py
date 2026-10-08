@@ -5,30 +5,21 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from polyfactory.factories.base import BaseFactory
 
 from saas_testkit.adapters.http import HttpAuthApi, HttpSimulatorApi, HttpTaskApi
 from saas_testkit.adapters.kafka import KafkaEventReader
 from saas_testkit.adapters.mail import MailHogInbox
 from saas_testkit.adapters.wiremock import WireMockSink
 from saas_testkit.context import RunContext, using_context
+from saas_testkit.factories import seed_factories_once
 from saas_testkit.flows import AuthFlow, ExternalReceiver, TaskLifecycle, WebhookDelivery
 from saas_testkit.infra import KAFKA_TOPICS, read_session
-
-_factories_seeded = False
 
 
 @pytest.fixture(scope="session", autouse=True)
 def _seed_factories(pytestconfig: pytest.Config) -> None:
     """One seed per run, so the pytest-randomly number reproduces factory data too."""
-    global _factories_seeded
-    if _factories_seeded:
-        return
-    seed = pytestconfig.getoption("randomly_seed")
-    if not isinstance(seed, int):
-        raise RuntimeError("pytest-randomly did not provide an integer seed")
-    BaseFactory.seed_random(seed)
-    _factories_seeded = True
+    seed_factories_once(pytestconfig.getoption("randomly_seed"))
 
 
 @pytest.fixture(scope="session")

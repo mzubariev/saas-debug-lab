@@ -13,6 +13,7 @@ from saas_testkit.factories.events import (
 from saas_testkit.factories.jwt import LAB_JWT_SECRET, JwtFactory
 from saas_testkit.factories.payloads import TaskCreateFactory
 from saas_testkit.factories.rows import Rows, TaskRowFactory, UserRowFactory
+from saas_testkit.factories.seed import seed_factories_once
 
 __all__ = [
     "LAB_JWT_SECRET",
@@ -29,4 +30,5 @@ __all__ = [
     "WebhookDlqPayloadFactory",
     "WebhookInboundEnvelopeFactory",
     "WebhookInboundPayloadFactory",
+    "seed_factories_once",
 ]

@@ -25,6 +25,7 @@ class KitSettings(BaseSettings):
     test_pg_url: str | None = None
     test_redis_url: str | None = None
     test_kafka_bootstrap: str | None = None
+    ui_url: str = "http://127.0.0.1:5173"
 
     @field_validator("infra", mode="before")
     @classmethod
@@ -38,4 +39,12 @@ class KitSettings(BaseSettings):
     def _blank_is_unset(cls, value: object) -> object:
         if value == "":
             return None
+        return value
+
+    @field_validator("ui_url", mode="before")
+    @classmethod
+    def _ui_origin(cls, value: object) -> object:
+        """`UI_URL` is both the page base and the storage origin, so drop a trailing slash."""
+        if isinstance(value, str):
+            return value.strip().rstrip("/")
         return value

@@ -9,7 +9,6 @@ from collections.abc import AsyncIterator, Iterator
 from uuid import uuid4
 
 import pytest
-from polyfactory.factories.base import BaseFactory
 from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -17,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from saas_testkit.adapters.kafka import KafkaEventReader
 from saas_testkit.config import redis_db_index, service_environment
 from saas_testkit.context import RunContext, using_context
-from saas_testkit.factories import Rows, TaskRowFactory, UserRowFactory
+from saas_testkit.factories import Rows, TaskRowFactory, UserRowFactory, seed_factories_once
 from saas_testkit.infra import (
     KAFKA_TOPICS,
     DbUrls,
@@ -36,7 +35,6 @@ logger = logging.getLogger("saas_testkit.component")
 _DELETE_TOUCHED = text('DELETE FROM "_touched" RETURNING tbl')
 # Contract re-imports these fixtures, so one process registers each of them twice.
 _worker_databases: set[str] = set()
-_factories_seeded = False
 
 
 def _worker_redis_url(infra: Infra, worker_id: str) -> str:
@@ -145,19 +143,8 @@ async def clean_db(
 
 @pytest.fixture(scope="session", autouse=True)
 def _seed_factories(pytestconfig: pytest.Config) -> None:
-    """One seed per run, so the pytest-randomly number reproduces factory data too.
-
-    A second registration must not call ``seed_random`` again. That rewinds ids
-    already inserted into the shared worker database.
-    """
-    global _factories_seeded
-    if _factories_seeded:
-        return
-    seed = pytestconfig.getoption("randomly_seed")
-    if not isinstance(seed, int):
-        raise RuntimeError("pytest-randomly did not provide an integer seed")
-    BaseFactory.seed_random(seed)
-    _factories_seeded = True
+    """One seed per run. Contract imports this fixture, so the helper ignores the second call."""
+    seed_factories_once(pytestconfig.getoption("randomly_seed"))
 
 
 @pytest.fixture(scope="session")

@@ -48,6 +48,16 @@ def test_unknown_infra_mode_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None
         KitSettings()
 
 
+def test_ui_url_is_one_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("UI_URL", raising=False)
+
+    assert KitSettings().ui_url == "http://127.0.0.1:5173"
+
+    monkeypatch.setenv("UI_URL", "http://localhost:5173/")
+
+    assert KitSettings().ui_url == "http://localhost:5173"
+
+
 def test_postgres_image_matches_the_lab_major() -> None:
     assert POSTGRES_IMAGE == "postgres:15"
 

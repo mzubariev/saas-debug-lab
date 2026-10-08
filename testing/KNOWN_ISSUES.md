@@ -28,6 +28,7 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - Service and worker `Settings`, plus `migrations/alembic/env.py`: database host, Redis URL (including DB index), Kafka bootstrap, `WEBHOOK_URL`, JWT secret, SMTP host, gateway service URLs, and the simulator webhook URL are required environment variables. A missing variable fails settings load instead of falling back to a Docker DNS name. Lab `.env` files already set the previous values, so compose behaviour is unchanged. `OTLP_ENDPOINT` still defaults to the collector; tests clear it.
 - `webhook-dispatcher` `WEBHOOK_BACKOFF_BASE` (default 1.0) and scheduler `DLQ_REPLAY_INTERVAL_SECONDS` (60) / `CLEANUP_INTERVAL_SECONDS` (300). `MAX_RETRIES` and `CLEANUP_COMPLETED_TASKS_MINUTES` (default 5) were already environment settings. Jitter stays 0..10% of the computed backoff.
 - Compose healthchecks for mailhog, postgres-exporter, kafka-exporter, and the frontend. FastAPI `/health` checks were already present. `infra/test-stack.services` lists the test stack. `frontend/Dockerfile` `preview` stage runs `vite build` then `vite preview`; the default stage stays `dev`. `infra/docker-compose.test.yml` selects `preview`.
+- `frontend/src/pages/LoginPage.tsx`: the login error `div` has `role="alert"` so `LoginPage` can use `get_by_role("alert")`. The message and the class are unchanged.
 
 ## Decisions since the plan
 
@@ -71,3 +72,5 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P6.3: S4 stays inside S1 (the shared `Idempotency-Key`). S5 is not in the integration catalogue, so there is no chaos scenario. S2a is not `slow`; only the DLQ replay (S2b) is.
 - P6.3: webhook stubs match the task title. The title is known before create; `payload.id` is assigned on insert, and the dispatcher can POST before a stub on that id exists.
 - P6.3: the test stack sets the simulator `INTEGRATION_SERVICE_WEBHOOK_URL` to `http://api-gateway:8000/webhooks/inbound`. The lab value `http://localhost/webhooks/inbound` is the simulator itself inside its container.
+- P7: the controller starts the shared stack for `e2e_ui` as well as `integration`, so UI workers read the same `session.json`. Login and the signed-out board visit use `@pytest.mark.anonymous` (no `storage_state`).
+- P7: board columns and task cards have no accessible name or `data-testid`. Locators use `.column` / `.column__title` and `.task-card`. The login form already has labels. The card id is the `title` attribute on `.task-card__id`.

@@ -1,3 +1,5 @@
 """UI components."""
 
-__all__: list[str] = []
+from saas_testkit.adapters.playwright.components.kanban import KanbanColumn, TaskCard
+
+__all__ = ["KanbanColumn", "TaskCard"]

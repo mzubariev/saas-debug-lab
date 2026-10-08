@@ -73,7 +73,7 @@ stack-down:
 	cd $(TESTING_DIR) && uv run python -c "from saas_testkit.infra import stack_down; stack_down()"
 
 t-ui:
-	cd $(TESTING_DIR) && uv run pytest tests/e2e_ui -n 2 -q
+	cd $(TESTING_DIR) && uv run pytest tests/e2e_ui -n 2 -q --tracing retain-on-failure --screenshot only-on-failure --video off
 
 t-smoke:
 	cd $(TESTING_DIR) && uv run pytest tests/smoke -n 0 -q

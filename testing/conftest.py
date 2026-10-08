@@ -62,7 +62,7 @@ def pytest_configure(config: pytest.Config) -> None:
     selected = service if isinstance(service, str) and service else None
     if selected is not None:
         install_service_paths(SERVICES[selected])
-    if not is_worker(config) and _runs_integration(config):
+    if not is_worker(config) and _runs_shared_stack(config):
         stack = stack_up()
         ensure_admin_token(stack)
         config._integration_stack = stack  # type: ignore[attr-defined]
@@ -93,9 +93,13 @@ def pytest_unconfigure(config: pytest.Config) -> None:
         release_stack()
 
 
-def _runs_integration(config: pytest.Config) -> bool:
+_SHARED_STACK = frozenset({"integration", "e2e_ui"})
+
+
+def _runs_shared_stack(config: pytest.Config) -> bool:
+    """Integration and UI share one compose stack and the admin token file."""
     root = Path(config.rootpath)
-    return any(_layer(str(arg), root) == "integration" for arg in config.args)
+    return any(_layer(str(arg), root) in _SHARED_STACK for arg in config.args)
 
 
 def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:

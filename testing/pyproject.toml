@@ -170,6 +170,7 @@ markers = [
     "slow: long-running test",
     "chaos: fault-injection test",
     "critical: fast UI subset",
+    "anonymous: UI test that starts signed out (no storage_state)",
     "clean_db: truncate tables touched since the last cleanup",
 ]
 

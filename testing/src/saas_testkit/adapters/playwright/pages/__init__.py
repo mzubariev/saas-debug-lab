@@ -1,3 +1,6 @@
 """Page objects."""
 
-__all__: list[str] = []
+from saas_testkit.adapters.playwright.pages.board import BoardPage
+from saas_testkit.adapters.playwright.pages.login import LoginPage
+
+__all__ = ["BoardPage", "LoginPage"]
