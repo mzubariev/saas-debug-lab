@@ -107,7 +107,11 @@ def browser_context_args(
     request: pytest.FixtureRequest,
 ) -> dict[str, object]:
     """Block service workers. Signed-in tests reuse the per-run admin token."""
-    args = {**browser_context_args, "service_workers": "block"}
+    args = {
+        **browser_context_args,
+        "service_workers": "block",
+        "viewport": {"width": 1920, "height": 1080},
+    }
     if request.node.get_closest_marker("anonymous") is None:
         args["storage_state"] = _storage_state()
     return args

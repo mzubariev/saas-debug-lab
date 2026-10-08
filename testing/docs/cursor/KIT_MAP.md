@@ -109,7 +109,9 @@ One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_
 
 `tests/e2e_ui/conftest.py`. `base_url` and the `storage_state` origin are both `KitSettings.ui_url` (`UI_URL`, default `http://127.0.0.1:5173`). `browser_context_args` sets `service_workers=block` and `storage_state` from `session.json` (`saas_debug_token`, `frontend/src/lib/apiClient.ts`) unless the test is `@pytest.mark.anonymous`. A failure keeps a trace and a screenshot (`--tracing retain-on-failure`, `--screenshot only-on-failure`). `admin` is the seeded user. `login` is `LoginPage`. `board` is `BoardPage`. `tasks` is `UiTasks` (sync httpx on the gateway): `create` may assert, `find` returns the first title match and raises when a second exists.
 
-`LoginPage.open`, `sign_in`, `expect_form`, `expect_login_page`, `expect_invalid_credentials`, `expect_board`. `BoardPage.open`, `reload`, `create_task`, `move_task`, `expect_open`, `expect_task`, `task_id`. `move_task` drags with `mouse.move(..., steps=25)`. `KanbanColumn.reveal` walks the 10-card pages. `TaskCard.expect_visible` and `task_id` (the card's `title` attribute).
+`LoginPage.open`, `sign_in`, `expect_form`, `expect_login_page`, `expect_invalid_credentials`, `expect_board`. `BoardPage.open`, `reload`, `create_task`, `move_task`, `expect_open`, `expect_task`, `task_id`. `move_task` drags with `mouse.move(..., steps=40)` and waits for the move response. The context viewport is 1920×1080 so a long title does not push a column off screen. `KanbanColumn.reveal` walks the 10-card pages. `TaskCard.expect_visible` and `task_id` (the card's `title` attribute).
+
+`test_login_with_seeded_credentials_opens_the_board` (`anonymous`, `critical`), `test_login_with_a_wrong_password_shows_an_error` (`anonymous`), `test_board_without_a_session_redirects_to_login` (`anonymous`), `test_created_task_stays_in_each_column_after_reload` (`critical`).
 
 ## P5 CI
 

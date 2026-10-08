@@ -37,6 +37,7 @@ class TaskCard:
 class KanbanColumn:
     def __init__(self, page: Page, status: TaskStatus) -> None:
         label = _LABELS[status]
+        self._titles = page.locator(".task-card__title")
         self._root = page.locator(".column").filter(
             has=page.locator(".column__title", has_text=re.compile(rf"^{re.escape(label)}$"))
         )
@@ -51,8 +52,7 @@ class KanbanColumn:
 
     def card(self, title: str) -> TaskCard:
         exact = re.compile(rf"^{re.escape(title)}$")
-        title_node = self._root.locator(".task-card__title", has_text=exact)
-        return TaskCard(self._cards.filter(has=title_node))
+        return TaskCard(self._cards.filter(has=self._titles.filter(has_text=exact)))
 
     def reveal(self, title: str) -> TaskCard | None:
         """The column shows 10 cards per page. Walk pages until this title is mounted."""

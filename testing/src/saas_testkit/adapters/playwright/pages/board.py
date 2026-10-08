@@ -1,11 +1,11 @@
 """Task board. Drag and drop uses pointer moves because dnd-kit ignores `drag_to`."""
 
-from playwright.sync_api import Locator, Page, expect
+from playwright.sync_api import Locator, Page, Response, expect
 
 from saas_testkit.adapters.playwright.components.kanban import KanbanColumn, TaskCard
 from saas_testkit.domain.tasks import TaskStatus
 
-_DRAG_STEPS = 25
+_DRAG_STEPS = 40
 
 
 class BoardPage:
@@ -28,13 +28,15 @@ class BoardPage:
         self._ready()
         self._new.click()
         self._title.fill(title)
-        self._create.click()
+        with self._page.expect_response(_is_create):
+            self._create.click()
 
     def move_task(self, task: str, *, to: TaskStatus) -> None:
         self._ready()
         card = self._require(task)
         card.expect_visible()
-        self._drag(card.root, self._columns[to].root)
+        with self._page.expect_response(_is_move):
+            self._drag(card.root, self._columns[to].root)
 
     def expect_open(self) -> None:
         self._ready()
@@ -62,15 +64,28 @@ class BoardPage:
 
     def _drag(self, source: Locator, target: Locator) -> None:
         """Move the pointer in steps so dnd-kit's 5px activation distance is crossed."""
-        source.scroll_into_view_if_needed()
         target.scroll_into_view_if_needed()
+        source.scroll_into_view_if_needed()
         start = _center(source)
-        end = _center(target)
+        end = _center(target.locator(".column__header"))
         mouse = self._page.mouse
         mouse.move(start[0], start[1])
         mouse.down()
+        mouse.move(start[0] + 24, start[1], steps=8)
         mouse.move(end[0], end[1], steps=_DRAG_STEPS)
         mouse.up()
+
+
+def _is_create(response: Response) -> bool:
+    path = response.url.split("?", 1)[0].rstrip("/")
+    return response.request.method == "POST" and path.endswith("/tasks")
+
+
+def _is_move(response: Response) -> bool:
+    path = response.url.split("?", 1)[0].rstrip("/")
+    return response.request.method == "PATCH" and (
+        path.endswith("/start") or path.endswith("/complete")
+    )
 
 
 def _center(locator: Locator) -> tuple[float, float]:
