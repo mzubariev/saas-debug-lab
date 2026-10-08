@@ -12,10 +12,14 @@ from xdist.workermanage import WorkerController
 from saas_testkit.config import SERVICES
 from saas_testkit.infra import (
     InfraHandle,
+    Stack,
     _layer,
+    ensure_admin_token,
     install_service_paths,
     is_worker,
     needs_infra,
+    release_stack,
+    stack_up,
     start_or_attach_infra,
 )
 
@@ -58,6 +62,10 @@ def pytest_configure(config: pytest.Config) -> None:
     selected = service if isinstance(service, str) and service else None
     if selected is not None:
         install_service_paths(SERVICES[selected])
+    if not is_worker(config) and _runs_integration(config):
+        stack = stack_up()
+        ensure_admin_token(stack)
+        config._integration_stack = stack  # type: ignore[attr-defined]
     if is_worker(config) or not needs_infra(config):
         return
     root = Path(config.rootpath)
@@ -80,6 +88,14 @@ def pytest_unconfigure(config: pytest.Config) -> None:
     handle = getattr(config, "_infra", None)
     if isinstance(handle, InfraHandle):
         handle.stop()
+    stack = getattr(config, "_integration_stack", None)
+    if isinstance(stack, Stack) and stack.owned:
+        release_stack()
+
+
+def _runs_integration(config: pytest.Config) -> bool:
+    root = Path(config.rootpath)
+    return any(_layer(str(arg), root) == "integration" for arg in config.args)
 
 
 def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:

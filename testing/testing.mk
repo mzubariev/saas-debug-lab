@@ -25,7 +25,7 @@ GATE_N = $(or $(N),$(N_$(LAYER)),auto)
 
 .PHONY: t-unit t-component t-component-all deps-up deps-down deps-clean \
 	t-contract contracts-update t-int t-ui t-smoke t-synthetic \
-	t-lint t-check t-gate
+	t-lint t-check t-gate stack-up stack-down
 
 t-unit:
 	cd $(TESTING_DIR) && uv run pytest tests/unit -n auto --maxprocesses=8 -q
@@ -65,6 +65,12 @@ contracts-update:
 
 t-int:
 	cd $(TESTING_DIR) && uv run pytest tests/integration -n 3 -q
+
+stack-up:
+	cd $(TESTING_DIR) && uv run python -c "from saas_testkit.infra import stack_up; stack_up()"
+
+stack-down:
+	cd $(TESTING_DIR) && uv run python -c "from saas_testkit.infra import stack_down; stack_down()"
 
 t-ui:
 	cd $(TESTING_DIR) && uv run pytest tests/e2e_ui -n 2 -q

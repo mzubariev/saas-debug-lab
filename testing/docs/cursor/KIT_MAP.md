@@ -48,6 +48,22 @@ Repo root, via `testing/testing.mk`. `TEST_PG_URL`, `TEST_REDIS_URL`, and `TEST_
 - `make t-contract` (`SERVICE` for `tests/contract/http`), `make contracts-update`
 - `make t-int`, `t-ui`, `t-smoke`, `t-synthetic`
 - `make t-lint`, `t-check`, `t-gate` (`LAYER=`; `SERVICE=` for component and contract)
+- `make stack-up`, `make stack-down` (`KEEP_STACK=1` keeps the stack after a pytest run)
+
+## P6.1 integration
+
+`tests/integration/conftest.py`. The controller calls `stack_up` (`BASE_URL` and `NGINX_URL` when the stack is already up) and `ensure_admin_token` (FileLock, `testing/.stack/session.json`, refresh when `exp` is close). Workers read that file and do not log in. `KEEP_STACK=1` skips `down -v`.
+
+- `base_url`: gateway, `http://127.0.0.1:8001` unless `BASE_URL` is set.
+- `nginx_url`: `NGINX_URL` or `http://127.0.0.1`.
+- `admin_token`: seeded `admin` access token.
+- `client`: `httpx.AsyncClient` on `base_url` with that bearer token.
+- `run_context`: binds `RunContext`.
+- `auth`: `AuthFlow` over `HttpAuthApi`.
+- `lifecycle`: `TaskLifecycle` over `HttpTaskApi`.
+- `events`: `KafkaEventReader` on `127.0.0.1:9093`, one group per worker.
+- `mail`: `MailHogInbox`. `containing` returns messages whose subject or body includes the text.
+- `wiremock`: `WireMockSink`. `install_catch_all` (priority 10, 200), `stub_for_payload` (JSONPath on `id`, unique scenario), `calls_for` (journal filtered by that id).
 
 ## P3.2 auth-service
 

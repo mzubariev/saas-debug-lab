@@ -1,6 +1,5 @@
 postgres
 redis
-zookeeper
 kafka
 migrations
 auth-service
@@ -13,5 +12,6 @@ scheduler-worker
 api-gateway
 nginx
 mailhog
+wiremock
 toxiproxy
 frontend

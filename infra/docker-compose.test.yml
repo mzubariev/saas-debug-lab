@@ -8,10 +8,73 @@
 #
 # Frontend uses the Dockerfile `preview` stage (`vite build` then `vite preview`).
 # Workers have no HTTP app; the test kit checks their metrics port.
+# nginx is not modified. Host ports below are for seeding, KafkaEventReader, and readiness.
 
 services:
+  postgres:
+    # ADR-18, plus the preload the init script needs. Data dir is tmpfs (PGDATA),
+    # because this Compose version appends volumes and cannot drop postgres_data.
+    environment:
+      PGDATA: /tmp/pgdata
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.track=all
+      -c pg_stat_statements.max=10000
+      -c fsync=off
+      -c synchronous_commit=off
+      -c full_page_writes=off
+      -c max_connections=200
+    tmpfs:
+      - /tmp/pgdata:rw,nosuid,size=1g,mode=0777
+    ports:
+      - "5433:5432"
+
+  redis:
+    ports:
+      - "6380:6379"
+
+  kafka:
+    ports:
+      - "9093:9093"
+
+  api-gateway:
+    ports:
+      - "8001:8000"
+
+  webhook-dispatcher:
+    environment:
+      WEBHOOK_URL: http://wiremock:8080/external/receive-webhook
+      WEBHOOK_BACKOFF_BASE: "0.2"
+    ports:
+      - "9101:9100"
+    depends_on:
+      wiremock:
+        condition: service_started
+
+  notification-worker:
+    ports:
+      - "9102:9100"
+
+  scheduler-worker:
+    environment:
+      WEBHOOK_URL: http://wiremock:8080/external/receive-webhook
+      DLQ_REPLAY_INTERVAL_SECONDS: "5"
+      CLEANUP_INTERVAL_SECONDS: "10"
+    ports:
+      - "9103:9100"
+    depends_on:
+      wiremock:
+        condition: service_started
+
   frontend:
     build:
       context: ..
       dockerfile: frontend/Dockerfile
       target: preview
+
+  wiremock:
+    image: wiremock/wiremock:3.13.1
+    container_name: wiremock
+    ports:
+      - "8089:8080"

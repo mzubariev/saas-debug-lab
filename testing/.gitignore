@@ -5,4 +5,5 @@
 .coverage.*
 htmlcov/
 reports/
+.stack/
 *.egg-info/
