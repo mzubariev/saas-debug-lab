@@ -1,0 +1,65 @@
+{
+  "$defs": {
+    "TaskStatus": {
+      "enum": [
+        "created",
+        "in_progress",
+        "completed"
+      ],
+      "title": "TaskStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "V1 envelope, or `event_type=\"unknown\"` when the message is not one (SUT_MAP).",
+  "properties": {
+    "event_type": {
+      "const": "task.updated",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": false,
+      "description": "`task_updated` business payload. Same fields as `task_created` (SUT_MAP).",
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TaskStatus"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "status"
+      ],
+      "title": "TaskUpdatedPayload",
+      "type": "object"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "trace_id": {
+      "type": "string"
+    },
+    "version": {
+      "const": "v1",
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_type",
+    "version",
+    "trace_id",
+    "timestamp",
+    "payload"
+  ],
+  "title": "task_updated",
+  "type": "object"
+}

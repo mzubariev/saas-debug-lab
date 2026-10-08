@@ -1,4 +1,4 @@
-"""Consumer-side Kafka envelope. Tolerant of fields the producer may add."""
+"""Kafka envelope v1. The model is strict; a non-v1 message is `unknown`."""
 
 from uuid import UUID
 
@@ -10,7 +10,7 @@ from saas_testkit.domain.tasks import TaskStatus
 class Envelope(BaseModel):
     """V1 envelope, or `event_type="unknown"` when the message is not one (SUT_MAP)."""
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     event_type: str
     version: str | None = None

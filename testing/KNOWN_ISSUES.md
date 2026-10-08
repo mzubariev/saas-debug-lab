@@ -53,3 +53,5 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P3.3: the header test pins the request respx sees. The proxy omits `host`, `sentry-trace`, `baggage`, `traceparent`, and `tracestate`. With `OTLP_ENDPOINT` empty, the httpx instrumentor puts the client's `baggage`, `traceparent`, and `tracestate` back; `sentry-trace` stays absent; `Host` is the upstream hostname.
 - P3.4: the webhook-receiver ASGI client sets `raise_app_exceptions=False`, so a failed publish is the HTTP 500 from the exception middleware.
 - P3.4.2: the external-service-simulator ASGI client sets `raise_app_exceptions=False`, matching the other component clients.
+- P4.1: `Envelope` is `extra="forbid"`. cat-contract calls the v1 model strict. `KafkaEventReader` still builds it from the known fields, so a non-v1 message stays `event_type="unknown"`.
+- P4.1: captured producer tests are collected only when `--service` is that producer. Schema and legacy tests stay in every `tests/contract` session.

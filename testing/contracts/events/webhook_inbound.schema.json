@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "description": "V1 envelope, or `event_type=\"unknown\"` when the message is not one (SUT_MAP).",
+  "properties": {
+    "event_type": {
+      "const": "webhook.inbound",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": false,
+      "description": "`webhook_inbound` business payload. `event` and `data` (SUT_MAP).",
+      "properties": {
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "event": {
+          "title": "Event",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event"
+      ],
+      "title": "WebhookInboundPayload",
+      "type": "object"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "trace_id": {
+      "type": "string"
+    },
+    "version": {
+      "const": "v1",
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_type",
+    "version",
+    "trace_id",
+    "timestamp",
+    "payload"
+  ],
+  "title": "webhook_inbound",
+  "type": "object"
+}

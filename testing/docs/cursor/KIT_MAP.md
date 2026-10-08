@@ -72,3 +72,7 @@ webhook-receiver (`tests/component/webhook_receiver/conftest.py`): `service_app`
 external-service-simulator (`tests/component/external_service_simulator/conftest.py`): `service_app` enters `lifespan_context`. `client` is `httpx.AsyncClient` on `ASGITransport` (`raise_app_exceptions=False`) with `base_url="http://test"`. `simulator` is `ExternalReceiver`.
 
 `ExternalReceiver.receive`, `receive_again`, and `fail` (`simulated` is `fail_rate=1`, `custom` asks for status 503). `Delivery` is the response plus the idempotency `key` and `payload` sent. `HttpSimulatorApi.receive` posts `/receive-webhook` with `Idempotency-Key`. `SimulatorReceipt` is that body (`status`, and `payload`, `idempotency_key`, `reason`, or `code`).
+
+## P4.1 contract/events
+
+`Envelope` is `extra="forbid"`. Snapshots: `contracts/events/task_created.schema.json`, `task_updated.schema.json`, `webhook_inbound.schema.json`, `webhook_dlq.schema.json`. `event_contract_dir` and `event_schema_errors`. `test_event_schema_matches_snapshot` and `test_legacy_message_maps_to_unknown` are service-agnostic. `test_produced_task_created_matches_snapshot` and `test_produced_task_updated_matches_snapshot` collect only for `--service task-service`. `test_produced_webhook_inbound_matches_snapshot` collects only for `--service webhook-receiver`.

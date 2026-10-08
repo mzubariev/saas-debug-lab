@@ -1,0 +1,80 @@
+{
+  "$defs": {
+    "TaskStatus": {
+      "enum": [
+        "created",
+        "in_progress",
+        "completed"
+      ],
+      "title": "TaskStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "V1 envelope, or `event_type=\"unknown\"` when the message is not one (SUT_MAP).",
+  "properties": {
+    "event_type": {
+      "const": "webhook.dlq",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": false,
+      "description": "`webhook_dlq` payload: task fields plus `error`, `attempts`, `timestamp`.",
+      "properties": {
+        "attempts": {
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "error": {
+          "title": "Error",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TaskStatus"
+        },
+        "timestamp": {
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "status",
+        "error",
+        "attempts",
+        "timestamp"
+      ],
+      "title": "WebhookDlqPayload",
+      "type": "object"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "trace_id": {
+      "type": "string"
+    },
+    "version": {
+      "const": "v1",
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_type",
+    "version",
+    "trace_id",
+    "timestamp",
+    "payload"
+  ],
+  "title": "webhook_dlq",
+  "type": "object"
+}
