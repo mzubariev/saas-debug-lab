@@ -25,7 +25,7 @@ A request with no `Authorization` header has an empty zone key. nginx does not a
 
 ## Postgres, Redis, Kafka images
 
-`infra/docker-compose.yml` service `postgres` uses image `postgres:15` (major 15; the tag is not minor-pinned). No host port is published. Command sets `shared_preload_libraries=pg_stat_statements`. Redis image `redis:7`, no host port. Kafka is `confluentinc/cp-kafka:7.5.0` plus `confluentinc/cp-zookeeper:7.5.0`. Listeners `PLAINTEXT://kafka:9092` and `PLAINTEXT_HOST://localhost:9093`; neither is published in this compose file.
+`infra/docker-compose.yml` service `postgres` uses image `postgres:15` (major 15; the tag is not minor-pinned). No host port is published. Command sets `shared_preload_libraries=pg_stat_statements`. Redis image `redis:7`, no host port. Kafka is `confluentinc/cp-kafka:7.5.0` in KRaft combined mode (`broker,controller`, no ZooKeeper). Listeners `PLAINTEXT://kafka:9092`, `CONTROLLER://kafka:9094`, and `PLAINTEXT_HOST://localhost:9093`; none is published in this compose file.
 
 There is no Flower service in `infra/docker-compose.yml`.
 
