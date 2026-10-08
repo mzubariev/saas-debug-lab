@@ -113,6 +113,14 @@ One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_
 
 `test_login_with_seeded_credentials_opens_the_board` (`anonymous`, `critical`), `test_login_with_a_wrong_password_shows_an_error` (`anonymous`), `test_board_without_a_session_redirects_to_login` (`anonymous`), `test_created_task_stays_in_each_column_after_reload` (`critical`).
 
+## P8.1 smoke
+
+`tests/smoke/`. Reads `SMOKE_BASE_URL`. Session start exits when it is unset, unreachable, or `/health` is not 200 `{"status":"ok"}`. `ui_url` is `KitSettings.ui_url`.
+
+`test_health_through_the_edge_is_ok` (`/health`, `/external/health`), `test_login_for_a_seeded_role_returns_a_token` (`admin`, `user`), `test_created_task_is_readable`, `test_metrics_are_reachable` (`GET /metrics`), `test_frontend_returns_ok`.
+
+`.github/workflows/smoke.yml`: `workflow_call` and `workflow_dispatch`, input `smoke_base_url`. The caller starts the stack.
+
 ## P5 CI
 
 `.github/workflows/ci.yml`: `lint`, `security`, `unit`, `component-contract` (matrix `task-service`, `auth-service`, `api-gateway`, `webhook-receiver`, `external-service-simulator`), `ci-gate`. `open_app_lifespan` enters a service lifespan once per process.

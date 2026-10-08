@@ -1,4 +1,4 @@
-# P10 polish (cut first if behind), optional improvement E, and the refactoring phase F
+# P10 polish (cut first if behind), A - optional improvement and the refactoring phase
 
 ## P10: Polish
 
@@ -8,9 +8,9 @@
 - Run the final check: `make t-lint && make t-unit && make t-component-all && make t-contract && make t-int && make t-ui`.
 - Write `testing/README.md`: purpose, layer diagram, how to run each layer, ADR summary, CI badge, a summary of findings from `KNOWN_ISSUES.md`, and a screenshot of a trace or report. State there that the tests run on Python 3.14 with a lockfile while the service images still run Python 3.11 with unpinned requirements (closed in R0).
   - **opentelemetry.instrumentation.instrumentor**
-    **error**
-    ++Oct 8, 6:56:40.346 AM UTC++
-    SQLAlchemyInstrumentor only instruments "sqlalchemy >= 1.0.0, < 2.1.0", but currently installed version ("sqlalchemy 2.1.3") falls outside of that range, so nothing can be instrumented.
+  **error**
+  ++Oct 8, 6:56:40.346 AM UTC++
+  SQLAlchemyInstrumentor only instruments "sqlalchemy >= 1.0.0, < 2.1.0", but currently installed version ("sqlalchemy 2.1.3") falls outside of that range, so nothing can be instrumented.
 
 
 

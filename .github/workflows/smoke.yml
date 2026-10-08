@@ -1,0 +1,38 @@
+name: smoke
+
+on:
+  workflow_call:
+    inputs:
+      smoke_base_url:
+        description: Stack URL (SMOKE_BASE_URL). The caller starts the stack first.
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      smoke_base_url:
+        description: Stack URL (SMOKE_BASE_URL)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: testing
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: testing/uv.lock
+          python-version: "3.14"
+      - run: uv sync --locked
+      - run: uv run pytest tests/smoke -n 0 -q
+        env:
+          SMOKE_BASE_URL: ${{ inputs.smoke_base_url }}
