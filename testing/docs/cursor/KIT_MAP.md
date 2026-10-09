@@ -119,7 +119,7 @@ One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_
 
 `test_health_through_the_edge_is_ok` (`/health`, `/external/health`), `test_login_for_a_seeded_role_returns_a_token` (`admin`, `user`), `test_created_task_is_readable`, `test_metrics_are_reachable` (`GET /metrics`), `test_frontend_returns_ok`.
 
-`.github/workflows/smoke.yml`: `workflow_call` and `workflow_dispatch`, input `smoke_base_url`. The caller starts the stack.
+`.github/workflows/smoke.yml`: `workflow_call` and `workflow_dispatch`, inputs `smoke_base_url` and `start_stack`. `start_stack` brings the stack up on that runner; otherwise the caller has already started it.
 
 ## P8.2 synthetic
 
@@ -128,3 +128,7 @@ One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_
 ## P5 CI
 
 `.github/workflows/ci.yml`: `lint`, `security`, `unit`, `component-contract` (matrix `task-service`, `auth-service`, `api-gateway`, `webhook-receiver`, `external-service-simulator`), `ci-gate`. `open_app_lifespan` enters a service lifespan once per process.
+
+## P9 CI
+
+`.github/workflows/ci.yml` also runs `integration` and `ui-e2e` (`shard: [1]`, `pytest-split --splits` / `--group`, cached `.test_durations`), `smoke` (`smoke.yml` with `start_stack`), and `coverage` (`coverage combine`). `ci-gate` needs all of them. `.github/workflows/nightly.yml`: `schemathesis` (`SCHEMA_EXAMPLES=500`), `stack` (`slow`/`chaos`, `--count 5`, `--store-durations`), `browsers` (`firefox`, `webkit`).

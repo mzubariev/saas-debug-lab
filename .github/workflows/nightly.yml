@@ -1,0 +1,245 @@
+name: nightly
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: testing
+
+jobs:
+  schemathesis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - task-service
+          - auth-service
+          - api-gateway
+          - webhook-receiver
+          - external-service-simulator
+    env:
+      TEST_PG_URL: postgresql://postgres:test@localhost:5432/postgres
+      TEST_REDIS_URL: redis://localhost:6379
+      TEST_KAFKA_BOOTSTRAP: localhost:9092
+      SCHEMA_EXAMPLES: "500"
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test
+        command: postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=200
+        options: >-
+          --tmpfs /var/lib/postgresql/data
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 6379:6379
+      redpanda:
+        image: docker.redpanda.com/redpandadata/redpanda:v26.2.2
+        command: >-
+          redpanda start --mode dev-container --smp 1 --memory 1G --overprovisioned
+          --kafka-addr plaintext://0.0.0.0:9092
+          --advertise-kafka-addr plaintext://localhost:9092
+        ports:
+          - 9092:9092
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: testing/uv.lock
+          python-version: "3.14"
+      - run: uv sync --locked --group ${{ matrix.service }}
+      - name: Wait for Redpanda
+        run: timeout 60 bash -c 'until (echo > /dev/tcp/localhost/9092) 2>/dev/null; do sleep 1; done'
+      - run: uv run pytest tests/contract --service ${{ matrix.service }} -n auto -q
+
+  stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: write
+    env:
+      COMPOSE_PROJECT_NAME: infra
+      BASE_URL: http://127.0.0.1:8001
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Copy env examples
+        working-directory: ${{ github.workspace }}
+        run: |
+          git ls-files '*.env.example' | while read -r example; do
+            case "$example" in testing/*) continue ;; esac
+            cp "$example" "${example%.example}"
+          done
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: testing/uv.lock
+          python-version: "3.14"
+      - run: uv sync --locked
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7.4.0
+        with:
+          files: |
+            infra/docker-compose.yml
+            infra/docker-compose.test.yml
+          targets: |
+            migrations
+            auth-service
+            task-service
+            webhook-receiver
+            webhook-dispatcher
+            external-service-simulator
+            notification-worker
+            scheduler-worker
+            api-gateway
+            frontend
+          load: true
+          provenance: false
+          allow: fs.read=*
+          set: |
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+      - name: Start the test stack
+        working-directory: ${{ github.workspace }}/infra
+        run: |
+          mapfile -t services < <(grep -vE '^(#|[[:space:]]*$)' test-stack.services)
+          docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --no-build --remove-orphans "${services[@]}"
+      - name: Wait until each service kind is ready
+        run: |
+          uv run python - <<'PY'
+          from saas_testkit.adapters.wiremock import WireMockSink
+          from saas_testkit.infra.compose import _postgres_ready, _require, _wait_ready, _wait_until
+
+          _wait_until(_postgres_ready, "postgres")
+          _require("up", "-d", "--force-recreate", "--no-deps", "migrations", timeout=180)
+          _wait_ready()
+          WireMockSink("http://127.0.0.1:8089").install_catch_all()
+          PY
+      - id: pw
+        run: echo "version=$(uv run python -c 'from importlib.metadata import version; print(version("playwright"))')" >> "$GITHUB_OUTPUT"
+      - id: pw-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: uv run playwright install --with-deps chromium
+      - if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: uv run playwright install-deps chromium
+      - name: slow and chaos
+        run: uv run pytest tests/integration tests/e2e_ui -m "slow or chaos" -n 3 --dist loadgroup -q
+      - name: flaky pass
+        run: uv run pytest tests/integration tests/e2e_ui -m "not slow and not chaos" --count 5 -n 2 --dist loadgroup -q
+      - name: Refresh .test_durations
+        run: uv run pytest tests/integration tests/e2e_ui --store-durations --durations-path .test_durations -n 2 --dist loadgroup -q
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: testing/.test_durations
+          key: durations-${{ runner.os }}-${{ github.run_id }}
+
+  browsers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [firefox, webkit]
+    env:
+      COMPOSE_PROJECT_NAME: infra
+      BASE_URL: http://127.0.0.1:8001
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Copy env examples
+        working-directory: ${{ github.workspace }}
+        run: |
+          git ls-files '*.env.example' | while read -r example; do
+            case "$example" in testing/*) continue ;; esac
+            cp "$example" "${example%.example}"
+          done
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: testing/uv.lock
+          python-version: "3.14"
+      - run: uv sync --locked
+      - id: pw
+        run: echo "version=$(uv run python -c 'from importlib.metadata import version; print(version("playwright"))')" >> "$GITHUB_OUTPUT"
+      - id: pw-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ matrix.browser }}
+      - if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: uv run playwright install --with-deps ${{ matrix.browser }}
+      - if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: uv run playwright install-deps ${{ matrix.browser }}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7.4.0
+        with:
+          files: |
+            infra/docker-compose.yml
+            infra/docker-compose.test.yml
+          targets: |
+            migrations
+            auth-service
+            task-service
+            webhook-receiver
+            webhook-dispatcher
+            external-service-simulator
+            notification-worker
+            scheduler-worker
+            api-gateway
+            frontend
+          load: true
+          provenance: false
+          allow: fs.read=*
+          set: |
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+      - name: Start the test stack
+        working-directory: ${{ github.workspace }}/infra
+        run: |
+          mapfile -t services < <(grep -vE '^(#|[[:space:]]*$)' test-stack.services)
+          docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --no-build --remove-orphans "${services[@]}"
+      - name: Wait until each service kind is ready
+        run: |
+          uv run python - <<'PY'
+          from saas_testkit.adapters.wiremock import WireMockSink
+          from saas_testkit.infra.compose import _postgres_ready, _require, _wait_ready, _wait_until
+
+          _wait_until(_postgres_ready, "postgres")
+          _require("up", "-d", "--force-recreate", "--no-deps", "migrations", timeout=180)
+          _wait_ready()
+          WireMockSink("http://127.0.0.1:8089").install_catch_all()
+          PY
+      - run: uv run pytest tests/e2e_ui --browser ${{ matrix.browser }} -n 2 -q --tracing retain-on-failure --screenshot only-on-failure --video off

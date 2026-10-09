@@ -4,8 +4,6 @@ on:
   pull_request:
   push:
     branches: [main]
-  schedule:
-    - cron: "0 2 * * *"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -163,9 +161,269 @@ jobs:
           reporter: java-junit
           use-actions-summary: true
 
+  integration:
+    needs: [lint, security, unit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: write
+      checks: write
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1]
+    env:
+      COMPOSE_PROJECT_NAME: infra
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Copy env examples
+        working-directory: ${{ github.workspace }}
+        run: |
+          git ls-files '*.env.example' | while read -r example; do
+            case "$example" in testing/*) continue ;; esac
+            cp "$example" "${example%.example}"
+          done
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: testing/uv.lock
+          python-version: "3.14"
+      - run: uv sync --locked
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7.4.0
+        with:
+          files: |
+            infra/docker-compose.yml
+            infra/docker-compose.test.yml
+          targets: |
+            migrations
+            auth-service
+            task-service
+            webhook-receiver
+            webhook-dispatcher
+            external-service-simulator
+            notification-worker
+            scheduler-worker
+            api-gateway
+            frontend
+          load: true
+          provenance: false
+          allow: fs.read=*
+          set: |
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+      - name: Start the test stack
+        working-directory: ${{ github.workspace }}/infra
+        run: |
+          mapfile -t services < <(grep -vE '^(#|[[:space:]]*$)' test-stack.services)
+          docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --no-build --remove-orphans "${services[@]}"
+      - name: Wait until each service kind is ready
+        run: |
+          uv run python - <<'PY'
+          from saas_testkit.adapters.wiremock import WireMockSink
+          from saas_testkit.infra.compose import _postgres_ready, _require, _wait_ready, _wait_until
+
+          _wait_until(_postgres_ready, "postgres")
+          _require("up", "-d", "--force-recreate", "--no-deps", "migrations", timeout=180)
+          _wait_ready()
+          WireMockSink("http://127.0.0.1:8089").install_catch_all()
+          PY
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: testing/.test_durations
+          key: durations-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: durations-${{ runner.os }}-
+      - name: Integration tests
+        env:
+          BASE_URL: http://127.0.0.1:8001
+        run: |
+          mkdir -p reports
+          uv run pytest tests/integration -n 3 --dist loadgroup -q \
+            --splits ${{ strategy.job-total }} --group ${{ matrix.shard }} \
+            --durations-path .test_durations \
+            --junitxml=reports/junit-integration-${{ matrix.shard }}.xml \
+            ${{ github.event_name == 'pull_request' && '-m "not slow and not chaos"' || '' }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: junit-integration-${{ matrix.shard }}
+          path: testing/reports/junit-integration-${{ matrix.shard }}.xml
+      - name: Compose logs
+        if: failure()
+        working-directory: ${{ github.workspace }}/infra
+        run: docker compose -f docker-compose.yml -f docker-compose.test.yml logs --no-color > "${{ github.workspace }}/testing/reports/compose.log"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: integration-logs-${{ matrix.shard }}
+          path: testing/reports/compose.log
+      - uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        if: ${{ !cancelled() }}
+        with:
+          name: junit-integration-${{ matrix.shard }}
+          path: testing/reports/junit-integration-${{ matrix.shard }}.xml
+          reporter: java-junit
+          use-actions-summary: true
+
+  smoke:
+    needs: [lint, security, unit]
+    permissions:
+      contents: read
+      actions: write
+    uses: ./.github/workflows/smoke.yml
+    with:
+      smoke_base_url: http://127.0.0.1
+      start_stack: true
+
+  ui-e2e:
+    needs: [lint, security, unit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: write
+      checks: write
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1]
+    env:
+      COMPOSE_PROJECT_NAME: infra
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Copy env examples
+        working-directory: ${{ github.workspace }}
+        run: |
+          git ls-files '*.env.example' | while read -r example; do
+            case "$example" in testing/*) continue ;; esac
+            cp "$example" "${example%.example}"
+          done
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: testing/uv.lock
+          python-version: "3.14"
+      - run: uv sync --locked
+      - id: pw
+        run: echo "version=$(uv run python -c 'from importlib.metadata import version; print(version("playwright"))')" >> "$GITHUB_OUTPUT"
+      - id: pw-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: uv run playwright install --with-deps chromium
+      - if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: uv run playwright install-deps chromium
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7.4.0
+        with:
+          files: |
+            infra/docker-compose.yml
+            infra/docker-compose.test.yml
+          targets: |
+            migrations
+            auth-service
+            task-service
+            webhook-receiver
+            webhook-dispatcher
+            external-service-simulator
+            notification-worker
+            scheduler-worker
+            api-gateway
+            frontend
+          load: true
+          provenance: false
+          allow: fs.read=*
+          set: |
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+      - name: Start the test stack
+        working-directory: ${{ github.workspace }}/infra
+        run: |
+          mapfile -t services < <(grep -vE '^(#|[[:space:]]*$)' test-stack.services)
+          docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --no-build --remove-orphans "${services[@]}"
+      - name: Wait until each service kind is ready
+        run: |
+          uv run python - <<'PY'
+          from saas_testkit.adapters.wiremock import WireMockSink
+          from saas_testkit.infra.compose import _postgres_ready, _require, _wait_ready, _wait_until
+
+          _wait_until(_postgres_ready, "postgres")
+          _require("up", "-d", "--force-recreate", "--no-deps", "migrations", timeout=180)
+          _wait_ready()
+          WireMockSink("http://127.0.0.1:8089").install_catch_all()
+          PY
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: testing/.test_durations
+          key: durations-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: durations-${{ runner.os }}-
+      - name: UI tests
+        env:
+          BASE_URL: http://127.0.0.1:8001
+        run: |
+          mkdir -p reports
+          uv run pytest tests/e2e_ui -n 2 -q \
+            --splits ${{ strategy.job-total }} --group ${{ matrix.shard }} \
+            --durations-path .test_durations \
+            --tracing retain-on-failure --screenshot only-on-failure --video off \
+            --junitxml=reports/junit-e2e-${{ matrix.shard }}.xml \
+            ${{ github.event_name == 'pull_request' && '-m critical' || '' }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: ui-e2e-traces-${{ matrix.shard }}
+          path: testing/test-results/
+          if-no-files-found: ignore
+      - name: Compose logs
+        if: failure()
+        working-directory: ${{ github.workspace }}/infra
+        run: docker compose -f docker-compose.yml -f docker-compose.test.yml logs --no-color > "${{ github.workspace }}/testing/reports/compose.log"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: ui-e2e-logs-${{ matrix.shard }}
+          path: testing/reports/compose.log
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: junit-e2e-${{ matrix.shard }}
+          path: testing/reports/junit-e2e-${{ matrix.shard }}.xml
+      - uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        if: ${{ !cancelled() }}
+        with:
+          name: junit-e2e-${{ matrix.shard }}
+          path: testing/reports/junit-e2e-${{ matrix.shard }}.xml
+          reporter: java-junit
+          use-actions-summary: true
+
+  coverage:
+    needs: [component-contract]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: testing/uv.lock
+          python-version: "3.14"
+      - run: uv sync --locked
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: reports-*
+          path: testing/coverage-parts
+          merge-multiple: true
+      - run: uv run coverage combine coverage-parts && uv run coverage report
+
   ci-gate:
     if: always()
-    needs: [lint, security, unit, component-contract]
+    needs: [lint, security, unit, component-contract, integration, smoke, ui-e2e, coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
