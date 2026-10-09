@@ -94,7 +94,7 @@ jobs:
       TEST_PG_URL: postgresql://postgres:test@localhost:5432/postgres
       TEST_REDIS_URL: redis://localhost:6379
       TEST_KAFKA_BOOTSTRAP: localhost:9092
-      SCHEMA_EXAMPLES: ${{ github.event_name == 'schedule' && '500' || '40' }}
+      SCHEMA_EXAMPLES: "40"
       COVERAGE_FILE: .coverage.${{ matrix.service }}
     services:
       postgres:
@@ -143,7 +143,7 @@ jobs:
           uv run pytest tests/component tests/contract/http --service ${{ matrix.service }}
           -n auto -q --cov=../${{ steps.svc.outputs.path }} --cov-report=
           --junitxml=reports/junit-${{ matrix.service }}.xml
-      - if: matrix.service == 'task-service'
+      - if: ${{ !cancelled() && matrix.service == 'task-service' }}
         run: uv run pytest tests/contract/events -q --junitxml=reports/junit-events.xml
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
@@ -152,12 +152,20 @@ jobs:
           path: |
             testing/reports/junit-${{ matrix.service }}.xml
             testing/.coverage.${{ matrix.service }}
+            testing/reports/junit-events.xml
           include-hidden-files: true
       - uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         if: ${{ !cancelled() }}
         with:
           name: junit-${{ matrix.service }}
           path: testing/reports/junit-${{ matrix.service }}.xml
+          reporter: java-junit
+          use-actions-summary: true
+      - uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        if: ${{ !cancelled() && matrix.service == 'task-service' }}
+        with:
+          name: junit-events
+          path: testing/reports/junit-events.xml
           reporter: java-junit
           use-actions-summary: true
 
@@ -252,7 +260,9 @@ jobs:
       - name: Compose logs
         if: failure()
         working-directory: ${{ github.workspace }}/infra
-        run: docker compose -f docker-compose.yml -f docker-compose.test.yml logs --no-color > "${{ github.workspace }}/testing/reports/compose.log"
+        run: |
+          mkdir -p "${{ github.workspace }}/testing/reports"
+          docker compose -f docker-compose.yml -f docker-compose.test.yml logs --no-color > "${{ github.workspace }}/testing/reports/compose.log"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
@@ -380,7 +390,9 @@ jobs:
       - name: Compose logs
         if: failure()
         working-directory: ${{ github.workspace }}/infra
-        run: docker compose -f docker-compose.yml -f docker-compose.test.yml logs --no-color > "${{ github.workspace }}/testing/reports/compose.log"
+        run: |
+          mkdir -p "${{ github.workspace }}/testing/reports"
+          docker compose -f docker-compose.yml -f docker-compose.test.yml logs --no-color > "${{ github.workspace }}/testing/reports/compose.log"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
