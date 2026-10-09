@@ -177,6 +177,11 @@ services:
       dockerfile: frontend/Dockerfile
       target: preview
 
+  nginx:
+    # nginx.conf resolves otel-collector at startup. The test stack does not run it.
+    extra_hosts:
+      - "otel-collector:127.0.0.1"
+
   wiremock:
     image: wiremock/wiremock:3.13.1
     container_name: wiremock
