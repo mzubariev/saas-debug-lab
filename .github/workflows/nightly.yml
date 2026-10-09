@@ -17,6 +17,42 @@ defaults:
     working-directory: testing
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Copy env examples
+        working-directory: ${{ github.workspace }}
+        run: |
+          git ls-files '*.env.example' | while read -r example; do
+            case "$example" in testing/*) continue ;; esac
+            cp "$example" "${example%.example}"
+          done
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7.4.0
+        with:
+          files: |
+            infra/docker-compose.yml
+            infra/docker-compose.test.yml
+          targets: |
+            migrations
+            auth-service
+            task-service
+            webhook-receiver
+            webhook-dispatcher
+            external-service-simulator
+            notification-worker
+            scheduler-worker
+            api-gateway
+            frontend
+          load: false
+          provenance: false
+          allow: fs.read=*
+          set: |
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+
   schemathesis:
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -80,6 +116,7 @@ jobs:
       - run: uv run pytest tests/contract --service ${{ matrix.service }} -n auto -q
 
   stack:
+    needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -125,7 +162,6 @@ jobs:
           allow: fs.read=*
           set: |
             *.cache-from=type=gha
-            *.cache-to=type=gha,mode=max
       - name: Start the test stack
         working-directory: ${{ github.workspace }}/infra
         run: |
@@ -165,6 +201,7 @@ jobs:
           key: durations-${{ runner.os }}-${{ github.run_id }}
 
   browsers:
+    needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -225,7 +262,6 @@ jobs:
           allow: fs.read=*
           set: |
             *.cache-from=type=gha
-            *.cache-to=type=gha,mode=max
       - name: Start the test stack
         working-directory: ${{ github.workspace }}/infra
         run: |
