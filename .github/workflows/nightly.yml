@@ -7,7 +7,7 @@ on:
 
 concurrency:
   group: nightly-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -113,7 +113,14 @@ jobs:
       - run: uv sync --locked --group ${{ matrix.service }}
       - name: Wait for Redpanda
         run: timeout 60 bash -c 'until (echo > /dev/tcp/localhost/9092) 2>/dev/null; do sleep 1; done'
-      - run: uv run pytest tests/contract --service ${{ matrix.service }} -n auto -q
+      - run: >-
+          uv run pytest tests/contract/http --service ${{ matrix.service }}
+          -n auto -q --junitxml=reports/junit-schemathesis-${{ matrix.service }}.xml
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: junit-schemathesis-${{ matrix.service }}
+          path: testing/reports/junit-schemathesis-${{ matrix.service }}.xml
 
   stack:
     needs: [build]
@@ -148,15 +155,50 @@ jobs:
       - if: steps.pw-cache.outputs.cache-hit == 'true'
         run: uv run playwright install-deps chromium
       - name: slow and chaos
-        run: uv run pytest tests/integration tests/e2e_ui -m "slow or chaos" -n 3 --dist loadgroup -q
+        if: ${{ !cancelled() }}
+        run: |
+          uv run pytest tests/integration tests/e2e_ui -m "slow or chaos" -n 3 --dist loadgroup -q \
+            --junitxml=reports/junit-nightly-slow-and-chaos.xml
       - name: flaky pass
-        run: uv run pytest tests/integration tests/e2e_ui -m "not slow and not chaos" --count 5 -n 2 --dist loadgroup -q
+        if: ${{ !cancelled() }}
+        run: |
+          uv run pytest tests/integration tests/e2e_ui -m "not slow and not chaos" --count 5 -n 2 --dist loadgroup -q \
+            --junitxml=reports/junit-nightly-flaky-pass.xml
       - name: Refresh .test_durations
-        run: uv run pytest tests/integration tests/e2e_ui --store-durations --durations-path .test_durations -n 2 --dist loadgroup -q
+        if: ${{ !cancelled() }}
+        run: |
+          uv run pytest tests/integration tests/e2e_ui --store-durations --durations-path .test_durations -n 2 --dist loadgroup -q \
+            --junitxml=reports/junit-nightly-refresh-durations.xml
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: ${{ !cancelled() && hashFiles('testing/.test_durations') != '' }}
         with:
           path: testing/.test_durations
           key: durations-${{ runner.os }}-${{ github.run_id }}
+      - name: Compose logs
+        if: failure()
+        working-directory: ${{ github.workspace }}/infra
+        run: |
+          mkdir -p "${{ github.workspace }}/testing/reports"
+          docker compose -f docker-compose.yml -f docker-compose.test.yml logs --no-color > "${{ github.workspace }}/testing/reports/compose.log"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: nightly-logs
+          path: testing/reports/compose.log
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: nightly-test-results
+          path: testing/test-results/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: junit-nightly
+          path: |
+            testing/reports/junit-nightly-slow-and-chaos.xml
+            testing/reports/junit-nightly-flaky-pass.xml
+            testing/reports/junit-nightly-refresh-durations.xml
 
   browsers:
     needs: [build]
@@ -194,4 +236,57 @@ jobs:
       - uses: ./.github/actions/test-stack
         with:
           install-wiremock-catch-all: true
-      - run: uv run pytest tests/e2e_ui --browser ${{ matrix.browser }} -n 2 -q --tracing retain-on-failure --screenshot only-on-failure --video off
+      - run: |
+          uv run pytest tests/e2e_ui --browser ${{ matrix.browser }} -n 2 -q \
+            --tracing retain-on-failure --screenshot only-on-failure --video off \
+            --junitxml=reports/junit-nightly-${{ matrix.browser }}.xml
+      - name: Compose logs
+        if: failure()
+        working-directory: ${{ github.workspace }}/infra
+        run: |
+          mkdir -p "${{ github.workspace }}/testing/reports"
+          docker compose -f docker-compose.yml -f docker-compose.test.yml logs --no-color > "${{ github.workspace }}/testing/reports/compose.log"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: nightly-logs-${{ matrix.browser }}
+          path: testing/reports/compose.log
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: nightly-test-results-${{ matrix.browser }}
+          path: testing/test-results/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: junit-nightly-${{ matrix.browser }}
+          path: testing/reports/junit-nightly-${{ matrix.browser }}.xml
+
+  report:
+    needs: [build, schemathesis, stack, browsers]
+    if: ${{ always() && github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the nightly issue
+        working-directory: ${{ github.workspace }}
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if echo "$NEEDS" | jq -e 'all(.[]; .result == "success")' >/dev/null; then
+            exit 0
+          fi
+          body=$(jq -rn --arg url "$RUN_URL" --argjson needs "$NEEDS" \
+            '"Nightly run: \($url)\n\n" + ([$needs | to_entries[] | "- \(.key): \(.value.result)"] | join("\n"))')
+          number=$(gh issue list --state open --limit 100 --json number,title \
+            --jq 'first(.[] | select(.title == "nightly failed") | .number) // empty')
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --body "$body"
+          else
+            gh issue create --title "nightly failed" --body "$body"
+          fi
