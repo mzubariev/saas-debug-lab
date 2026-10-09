@@ -13,6 +13,7 @@ from saas_testkit.infra.compose import (
     seed_synthetic_user,
     stack_down,
     stack_up,
+    wait_for_stack,
 )
 from saas_testkit.infra.containers import (
     KAFKA_TOPICS,
@@ -68,6 +69,7 @@ __all__ = [
     "stack_up",
     "start_or_attach_infra",
     "template_database_name",
+    "wait_for_stack",
     "worker_database_name",
     "worker_index",
 ]

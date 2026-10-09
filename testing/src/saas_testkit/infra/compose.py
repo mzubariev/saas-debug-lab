@@ -3,10 +3,12 @@
 `BASE_URL` means the stack is already up (CI). `KEEP_STACK=1` skips `down -v`.
 """
 
+import argparse
 import json
 import os
 import socket
 import subprocess
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -121,6 +123,31 @@ def ensure_admin_token(stack: Stack) -> str:
         if stack.owned:
             WireMockSink("http://127.0.0.1:8089").install_catch_all()
         return current
+
+
+def wait_for_stack(
+    *,
+    install_wiremock_catch_all: bool = False,
+    ensure_admin_token: bool = False,
+) -> None:
+    """Postgres, migrations, then each service kind. The stack is already started."""
+    _wait_until(_postgres_ready, "postgres")
+    _require("up", "-d", "--force-recreate", "--no-deps", "migrations", timeout=180)
+    _wait_ready()
+    if install_wiremock_catch_all:
+        WireMockSink("http://127.0.0.1:8089").install_catch_all()
+    if ensure_admin_token:
+        _ensure_admin_token()
+
+
+def _ensure_admin_token() -> None:
+    ensure_admin_token(
+        Stack(
+            base_url="http://127.0.0.1:8001",
+            nginx_url="http://127.0.0.1",
+            owned=False,
+        )
+    )
 
 
 def read_session() -> _SessionFile:
@@ -475,3 +502,32 @@ def _compose(*args: str, timeout: float) -> subprocess.CompletedProcess[str]:
         text=True,
         timeout=timeout,
     )
+
+
+def main(argv: list[str] | None = None) -> None:
+    """`python -m saas_testkit.infra.compose wait`."""
+    wiremock, admin = _parse_wait(sys.argv[1:] if argv is None else argv)
+    wait_for_stack(install_wiremock_catch_all=wiremock, ensure_admin_token=admin)
+
+
+def _parse_wait(argv: list[str]) -> tuple[bool, bool]:
+    parser = argparse.ArgumentParser(prog="python -m saas_testkit.infra.compose")
+    commands = parser.add_subparsers(dest="command", required=True)
+    wait = commands.add_parser("wait")
+    wait.add_argument("--wiremock-catch-all", action="store_true")
+    wait.add_argument("--ensure-admin-token", action="store_true")
+    namespace = parser.parse_args(argv)
+    if namespace.command != "wait":
+        raise RuntimeError(f"unknown command: {namespace.command}")
+    return _cli_flag(namespace, "wiremock_catch_all"), _cli_flag(namespace, "ensure_admin_token")
+
+
+def _cli_flag(namespace: argparse.Namespace, name: str) -> bool:
+    raw: object = vars(namespace).get(name)
+    if not isinstance(raw, bool):
+        raise RuntimeError(f"{name} must be a boolean")
+    return raw
+
+
+if __name__ == "__main__":
+    main()

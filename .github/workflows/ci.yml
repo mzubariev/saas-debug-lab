@@ -220,59 +220,16 @@ jobs:
       COMPOSE_PROJECT_NAME: infra
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Copy env examples
-        working-directory: ${{ github.workspace }}
-        run: |
-          git ls-files '*.env.example' | while read -r example; do
-            case "$example" in testing/*) continue ;; esac
-            cp "$example" "${example%.example}"
-          done
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
           cache-dependency-glob: testing/uv.lock
           python-version: "3.14"
       - run: uv sync --locked
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7.4.0
+      - uses: ./.github/actions/test-stack
         with:
-          files: |
-            infra/docker-compose.yml
-            infra/docker-compose.test.yml
-          targets: |
-            migrations
-            auth-service
-            task-service
-            webhook-receiver
-            webhook-dispatcher
-            external-service-simulator
-            notification-worker
-            scheduler-worker
-            api-gateway
-            frontend
-          load: true
-          provenance: false
-          allow: fs.read=*
-          set: |
-            *.cache-from=type=gha
-      - name: Start the test stack
-        working-directory: ${{ github.workspace }}/infra
-        run: |
-          mapfile -t services < <(grep -vE '^(#|[[:space:]]*$)' test-stack.services)
-          docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --no-build --remove-orphans "${services[@]}"
-      - name: Wait until each service kind is ready
-        run: |
-          uv run python - <<'PY'
-          from saas_testkit.adapters.wiremock import WireMockSink
-          from saas_testkit.infra import Stack, ensure_admin_token
-          from saas_testkit.infra.compose import _postgres_ready, _require, _wait_ready, _wait_until
-
-          _wait_until(_postgres_ready, "postgres")
-          _require("up", "-d", "--force-recreate", "--no-deps", "migrations", timeout=180)
-          _wait_ready()
-          WireMockSink("http://127.0.0.1:8089").install_catch_all()
-          ensure_admin_token(Stack(base_url="http://127.0.0.1:8001", nginx_url="http://127.0.0.1", owned=False))
-          PY
+          install-wiremock-catch-all: true
+          ensure-admin-token: true
       - name: Smoke gate
         run: SMOKE_BASE_URL=http://127.0.0.1 uv run pytest tests/smoke -n 0 -q
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -331,13 +288,6 @@ jobs:
       COMPOSE_PROJECT_NAME: infra
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Copy env examples
-        working-directory: ${{ github.workspace }}
-        run: |
-          git ls-files '*.env.example' | while read -r example; do
-            case "$example" in testing/*) continue ;; esac
-            cp "$example" "${example%.example}"
-          done
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
@@ -355,44 +305,9 @@ jobs:
         run: uv run playwright install --with-deps chromium
       - if: steps.pw-cache.outputs.cache-hit == 'true'
         run: uv run playwright install-deps chromium
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7.4.0
+      - uses: ./.github/actions/test-stack
         with:
-          files: |
-            infra/docker-compose.yml
-            infra/docker-compose.test.yml
-          targets: |
-            migrations
-            auth-service
-            task-service
-            webhook-receiver
-            webhook-dispatcher
-            external-service-simulator
-            notification-worker
-            scheduler-worker
-            api-gateway
-            frontend
-          load: true
-          provenance: false
-          allow: fs.read=*
-          set: |
-            *.cache-from=type=gha
-      - name: Start the test stack
-        working-directory: ${{ github.workspace }}/infra
-        run: |
-          mapfile -t services < <(grep -vE '^(#|[[:space:]]*$)' test-stack.services)
-          docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --no-build --remove-orphans "${services[@]}"
-      - name: Wait until each service kind is ready
-        run: |
-          uv run python - <<'PY'
-          from saas_testkit.adapters.wiremock import WireMockSink
-          from saas_testkit.infra.compose import _postgres_ready, _require, _wait_ready, _wait_until
-
-          _wait_until(_postgres_ready, "postgres")
-          _require("up", "-d", "--force-recreate", "--no-deps", "migrations", timeout=180)
-          _wait_ready()
-          WireMockSink("http://127.0.0.1:8089").install_catch_all()
-          PY
+          install-wiremock-catch-all: true
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: testing/.test_durations
