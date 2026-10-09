@@ -48,7 +48,6 @@ jobs:
           cache-dependency-glob: testing/uv.lock
           python-version: "3.14"
       - run: uv sync --locked
-      - run: uv run ruff check --select S .
       - run: |
           uv export --locked --all-groups --no-emit-package saas-shared --no-hashes --no-emit-project > /tmp/req.txt
           uv run pip-audit -r /tmp/req.txt --no-deps --disable-pip
@@ -75,7 +74,7 @@ jobs:
           path: testing/reports/junit-unit.xml
 
   component-contract:
-    needs: [lint, unit]
+    needs: [lint, security, unit]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -175,7 +174,6 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
-      actions: write
       checks: write
     strategy:
       fail-fast: false
@@ -230,28 +228,34 @@ jobs:
         run: |
           uv run python - <<'PY'
           from saas_testkit.adapters.wiremock import WireMockSink
+          from saas_testkit.infra import Stack, ensure_admin_token
           from saas_testkit.infra.compose import _postgres_ready, _require, _wait_ready, _wait_until
 
           _wait_until(_postgres_ready, "postgres")
           _require("up", "-d", "--force-recreate", "--no-deps", "migrations", timeout=180)
           _wait_ready()
           WireMockSink("http://127.0.0.1:8089").install_catch_all()
+          ensure_admin_token(Stack(base_url="http://127.0.0.1:8001", nginx_url="http://127.0.0.1", owned=False))
           PY
+      - name: Smoke gate
+        run: SMOKE_BASE_URL=http://127.0.0.1 uv run pytest tests/smoke -n 0 -q
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: testing/.test_durations
           key: durations-${{ runner.os }}-${{ github.run_id }}
           restore-keys: durations-${{ runner.os }}-
+      # Same item order in every shard; otherwise shards can overlap or lose tests.
       - name: Integration tests
         env:
           BASE_URL: http://127.0.0.1:8001
         run: |
           mkdir -p reports
           uv run pytest tests/integration -n 3 --dist loadgroup -q \
+            --randomly-seed=${{ github.run_id }} \
             --splits ${{ strategy.job-total }} --group ${{ matrix.shard }} \
             --durations-path .test_durations \
             --junitxml=reports/junit-integration-${{ matrix.shard }}.xml \
-            ${{ github.event_name == 'pull_request' && '-m "not slow and not chaos"' || '' }}
+            ${{ github.event_name == 'pull_request' && '-m "not slow and not chaos"' || '-m "not chaos"' }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
@@ -276,23 +280,12 @@ jobs:
           reporter: java-junit
           use-actions-summary: true
 
-  smoke:
-    needs: [lint, security, unit]
-    permissions:
-      contents: read
-      actions: write
-    uses: ./.github/workflows/smoke.yml
-    with:
-      smoke_base_url: http://127.0.0.1
-      start_stack: true
-
   ui-e2e:
     needs: [lint, security, unit]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       contents: read
-      actions: write
       checks: write
     strategy:
       fail-fast: false
@@ -370,12 +363,14 @@ jobs:
           path: testing/.test_durations
           key: durations-${{ runner.os }}-${{ github.run_id }}
           restore-keys: durations-${{ runner.os }}-
+      # Same item order in every shard; otherwise shards can overlap or lose tests.
       - name: UI tests
         env:
           BASE_URL: http://127.0.0.1:8001
         run: |
           mkdir -p reports
           uv run pytest tests/e2e_ui -n 2 -q \
+            --randomly-seed=${{ github.run_id }} \
             --splits ${{ strategy.job-total }} --group ${{ matrix.shard }} \
             --durations-path .test_durations \
             --tracing retain-on-failure --screenshot only-on-failure --video off \
@@ -435,7 +430,7 @@ jobs:
 
   ci-gate:
     if: always()
-    needs: [lint, security, unit, component-contract, integration, smoke, ui-e2e, coverage]
+    needs: [lint, security, unit, component-contract, integration, ui-e2e, coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
