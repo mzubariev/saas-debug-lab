@@ -49,6 +49,7 @@ services:
       - "9093:9093"
 
   api-gateway:
+    image: infra-api-gateway:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -61,6 +62,7 @@ services:
       - "8001:8000"
 
   auth-service:
+    image: infra-auth-service:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -74,6 +76,7 @@ services:
       REDIS_URL: redis://redis:6379/1
 
   task-service:
+    image: infra-task-service:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -87,6 +90,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 
   webhook-receiver:
+    image: infra-webhook-receiver:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -94,6 +98,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 
   webhook-dispatcher:
+    image: infra-webhook-dispatcher:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -109,6 +114,7 @@ services:
         condition: service_started
 
   notification-worker:
+    image: infra-notification-worker:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -122,6 +128,7 @@ services:
       - "9102:9100"
 
   external-service-simulator:
+    image: infra-external-service-simulator:latest
     # localhost inside this container is not the gateway. The lab file uses that host URL.
     env_file: !reset []
     environment:
@@ -130,6 +137,7 @@ services:
       INTEGRATION_SERVICE_WEBHOOK_URL: http://api-gateway:8000/webhooks/inbound
 
   scheduler-worker:
+    image: infra-scheduler-worker:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -152,6 +160,7 @@ services:
         condition: service_started
 
   migrations:
+    image: infra-migrations:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -162,6 +171,7 @@ services:
       POSTGRES_PASSWORD: admin
 
   frontend:
+    image: infra-frontend:latest
     build:
       context: ..
       dockerfile: frontend/Dockerfile
