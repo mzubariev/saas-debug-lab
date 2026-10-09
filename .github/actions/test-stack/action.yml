@@ -1,0 +1,76 @@
+# The caller must actions/checkout and astral-sh/setup-uv, then `uv sync --locked`,
+# before this action. Composite `run` steps do not inherit defaults.run.
+name: Test stack
+description: Copy env files, load images from the GHA cache, start the test stack, and wait until it is ready.
+inputs:
+  install-wiremock-catch-all:
+    description: Boolean. Install the WireMock catch-all stub on port 8089.
+    required: false
+    default: "false"
+  ensure-admin-token:
+    description: Boolean. Seed the admin user and write the session token.
+    required: false
+    default: "false"
+  start:
+    description: Boolean. Skip every step when false.
+    required: false
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - name: Copy env examples
+      if: ${{ inputs.start == 'true' }}
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        git ls-files '*.env.example' | while read -r example; do
+          case "$example" in testing/*) continue ;; esac
+          cp "$example" "${example%.example}"
+        done
+    - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      if: ${{ inputs.start == 'true' }}
+    - uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7.4.0
+      if: ${{ inputs.start == 'true' }}
+      with:
+        files: |
+          infra/docker-compose.yml
+          infra/docker-compose.test.yml
+        targets: |
+          migrations
+          auth-service
+          task-service
+          webhook-receiver
+          webhook-dispatcher
+          external-service-simulator
+          notification-worker
+          scheduler-worker
+          api-gateway
+          frontend
+        load: true
+        provenance: false
+        allow: fs.read=*
+        set: |
+          *.cache-from=type=gha
+    - name: Start the test stack
+      if: ${{ inputs.start == 'true' }}
+      shell: bash
+      working-directory: ${{ github.workspace }}/infra
+      run: |
+        mapfile -t services < <(grep -vE '^(#|[[:space:]]*$)' test-stack.services)
+        docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --no-build --remove-orphans "${services[@]}"
+    - name: Wait until each service kind is ready
+      if: ${{ inputs.start == 'true' }}
+      shell: bash
+      working-directory: ${{ github.workspace }}/testing
+      env:
+        WIREMOCK: ${{ inputs.install-wiremock-catch-all }}
+        ADMIN_TOKEN: ${{ inputs.ensure-admin-token }}
+      run: |
+        flags=()
+        if [[ "$WIREMOCK" == "true" ]]; then
+          flags+=(--wiremock-catch-all)
+        fi
+        if [[ "$ADMIN_TOKEN" == "true" ]]; then
+          flags+=(--ensure-admin-token)
+        fi
+        uv run python -m saas_testkit.infra.compose wait "${flags[@]}"
