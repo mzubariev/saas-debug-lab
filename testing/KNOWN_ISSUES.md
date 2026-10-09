@@ -85,3 +85,4 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P9.1: `--randomly-seed=run_id` for sharded jobs.
 - P9.1: `component-contract` now needs `security`.
 - P9: compose `env_file` paths are gitignored, so CI copies each tracked `.env.example` (except `testing/`) to `.env` before `up`. Readiness is the compose helpers; `stack_up` rebuilds and returns early when `BASE_URL` is set.
+- P9.1: `docker-compose.test.yml` clears every base `env_file` with `!reset []` and sets required variables in `environment`. `OTLP_ENDPOINT` and `SENTRY_DSN` come from one anchor, both empty. task-service and migrations use `admin` / `saas` because those examples leave the database fields blank. Postgres in the overlay uses the same credentials, and its healthcheck does not interpolate `${POSTGRES_USER}`.
