@@ -54,6 +54,10 @@ Repo root, via `testing/testing.mk`. `TEST_PG_URL`, `TEST_REDIS_URL`, and `TEST_
 
 `tests/integration/conftest.py`. The controller calls `stack_up` (`BASE_URL` and `NGINX_URL` when the stack is already up) and `ensure_admin_token` (FileLock, `testing/.stack/session.json`, refresh when `exp` is close). Workers read that file and do not log in. `KEEP_STACK=1` skips `down -v`.
 
+`wait_for_stack` checks postgres, force-recreates migrations, and waits until each service kind is ready. `install_wiremock_catch_all` stubs `:8089`; `ensure_admin_token` logs in for `Stack(base_url="http://127.0.0.1:8001", nginx_url="http://127.0.0.1", owned=False)`.
+
+`python -m saas_testkit.infra.compose wait` runs that. `--wiremock-catch-all` and `--ensure-admin-token` turn the two options on.
+
 - `base_url`: gateway, `http://127.0.0.1:8001` unless `BASE_URL` is set.
 - `nginx_url`: `NGINX_URL` or `http://127.0.0.1`.
 - `admin_token`: seeded `admin` access token.

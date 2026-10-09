@@ -77,6 +77,11 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P8.1: the gateway keeps the prefix (`/auth/{path}` → auth `/auth/{path}`), so auth, task, and webhook `/health` are not on the edge. The parametrized health check is `/health` (gateway) and `/external/health` (simulator via nginx). Login and create/read cover auth and task. Webhook-receiver has no published health route.
 - P8.2: a Grafana SM scripted check is one file and cannot import local modules. `testing/synthetic/k6/critical_path.js` copies login and the request id; it does not import `load-tests/lib/helpers.js`. Lab compose does not publish Postgres, so `seed_synthetic_user` inserts from the `auth-service` container when port 5433 refuses the connection.
 - P9: the `0 2 * * *` cron moved from `ci.yml` to `nightly.yml`. `ci.yml` keeps `SCHEMA_EXAMPLES` at 40.
-- P9: `smoke.yml` input `start_stack` builds on the smoke runner. A `workflow_call` job cannot see the integration job's Docker. CI passes `http://127.0.0.1` (nginx).
-- P9: a pull request runs integration with `-m "not slow and not chaos"`. A push to main runs those tests. Nightly runs the markers, firefox/webkit, 500 Schemathesis examples, and `--count 5`.
+- P9: `smoke.yml` input `start_stack` builds on the smoke runner. A `workflow_call` job cannot see another job's Docker.
+- P9: a pull request runs integration with `-m "not slow and not chaos"`. Nightly runs firefox/webkit, 500 Schemathesis examples, and `--count 5`.
+- P9.1: smoke runs as a step inside `integration` (`smoke.yml` kept for post-deploy).
+- P9.1: the single `build` job is the only cache writer.
+- P9.1: `chaos` only in nightly, `slow` also on main.
+- P9.1: `--randomly-seed=run_id` for sharded jobs.
+- P9.1: `component-contract` now needs `security`.
 - P9: compose `env_file` paths are gitignored, so CI copies each tracked `.env.example` (except `testing/`) to `.env` before `up`. Readiness is the compose helpers; `stack_up` rebuilds and returns early when `BASE_URL` is set.
