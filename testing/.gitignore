@@ -6,4 +6,5 @@
 htmlcov/
 reports/
 .stack/
+synthetic/.env
 *.egg-info/

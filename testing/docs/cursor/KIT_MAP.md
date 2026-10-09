@@ -121,6 +121,10 @@ One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_
 
 `.github/workflows/smoke.yml`: `workflow_call` and `workflow_dispatch`, input `smoke_base_url`. The caller starts the stack.
 
+## P8.2 synthetic
+
+`seed_synthetic_user` inserts `SYNTHETIC_USER` with role `user` (`ON CONFLICT DO NOTHING`). `_seed` calls it when `SYNTHETIC_USER` and `SYNTHETIC_PASSWORD` are set. The published test Postgres is tried first; a refused connection inserts from the `auth-service` container. The check itself is `testing/synthetic/k6/critical_path.js` (no Python suite).
+
 ## P5 CI
 
 `.github/workflows/ci.yml`: `lint`, `security`, `unit`, `component-contract` (matrix `task-service`, `auth-service`, `api-gateway`, `webhook-receiver`, `external-service-simulator`), `ci-gate`. `open_app_lifespan` enters a service lifespan once per process.

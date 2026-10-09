@@ -1,0 +1,19 @@
+# infra/docker-compose.yml declares no network, so Compose names it infra_default
+# from the infra/ directory. The agent joins that network and reaches nginx at
+# http://nginx. No ports are published: it only dials out to Grafana Cloud and nginx.
+services:
+  synthetic-monitoring-agent:
+    image: grafana/synthetic-monitoring-agent:v0.66.1
+    env_file:
+      - .env
+    command:
+      - --api-server-address=${API_SERVER}
+      - --api-token=${API_TOKEN}
+      - --verbose=true
+    networks:
+      - lab
+
+networks:
+  lab:
+    name: infra_default
+    external: true

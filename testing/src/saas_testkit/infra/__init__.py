@@ -10,6 +10,7 @@ from saas_testkit.infra.compose import (
     ensure_admin_token,
     read_session,
     release_stack,
+    seed_synthetic_user,
     stack_down,
     stack_up,
 )
@@ -62,6 +63,7 @@ __all__ = [
     "read_session",
     "redis_url_for",
     "release_stack",
+    "seed_synthetic_user",
     "stack_down",
     "stack_up",
     "start_or_attach_infra",

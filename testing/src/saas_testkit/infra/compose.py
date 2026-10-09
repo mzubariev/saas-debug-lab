@@ -295,6 +295,85 @@ def _seed() -> None:
             """,
             ("user", user_hash, "user"),
         )
+    username = os.environ.get("SYNTHETIC_USER", "").strip()
+    password = os.environ.get("SYNTHETIC_PASSWORD", "").strip()
+    if username and password:
+        seed_synthetic_user()
+
+
+def seed_synthetic_user() -> None:
+    """Insert `SYNTHETIC_USER`. An existing row stays.
+
+    The test stack is reached on its published port. Lab compose does not publish Postgres,
+    so a refused connection inserts from the `auth-service` container, which is on that network.
+    """
+    username = os.environ.get("SYNTHETIC_USER", "").strip()
+    password = os.environ.get("SYNTHETIC_PASSWORD", "")
+    if username == "" or password.strip() == "":
+        raise RuntimeError("SYNTHETIC_USER and SYNTHETIC_PASSWORD are required")
+    hashed = _HASHER.hash(password)
+    try:
+        _insert_user(username, hashed, _database_url())
+    except psycopg.OperationalError:
+        _insert_user_in_container(username, hashed)
+
+
+def _insert_user(username: str, hashed: str, database_url: str) -> None:
+    with psycopg.connect(database_url, autocommit=True) as conn:
+        conn.execute(
+            """
+            INSERT INTO users (username, hashed_password, role)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (username) DO NOTHING
+            """,
+            (username, hashed, "user"),
+        )
+
+
+def _insert_user_in_container(username: str, hashed: str) -> None:
+    """Parameterized insert from `auth-service`, which can reach Postgres on the compose network."""
+    script = """
+import asyncio
+import json
+import os
+import sys
+
+import asyncpg
+
+
+async def main() -> None:
+    row = json.loads(sys.stdin.read())
+    conn = await asyncpg.connect(
+        user=os.environ["POSTGRES_USER"],
+        password=os.environ["POSTGRES_PASSWORD"],
+        host=os.environ["POSTGRES_HOST"],
+        port=int(os.environ.get("POSTGRES_PORT", "5432")),
+        database=os.environ["POSTGRES_DB"],
+    )
+    try:
+        await conn.execute(
+            "INSERT INTO users (username, hashed_password, role) "
+            "VALUES ($1, $2, 'user') ON CONFLICT (username) DO NOTHING",
+            row["username"],
+            row["hashed"],
+        )
+    finally:
+        await conn.close()
+
+
+asyncio.run(main())
+"""
+    command = ["docker", "exec", "-i", "auth-service", "python", "-c", script]
+    completed = subprocess.run(  # noqa: S603
+        command,
+        input=json.dumps({"username": username, "hashed": hashed}),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise RuntimeError(detail or "docker exec auth-service failed")
 
 
 def _login(base_url: str) -> str:
