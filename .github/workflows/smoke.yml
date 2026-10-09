@@ -49,6 +49,22 @@ jobs:
         with:
           start: ${{ inputs.start_stack }}
           ensure-admin-token: true
-      - run: uv run pytest tests/smoke -n 0 -q
+      - run: uv run pytest tests/smoke -n 0 -q --junitxml=reports/junit-smoke.xml
         env:
           SMOKE_BASE_URL: ${{ inputs.smoke_base_url }}
+      - name: Compose logs
+        if: ${{ failure() && inputs.start_stack }}
+        working-directory: ${{ github.workspace }}/infra
+        run: |
+          mkdir -p "${{ github.workspace }}/testing/reports"
+          docker compose -f docker-compose.yml -f docker-compose.test.yml logs --no-color > "${{ github.workspace }}/testing/reports/compose.log"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ failure() && inputs.start_stack }}
+        with:
+          name: smoke-logs
+          path: testing/reports/compose.log
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: junit-smoke
+          path: testing/reports/junit-smoke.xml
