@@ -9,6 +9,11 @@
 # Frontend uses the Dockerfile `preview` stage (`vite build` then `vite preview`).
 # Workers have no HTTP app; the test kit checks their metrics port.
 # nginx is not modified. Host ports below are for seeding, KafkaEventReader, and readiness.
+# No service reads a gitignored .env. Required variables are set below.
+
+x-telemetry: &telemetry
+  OTLP_ENDPOINT: ""
+  SENTRY_DSN: ""
 
 services:
   postgres:
@@ -16,6 +21,11 @@ services:
     # because this Compose version appends volumes and cannot drop postgres_data.
     environment:
       PGDATA: /tmp/pgdata
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: saas
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d saas"]
     command: >
       postgres
       -c shared_preload_libraries=pg_stat_statements
@@ -39,11 +49,57 @@ services:
       - "9093:9093"
 
   api-gateway:
+    env_file: !reset []
+    environment:
+      <<: *telemetry
+      SERVICE_NAME: api-gateway
+      JWT_SECRET: dev-secret-change-in-production
+      AUTH_SERVICE_URL: http://auth-service:8000
+      TASK_SERVICE_URL: http://task-service:8000
+      INTEGRATION_SERVICE_URL: http://webhook-receiver:8000
     ports:
       - "8001:8000"
 
-  webhook-dispatcher:
+  auth-service:
+    env_file: !reset []
     environment:
+      <<: *telemetry
+      SERVICE_NAME: auth-service
+      JWT_SECRET: dev-secret-change-in-production
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: saas
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      REDIS_URL: redis://redis:6379/1
+
+  task-service:
+    env_file: !reset []
+    environment:
+      <<: *telemetry
+      SERVICE_NAME: task-service
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: saas
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+  webhook-receiver:
+    env_file: !reset []
+    environment:
+      <<: *telemetry
+      SERVICE_NAME: webhook-receiver
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+  webhook-dispatcher:
+    env_file: !reset []
+    environment:
+      <<: *telemetry
+      SERVICE_NAME: webhook-dispatcher
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      CONSUMER_GROUP: webhook-dispatcher
       WEBHOOK_URL: http://wiremock:8080/external/receive-webhook
       WEBHOOK_BACKOFF_BASE: "0.2"
     ports:
@@ -53,16 +109,39 @@ services:
         condition: service_started
 
   notification-worker:
+    env_file: !reset []
+    environment:
+      <<: *telemetry
+      SERVICE_NAME: notification-worker
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SMTP_HOST: toxiproxy
+      SMTP_PORT: "11025"
+      EMAIL_FROM: notifications@saas-debug-lab.local
+      EMAIL_TO: your-uuid@emailhook.site
     ports:
       - "9102:9100"
 
   external-service-simulator:
     # localhost inside this container is not the gateway. The lab file uses that host URL.
+    env_file: !reset []
     environment:
+      <<: *telemetry
+      SERVICE_NAME: external-service-simulator
       INTEGRATION_SERVICE_WEBHOOK_URL: http://api-gateway:8000/webhooks/inbound
 
   scheduler-worker:
+    env_file: !reset []
     environment:
+      <<: *telemetry
+      SERVICE_NAME: scheduler-worker
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: saas
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      CELERY_BROKER_URL: redis://redis:6379/2
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
       WEBHOOK_URL: http://wiremock:8080/external/receive-webhook
       DLQ_REPLAY_INTERVAL_SECONDS: "5"
       CLEANUP_INTERVAL_SECONDS: "10"
@@ -71,6 +150,16 @@ services:
     depends_on:
       wiremock:
         condition: service_started
+
+  migrations:
+    env_file: !reset []
+    environment:
+      <<: *telemetry
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: saas
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
 
   frontend:
     build:
