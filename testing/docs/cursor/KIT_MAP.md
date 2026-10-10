@@ -135,4 +135,4 @@ One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_
 
 ## P9 CI
 
-`.github/workflows/ci.yml` also runs `integration` and `ui-e2e` (`shard: [1]`, `pytest-split --splits` / `--group`, cached `.test_durations`), `smoke` (`smoke.yml` with `start_stack`), and `coverage` (`coverage combine`). `ci-gate` needs all of them. `.github/workflows/nightly.yml`: `schemathesis` (`SCHEMA_EXAMPLES=500`), `stack` (`slow`/`chaos`, `--count 5`, `--store-durations`), `browsers` (`firefox`, `webkit`).
+`.github/workflows/ci.yml` also runs `integration` and `ui-e2e` (`shard: [1]`, `pytest-split --splits` / `--group`, cached `.test_durations`), `smoke` (`smoke.yml` with `start_stack`), and `coverage` (`coverage combine`). `ci-gate` needs all of them. `.github/workflows/nightly.yml`: `schemathesis` (`SCHEMA_EXAMPLES=500`), `stack` (`slow`/`chaos`, `--count 5`, `--store-durations`), `browsers` (`firefox`, `webkit`). The flaky pass and the duration refresh run `tests/integration` and `tests/e2e_ui` in separate pytest processes. The UI flaky pass uses `--reruns 1`.

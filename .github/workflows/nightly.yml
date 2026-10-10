@@ -165,13 +165,17 @@ jobs:
       - name: flaky pass
         if: ${{ !cancelled() }}
         run: |
-          uv run pytest tests/integration tests/e2e_ui -m "not slow and not chaos" --count 5 -n 2 --dist loadgroup -q \
-            --junitxml=reports/junit-nightly-flaky-pass.xml
+          uv run pytest tests/integration -m "not slow and not chaos" --count 5 -n 2 --dist loadgroup -q \
+            --junitxml=reports/junit-nightly-flaky-pass-integration.xml
+          uv run pytest tests/e2e_ui -m "not slow and not chaos" --count 5 --reruns 1 -n 2 -q \
+            --junitxml=reports/junit-nightly-flaky-pass-ui.xml
       - name: Refresh .test_durations
         if: ${{ !cancelled() }}
         run: |
-          uv run pytest tests/integration tests/e2e_ui --store-durations --durations-path .test_durations -n 2 --dist loadgroup -q \
-            --junitxml=reports/junit-nightly-refresh-durations.xml
+          uv run pytest tests/integration --store-durations --durations-path .test_durations -n 2 --dist loadgroup -q \
+            --junitxml=reports/junit-nightly-refresh-durations-integration.xml
+          uv run pytest tests/e2e_ui --store-durations --durations-path .test_durations -n 2 -q \
+            --junitxml=reports/junit-nightly-refresh-durations-ui.xml
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: ${{ !cancelled() && hashFiles('testing/.test_durations') != '' }}
         with:
@@ -200,8 +204,10 @@ jobs:
           name: junit-nightly
           path: |
             testing/reports/junit-nightly-slow-and-chaos.xml
-            testing/reports/junit-nightly-flaky-pass.xml
-            testing/reports/junit-nightly-refresh-durations.xml
+            testing/reports/junit-nightly-flaky-pass-integration.xml
+            testing/reports/junit-nightly-flaky-pass-ui.xml
+            testing/reports/junit-nightly-refresh-durations-integration.xml
+            testing/reports/junit-nightly-refresh-durations-ui.xml
 
   browsers:
     needs: [build]
