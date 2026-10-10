@@ -91,9 +91,7 @@ def stack_up() -> Stack:
     _stack_dir().mkdir(parents=True, exist_ok=True)
     with FileLock(_lock_path(), timeout=_BUILD_TIMEOUT_S):
         _require("up", "-d", "--build", "--remove-orphans", *_services(), timeout=_BUILD_TIMEOUT_S)
-        _wait_until(_postgres_ready, "postgres")
-        _require("up", "-d", "--force-recreate", "--no-deps", "migrations", timeout=180)
-        _wait_ready()
+        _bring_up_migrations(time.monotonic(), {})
     return Stack(base_url=f"http://127.0.0.1:{_GATEWAY_PORT}", nginx_url=nginx, owned=True)
 
 
@@ -131,13 +129,16 @@ def wait_for_stack(
     ensure_admin_token: bool = False,
 ) -> None:
     """Postgres, migrations, then each service kind. The stack is already started."""
-    _wait_until(_postgres_ready, "postgres")
-    _require("up", "-d", "--force-recreate", "--no-deps", "migrations", timeout=180)
-    _wait_ready()
-    if install_wiremock_catch_all:
-        WireMockSink("http://127.0.0.1:8089").install_catch_all()
-    if ensure_admin_token:
-        _ensure_admin_token()
+    origin = time.monotonic()
+    ready: dict[str, float] = {}
+    try:
+        _bring_up_migrations(origin, ready)
+        if install_wiremock_catch_all:
+            WireMockSink("http://127.0.0.1:8089").install_catch_all()
+        if ensure_admin_token:
+            _ensure_admin_token()
+    finally:
+        _append_boot_phases(ready, time.monotonic() - origin)
 
 
 def _ensure_admin_token() -> None:
@@ -172,17 +173,90 @@ def _services() -> tuple[str, ...]:
     return tuple(names)
 
 
-def _wait_ready() -> None:
+def _bring_up_migrations(origin: float, ready: dict[str, float]) -> None:
+    _wait_until(_postgres_ready, "postgres")
+    _require("up", "-d", "--force-recreate", "--no-deps", "migrations", timeout=180)
+    _wait_ready(origin, ready)
+
+
+def _wait_ready(origin: float, ready: dict[str, float]) -> None:
     pending = _not_ready()
+    _note_ready(pending, origin, ready)
     deadline = time.monotonic() + _READY_TIMEOUT_S
     while pending and time.monotonic() < deadline:
         time.sleep(2)
         pending = _not_ready()
+        _note_ready(pending, origin, ready)
     if not pending:
         return
     logs = _compose("logs", "--tail", "100", *pending, timeout=60)
     detail = (logs.stdout + logs.stderr).strip()
     raise RuntimeError(f"not ready after {_READY_TIMEOUT_S:.0f}s: {', '.join(pending)}\n{detail}")
+
+
+def _note_ready(pending: tuple[str, ...], origin: float, ready: dict[str, float]) -> None:
+    elapsed = time.monotonic() - origin
+    waiting = set(pending)
+    for name in _readiness_names():
+        if name not in waiting and name not in ready:
+            ready[name] = elapsed
+
+
+def _readiness_names() -> tuple[str, ...]:
+    names = ["migrations"]
+    names.extend(name for name, _url in _FASTAPI_HTTP)
+    names.extend(_FASTAPI_EXEC)
+    names.extend(name for name, _url in _HTTP)
+    names.extend(name for name, _port in _WORKERS)
+    names.extend(name for name, _port in _TCP)
+    return tuple(names)
+
+
+def _append_boot_phases(ready: dict[str, float], wait_s: float) -> None:
+    raw = os.environ.get("BOOT_PHASES", "").strip()
+    if not raw:
+        return
+    lines: list[str] = []
+    for name in _readiness_names():
+        if name in ready:
+            lines.append(f"{name}\t{ready[name]:.3f}\n")
+    lines.append(f"wait\t{wait_s:.3f}\n")
+    with Path(raw).open("a") as handle:
+        handle.writelines(lines)
+
+
+def write_boot_summary(phases_path: Path, summary_path: Path) -> None:
+    """Append the stack-boot table to the GitHub job summary."""
+    rows: list[tuple[str, float]] = []
+    for line in phases_path.read_text().splitlines():
+        name, raw = line.split("\t", 1)
+        rows.append((name, float(raw)))
+    with summary_path.open("a") as handle:
+        handle.write(_boot_table(rows))
+
+
+def _boot_table(rows: list[tuple[str, float]]) -> str:
+    by_name = dict(rows)
+    total = (
+        by_name.get("image build/pull", 0.0)
+        + by_name.get("compose up", 0.0)
+        + by_name.get("wait", 0.0)
+    )
+    lines = [
+        "### Stack boot",
+        "",
+        "| Phase | Wall time |",
+        "| --- | --- |",
+    ]
+    for name, seconds in rows:
+        if name == "wait":
+            continue
+        lines.append(f"| {name} | {seconds:.1f}s |")
+    lines.append(f"| total | {total:.1f}s |")
+    lines.append("")
+    lines.append("Total is image build/pull + compose up + wait. Service rows sit inside wait.")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def _not_ready() -> tuple[str, ...]:

@@ -14,6 +14,7 @@ from saas_testkit.infra.compose import (
     stack_down,
     stack_up,
     wait_for_stack,
+    write_boot_summary,
 )
 from saas_testkit.infra.containers import (
     KAFKA_TOPICS,
@@ -72,4 +73,5 @@ __all__ = [
     "wait_for_stack",
     "worker_database_name",
     "worker_index",
+    "write_boot_summary",
 ]
