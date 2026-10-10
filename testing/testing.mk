@@ -12,6 +12,8 @@ export TEST_PG_URL TEST_REDIS_URL TEST_KAFKA_BOOTSTRAP
 
 LAYER ?= unit
 UV_RUN ?= uv run
+# `saas_testkit.infra.compose` passes `docker compose -p $(STACK_PROJECT)`.
+STACK_PROJECT := saas-test
 
 # xdist workers per layer for t-gate (override with N=...). Integration and UI share one stack, so they stay low.
 N_unit := auto
@@ -64,16 +66,16 @@ contracts-update:
 	cd $(TESTING_DIR) && uv run pytest tests/contract $(if $(SERVICE),--service $(SERVICE)) -q --update-contracts
 
 t-int:
-	cd $(TESTING_DIR) && uv run pytest tests/integration -n 3 --dist loadgroup -q
+	cd $(TESTING_DIR) && COMPOSE_PROJECT_NAME=$(STACK_PROJECT) uv run pytest tests/integration -n 3 --dist loadgroup -q
 
 stack-up:
-	cd $(TESTING_DIR) && uv run python -c "from saas_testkit.infra import stack_up; stack_up()"
+	cd $(TESTING_DIR) && COMPOSE_PROJECT_NAME=$(STACK_PROJECT) uv run python -c "from saas_testkit.infra import stack_up; stack_up()"
 
 stack-down:
-	cd $(TESTING_DIR) && uv run python -c "from saas_testkit.infra import stack_down; stack_down()"
+	cd $(TESTING_DIR) && COMPOSE_PROJECT_NAME=$(STACK_PROJECT) uv run python -c "from saas_testkit.infra import stack_down; stack_down()"
 
 t-ui:
-	cd $(TESTING_DIR) && uv run pytest tests/e2e_ui -n 2 -q --tracing retain-on-failure --screenshot only-on-failure --video off
+	cd $(TESTING_DIR) && COMPOSE_PROJECT_NAME=$(STACK_PROJECT) UI_URL=http://127.0.0.1:5174 uv run pytest tests/e2e_ui -n 2 -q --tracing retain-on-failure --screenshot only-on-failure --video off
 
 t-smoke:
 	cd $(TESTING_DIR) && uv run pytest tests/smoke -n 0 -q
@@ -96,6 +98,8 @@ t-gate:
 		if [ -z "$(SERVICE)" ]; then echo "t-gate LAYER=$(LAYER) needs SERVICE=<name> (one service per session)" >&2; exit 1; fi;; \
 	esac; \
 	cd $(TESTING_DIR); \
+	export COMPOSE_PROJECT_NAME=$(STACK_PROJECT); \
+	export UI_URL=http://127.0.0.1:5174; \
 	service_arg=""; \
 	if [ -n "$(SERVICE)" ]; then service_arg="--service $(SERVICE)"; fi; \
 	i=1; \

@@ -25,7 +25,7 @@ class KitSettings(BaseSettings):
     test_pg_url: str | None = None
     test_redis_url: str | None = None
     test_kafka_bootstrap: str | None = None
-    ui_url: str = "http://127.0.0.1:5173"
+    ui_url: str = "http://127.0.0.1:5174"
 
     @field_validator("infra", mode="before")
     @classmethod

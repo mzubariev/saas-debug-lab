@@ -1,4 +1,4 @@
-"""MailHog inbox. The integration stack publishes the API on :8025."""
+"""MailHog inbox. The integration stack publishes the API on :8026."""
 
 from typing import cast
 

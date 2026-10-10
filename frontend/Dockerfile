@@ -13,6 +13,10 @@ EXPOSE 5173
 # Production-style target for the test stack. Not the default image stage.
 FROM base AS preview
 
+# Baked into the bundle. Unset keeps the lab default (nginx on :80).
+ARG VITE_API_URL=http://localhost
+ENV VITE_API_URL=$VITE_API_URL
+
 RUN npm run build
 
 CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "5173"]

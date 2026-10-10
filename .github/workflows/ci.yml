@@ -219,7 +219,7 @@ jobs:
       matrix:
         shard: [1]
     env:
-      COMPOSE_PROJECT_NAME: infra
+      COMPOSE_PROJECT_NAME: saas-test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
@@ -233,7 +233,7 @@ jobs:
           install-wiremock-catch-all: true
           ensure-admin-token: true
       - name: Smoke gate
-        run: SMOKE_BASE_URL=http://127.0.0.1 uv run pytest tests/smoke -n 0 -q
+        run: SMOKE_BASE_URL=http://127.0.0.1:9080 UI_URL=http://127.0.0.1:5174 uv run pytest tests/smoke -n 0 -q
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: testing/.test_durations
@@ -242,7 +242,7 @@ jobs:
       # Same item order in every shard; otherwise shards can overlap or lose tests.
       - name: Integration tests
         env:
-          BASE_URL: http://127.0.0.1:8001
+          BASE_URL: http://127.0.0.1:8010
         run: |
           mkdir -p reports
           uv run pytest tests/integration -n 3 --dist loadgroup -q \
@@ -261,7 +261,7 @@ jobs:
         working-directory: ${{ github.workspace }}/infra
         run: |
           mkdir -p "${{ github.workspace }}/testing/reports"
-          docker compose -f docker-compose.yml -f docker-compose.test.yml logs --no-color > "${{ github.workspace }}/testing/reports/compose.log"
+          docker compose -p saas-test -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.test.ports.yml logs --no-color > "${{ github.workspace }}/testing/reports/compose.log"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
@@ -287,7 +287,8 @@ jobs:
       matrix:
         shard: [1]
     env:
-      COMPOSE_PROJECT_NAME: infra
+      COMPOSE_PROJECT_NAME: saas-test
+      UI_URL: http://127.0.0.1:5174
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
@@ -318,7 +319,7 @@ jobs:
       # Same item order in every shard; otherwise shards can overlap or lose tests.
       - name: UI tests
         env:
-          BASE_URL: http://127.0.0.1:8001
+          BASE_URL: http://127.0.0.1:8010
         run: |
           mkdir -p reports
           uv run pytest tests/e2e_ui -n 2 -q \
@@ -339,7 +340,7 @@ jobs:
         working-directory: ${{ github.workspace }}/infra
         run: |
           mkdir -p "${{ github.workspace }}/testing/reports"
-          docker compose -f docker-compose.yml -f docker-compose.test.yml logs --no-color > "${{ github.workspace }}/testing/reports/compose.log"
+          docker compose -p saas-test -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.test.ports.yml logs --no-color > "${{ github.workspace }}/testing/reports/compose.log"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:

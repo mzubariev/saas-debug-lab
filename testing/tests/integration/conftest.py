@@ -71,7 +71,7 @@ def lifecycle(client: httpx.AsyncClient, run_context: RunContext) -> TaskLifecyc
 @pytest.fixture
 async def events(worker_id: str) -> AsyncIterator[KafkaEventReader]:
     """Stack broker on the published external listener. One group per worker."""
-    reader = KafkaEventReader("127.0.0.1:9093", group_id=f"integration-{worker_id}-{uuid4().hex}")
+    reader = KafkaEventReader("127.0.0.1:9095", group_id=f"integration-{worker_id}-{uuid4().hex}")
     await reader.start(*KAFKA_TOPICS)
     try:
         yield reader
@@ -81,7 +81,7 @@ async def events(worker_id: str) -> AsyncIterator[KafkaEventReader]:
 
 @pytest.fixture
 def mail() -> MailHogInbox:
-    return MailHogInbox("http://127.0.0.1:8025")
+    return MailHogInbox("http://127.0.0.1:8026")
 
 
 @pytest.fixture
@@ -103,5 +103,5 @@ def delivery(events: KafkaEventReader) -> WebhookDelivery:
 @pytest.fixture
 async def simulator(run_context: RunContext) -> AsyncIterator[ExternalReceiver]:
     """Simulator on the published host port. It POSTs inbound events to the gateway."""
-    async with httpx.AsyncClient(base_url="http://127.0.0.1:8000", timeout=30) as http:
+    async with httpx.AsyncClient(base_url="http://127.0.0.1:8002", timeout=30) as http:
         yield ExternalReceiver(HttpSimulatorApi(http, run_context))

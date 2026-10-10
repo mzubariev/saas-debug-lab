@@ -29,6 +29,7 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - `webhook-dispatcher` `WEBHOOK_BACKOFF_BASE` (default 1.0) and scheduler `DLQ_REPLAY_INTERVAL_SECONDS` (60) / `CLEANUP_INTERVAL_SECONDS` (300). `MAX_RETRIES` and `CLEANUP_COMPLETED_TASKS_MINUTES` (default 5) were already environment settings. Jitter stays 0..10% of the computed backoff.
 - Compose healthchecks for mailhog, postgres-exporter, kafka-exporter, and the frontend. FastAPI `/health` checks were already present. `infra/test-stack.services` lists the test stack. `frontend/Dockerfile` `preview` stage runs `vite build` then `vite preview`; the default stage stays `dev`. `infra/docker-compose.test.yml` selects `preview`.
 - `frontend/src/pages/LoginPage.tsx`: the login error `div` has `role="alert"` so `LoginPage` can use `get_by_role("alert")`. The message and the class are unchanged.
+- `frontend/Dockerfile` preview `VITE_API_URL` build-arg (default `http://localhost`) and api-gateway `CORS_ORIGINS` (default empty, lab origins unchanged). The test stack publishes the UI on 5174 and nginx on 9080, so the bundle and the browser origin are not the lab's.
 
 ## Decisions since the plan
 
@@ -90,3 +91,4 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P9.1: built services in the test overlay set `image: infra-<service>:latest`. Bake loads that tag. Compose, run from `infra/`, looks up the same name. Container names stay unprefixed.
 - P9.1: test nginx gets `extra_hosts` for `otel-collector`. `nginx.conf` resolves that name at startup, and the test stack does not run the collector.
 - P9-perf: CI writes stack-boot phase times to the job summary. `test-stack.services` does not start kafka-ui, exporters, or observability. Integration and ui-e2e bake with `cache-from: type=gha`.
+- P9-isolate: the test stack project is `saas-test`. `container_name` is reset. Compose 2.19 ignores `!override` and appends ports, so `docker-compose.test.yml` clears lab host ports with `!reset []` and `docker-compose.test.ports.yml` publishes nginx `9080`, frontend `5174` (`UI_URL`), simulator `8002`, mailhog `8026`, toxiproxy `8475`. Postgres `5434`, Redis `6381`, Kafka `9095`, gateway `8010`, and worker metrics `9111`–`9113` stay off the ports the current `infra` project already publishes. `compose.py` refuses to start when `COMPOSE_PROJECT_NAME` is set to anything else. The synthetic probe and `testing/synthetic/compose.probe.yml` still target the dev lab (`infra_default`).

@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     otlp_endpoint: str = "http://otel-collector:4317"
     log_level: str = "INFO"
     sentry_dsn: str = ""
+    # Comma-separated extras. Empty keeps the lab origins in main.py.
+    cors_origins: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",

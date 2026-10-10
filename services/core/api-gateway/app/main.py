@@ -28,13 +28,23 @@ setup_sentry_fastapi(
 # The frontend Vite dev server runs on port 5173 (a different origin from the
 # Nginx port 80 that the API lives behind).  CORS headers are required for the
 # browser to attach sentry-trace / baggage to cross-origin fetch() calls.
+# `CORS_ORIGINS` appends origins (the test stack publishes the UI on 5174).
+def _cors_origins() -> list[str]:
+    origins = [
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost",  # production-like Docker frontend
+        "http://127.0.0.1:5173",
+    ]
+    for item in settings.cors_origins.split(","):
+        origin = item.strip()
+        if origin and origin not in origins:
+            origins.append(origin)
+    return origins
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",   # Vite dev server
-        "http://localhost",        # production-like Docker frontend
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],           # must include sentry-trace and baggage

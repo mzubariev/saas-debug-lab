@@ -1,15 +1,24 @@
 # Test-stack override. Does not change `docker compose --profile core`.
 #
+# Project `saas-test` (the lab project is the directory name `infra`). `down -v` only
+# removes this project's volumes. `container_name` is reset. Compose 2.19 appends
+# port sequences and ignores `!override`, so lab host ports are cleared here with
+# `!reset []` and republished by `docker-compose.test.ports.yml` (nginx 9080,
+# frontend 5174 / `UI_URL`, simulator 8002, mailhog 8026, toxiproxy 8475).
+#
 # Explicit service list (not the whole core profile; exporters stay out):
 # infra/test-stack.services
 #
-#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build \
+#   docker compose -p saas-test -f docker-compose.yml -f docker-compose.test.yml \
+#     -f docker-compose.test.ports.yml up -d --build \
 #     $(grep -v '^#' test-stack.services)
 #
 # Frontend uses the Dockerfile `preview` stage (`vite build` then `vite preview`).
 # Workers have no HTTP app; the test kit checks their metrics port.
-# nginx is not modified. Host ports below are for seeding, KafkaEventReader, and readiness.
+# nginx.conf is not modified. Host ports below are for seeding, KafkaEventReader, and readiness.
 # No service reads a gitignored .env. Required variables are set below.
+
+name: saas-test
 
 x-telemetry: &telemetry
   OTLP_ENDPOINT: ""
@@ -17,6 +26,7 @@ x-telemetry: &telemetry
 
 services:
   postgres:
+    container_name: !reset null
     # ADR-18, plus the preload the init script needs. Data dir is tmpfs (PGDATA),
     # because this Compose version appends volumes and cannot drop postgres_data.
     environment:
@@ -38,17 +48,22 @@ services:
     tmpfs:
       - /tmp/pgdata:rw,nosuid,size=1g,mode=0777
     ports:
-      - "5433:5432"
+      - "5434:5432"
 
   redis:
+    container_name: !reset null
     ports:
-      - "6380:6379"
+      - "6381:6379"
 
   kafka:
+    container_name: !reset null
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9095
     ports:
-      - "9093:9093"
+      - "9095:9093"
 
   api-gateway:
+    container_name: !reset null
     image: infra-api-gateway:latest
     env_file: !reset []
     environment:
@@ -58,10 +73,12 @@ services:
       AUTH_SERVICE_URL: http://auth-service:8000
       TASK_SERVICE_URL: http://task-service:8000
       INTEGRATION_SERVICE_URL: http://webhook-receiver:8000
+      CORS_ORIGINS: http://127.0.0.1:5174,http://localhost:5174
     ports:
-      - "8001:8000"
+      - "8010:8000"
 
   auth-service:
+    container_name: !reset null
     image: infra-auth-service:latest
     env_file: !reset []
     environment:
@@ -76,6 +93,7 @@ services:
       REDIS_URL: redis://redis:6379/1
 
   task-service:
+    container_name: !reset null
     image: infra-task-service:latest
     env_file: !reset []
     environment:
@@ -90,6 +108,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 
   webhook-receiver:
+    container_name: !reset null
     image: infra-webhook-receiver:latest
     env_file: !reset []
     environment:
@@ -98,6 +117,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 
   webhook-dispatcher:
+    container_name: !reset null
     image: infra-webhook-dispatcher:latest
     env_file: !reset []
     environment:
@@ -108,12 +128,13 @@ services:
       WEBHOOK_URL: http://wiremock:8080/external/receive-webhook
       WEBHOOK_BACKOFF_BASE: "0.2"
     ports:
-      - "9101:9100"
+      - "9111:9100"
     depends_on:
       wiremock:
         condition: service_started
 
   notification-worker:
+    container_name: !reset null
     image: infra-notification-worker:latest
     env_file: !reset []
     environment:
@@ -125,9 +146,10 @@ services:
       EMAIL_FROM: notifications@saas-debug-lab.local
       EMAIL_TO: your-uuid@emailhook.site
     ports:
-      - "9102:9100"
+      - "9112:9100"
 
   external-service-simulator:
+    container_name: !reset null
     image: infra-external-service-simulator:latest
     # localhost inside this container is not the gateway. The lab file uses that host URL.
     env_file: !reset []
@@ -135,8 +157,10 @@ services:
       <<: *telemetry
       SERVICE_NAME: external-service-simulator
       INTEGRATION_SERVICE_WEBHOOK_URL: http://api-gateway:8000/webhooks/inbound
+    ports: !reset []
 
   scheduler-worker:
+    container_name: !reset null
     image: infra-scheduler-worker:latest
     env_file: !reset []
     environment:
@@ -154,12 +178,13 @@ services:
       DLQ_REPLAY_INTERVAL_SECONDS: "5"
       CLEANUP_INTERVAL_SECONDS: "10"
     ports:
-      - "9103:9100"
+      - "9113:9100"
     depends_on:
       wiremock:
         condition: service_started
 
   migrations:
+    container_name: !reset null
     image: infra-migrations:latest
     env_file: !reset []
     environment:
@@ -171,16 +196,30 @@ services:
       POSTGRES_PASSWORD: admin
 
   frontend:
+    container_name: !reset null
     image: infra-frontend:latest
     build:
       context: ..
       dockerfile: frontend/Dockerfile
       target: preview
+      args:
+        VITE_API_URL: http://127.0.0.1:9080
+    ports: !reset []
 
   nginx:
+    container_name: !reset null
     # nginx.conf resolves otel-collector at startup. The test stack does not run it.
     extra_hosts:
       - "otel-collector:127.0.0.1"
+    ports: !reset []
+
+  mailhog:
+    container_name: !reset null
+    ports: !reset []
+
+  toxiproxy:
+    container_name: !reset null
+    ports: !reset []
 
   wiremock:
     image: wiremock/wiremock:3.13.1

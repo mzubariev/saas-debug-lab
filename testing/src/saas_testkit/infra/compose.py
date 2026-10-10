@@ -29,27 +29,35 @@ from saas_testkit.config.paths import repo_root, testing_root
 _READY_TIMEOUT_S = 180.0
 _BUILD_TIMEOUT_S = 900.0
 _TOKEN_SKEW_S = 60
-_POSTGRES_HOST_PORT = 5433
-_REDIS_HOST_PORT = 6380
-_KAFKA_HOST_PORT = 9093
-_GATEWAY_PORT = 8001
+_PROJECT = "saas-test"
+_POSTGRES_HOST_PORT = 5434
+_REDIS_HOST_PORT = 6381
+_KAFKA_HOST_PORT = 9095
+_GATEWAY_PORT = 8010
+_NGINX_PORT = 9080
+_FRONTEND_PORT = 5174
+_SIMULATOR_PORT = 8002
+_MAILHOG_PORT = 8026
+_TOXIPROXY_PORT = 8475
+_UI_URL = f"http://127.0.0.1:{_FRONTEND_PORT}"
+_NGINX_URL = f"http://127.0.0.1:{_NGINX_PORT}"
 
 _FASTAPI_EXEC = ("auth-service", "task-service", "webhook-receiver")
 _FASTAPI_HTTP = (
     ("api-gateway", f"http://127.0.0.1:{_GATEWAY_PORT}/health"),
-    ("external-service-simulator", "http://127.0.0.1:8000/health"),
+    ("external-service-simulator", f"http://127.0.0.1:{_SIMULATOR_PORT}/health"),
 )
 _HTTP = (
-    ("mailhog", "http://127.0.0.1:8025/api/v2/messages"),
+    ("mailhog", f"http://127.0.0.1:{_MAILHOG_PORT}/api/v2/messages"),
     ("wiremock", "http://127.0.0.1:8089/__admin/mappings"),
-    ("nginx", "http://127.0.0.1/health"),
-    ("frontend", "http://127.0.0.1:5173/"),
-    ("toxiproxy", "http://127.0.0.1:8474/version"),
+    ("nginx", f"{_NGINX_URL}/health"),
+    ("frontend", f"{_UI_URL}/"),
+    ("toxiproxy", f"http://127.0.0.1:{_TOXIPROXY_PORT}/version"),
 )
 _WORKERS = (
-    ("webhook-dispatcher", 9101),
-    ("notification-worker", 9102),
-    ("scheduler-worker", 9103),
+    ("webhook-dispatcher", 9111),
+    ("notification-worker", 9112),
+    ("scheduler-worker", 9113),
 )
 _TCP = (
     ("postgres", _POSTGRES_HOST_PORT),
@@ -85,9 +93,11 @@ class _SessionFile(BaseModel):
 def stack_up() -> Stack:
     """Start the test stack, or attach when `BASE_URL` is set."""
     base = os.environ.get("BASE_URL", "").strip()
-    nginx = os.environ.get("NGINX_URL", "http://127.0.0.1").strip().rstrip("/")
+    nginx = os.environ.get("NGINX_URL", _NGINX_URL).strip().rstrip("/")
     if base:
         return Stack(base_url=base.rstrip("/"), nginx_url=nginx, owned=False)
+    _refuse_foreign_project()
+    os.environ.setdefault("UI_URL", _UI_URL)
     _stack_dir().mkdir(parents=True, exist_ok=True)
     with FileLock(_lock_path(), timeout=_BUILD_TIMEOUT_S):
         _require("up", "-d", "--build", "--remove-orphans", *_services(), timeout=_BUILD_TIMEOUT_S)
@@ -96,8 +106,9 @@ def stack_up() -> Stack:
 
 
 def stack_down() -> None:
-    """`docker compose down -v`. `make stack-down` always calls this."""
-    completed = _compose("down", "-v", timeout=180)
+    """`docker compose --profile core down -v`. Compose 2.19 skips profiled services otherwise."""
+    _refuse_foreign_project()
+    completed = _compose("--profile", "core", "down", "-v", "--remove-orphans", timeout=180)
     if completed.returncode != 0:
         raise RuntimeError(completed.stderr.strip() or "docker compose down failed")
 
@@ -144,8 +155,8 @@ def wait_for_stack(
 def _ensure_admin_token() -> None:
     ensure_admin_token(
         Stack(
-            base_url="http://127.0.0.1:8001",
-            nginx_url="http://127.0.0.1",
+            base_url=f"http://127.0.0.1:{_GATEWAY_PORT}",
+            nginx_url=_NGINX_URL,
             owned=False,
         )
     )
@@ -558,14 +569,29 @@ def _require(*args: str, timeout: float) -> subprocess.CompletedProcess[str]:
     return completed
 
 
+def _refuse_foreign_project() -> None:
+    """`down -v` on the lab project `infra` would delete dev volumes."""
+    chosen = os.environ.get("COMPOSE_PROJECT_NAME", "").strip()
+    if chosen not in {"", _PROJECT}:
+        raise RuntimeError(
+            f"refusing to start compose project {chosen!r}; "
+            f"the test stack must use {_PROJECT} so down -v cannot touch the dev lab"
+        )
+
+
 def _compose(*args: str, timeout: float) -> subprocess.CompletedProcess[str]:
+    _refuse_foreign_project()
     command = [
         "docker",
         "compose",
+        "-p",
+        _PROJECT,
         "-f",
         "docker-compose.yml",
         "-f",
         "docker-compose.test.yml",
+        "-f",
+        "docker-compose.test.ports.yml",
         *args,
     ]
     return subprocess.run(  # noqa: S603

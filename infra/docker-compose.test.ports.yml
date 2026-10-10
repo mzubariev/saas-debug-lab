@@ -1,0 +1,22 @@
+# Merged after docker-compose.test.yml. That file clears lab host ports with
+# `ports: !reset []` (Compose 2.19 appends sequences and ignores `!override`).
+services:
+  nginx:
+    ports:
+      - "9080:80"
+
+  frontend:
+    ports:
+      - "5174:5173"
+
+  external-service-simulator:
+    ports:
+      - "8002:8000"
+
+  mailhog:
+    ports:
+      - "8026:8025"
+
+  toxiproxy:
+    ports:
+      - "8475:8474"

@@ -51,7 +51,7 @@ def test_unknown_infra_mode_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None
 def test_ui_url_is_one_origin(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("UI_URL", raising=False)
 
-    assert KitSettings().ui_url == "http://127.0.0.1:5173"
+    assert KitSettings().ui_url == "http://127.0.0.1:5174"
 
     monkeypatch.setenv("UI_URL", "http://localhost:5173/")
 
