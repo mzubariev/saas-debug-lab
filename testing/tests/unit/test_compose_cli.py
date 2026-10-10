@@ -1,5 +1,7 @@
 """CLI flags for `python -m saas_testkit.infra.compose wait`. No Docker."""
 
+from pathlib import Path
+
 import pytest
 
 import saas_testkit.infra.compose as compose
@@ -33,3 +35,17 @@ def test_wait_cli_parses_flags(
     compose.main(argv)
 
     assert seen == [(wiremock, admin)]
+
+
+def test_boot_table_total_is_the_sequential_phases(tmp_path: Path) -> None:
+    phases = tmp_path / "phases.tsv"
+    phases.write_text("image build/pull\t10\ncompose up\t20\nmigrations\t30\nnginx\t40\nwait\t50\n")
+    summary = tmp_path / "summary.md"
+    compose.write_boot_summary(phases, summary)
+    text = summary.read_text()
+    assert "| image build/pull | 10.0s |" in text
+    assert "| compose up | 20.0s |" in text
+    assert "| migrations | 30.0s |" in text
+    assert "| nginx | 40.0s |" in text
+    assert "| total | 80.0s |" in text
+    assert "| wait |" not in text

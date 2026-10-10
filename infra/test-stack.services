@@ -1,3 +1,4 @@
+# Integration and UI. kafka-ui, exporters, and observability are not started.
 postgres
 redis
 kafka

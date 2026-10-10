@@ -29,7 +29,15 @@ runs:
         done
     - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       if: ${{ inputs.start == 'true' }}
+    - name: Mark image phase
+      if: ${{ inputs.start == 'true' }}
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        BOOT_MARK: ${{ runner.temp }}/boot-image.start
+      run: python3 -c 'import os, time; from pathlib import Path; Path(os.environ["BOOT_MARK"]).write_text(f"{time.time():.3f}\n")'
     # Bake resolves env_file from its cwd and ignores !reset. cwd is infra.
+    # integration and ui-e2e both load layers with cache-from type=gha. The build job is the only writer.
     - uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7.4.0
       if: ${{ inputs.start == 'true' }}
       with:
@@ -53,13 +61,49 @@ runs:
         allow: fs.read=*
         set: |
           *.cache-from=type=gha
+    - name: Record image phase
+      if: ${{ always() && inputs.start == 'true' }}
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        BOOT_MARK: ${{ runner.temp }}/boot-image.start
+        BOOT_PHASES: ${{ runner.temp }}/boot-phases.tsv
+      run: |
+        python3 - << 'PY'
+        import os
+        import time
+        from pathlib import Path
+
+        mark = Path(os.environ["BOOT_MARK"])
+        if not mark.is_file():
+            raise SystemExit(0)
+        elapsed = time.time() - float(mark.read_text())
+        Path(os.environ["BOOT_PHASES"]).write_text(f"image build/pull\t{elapsed:.3f}\n")
+        PY
     - name: Start the test stack
       if: ${{ inputs.start == 'true' }}
       shell: bash
       working-directory: ${{ github.workspace }}/infra
+      env:
+        BOOT_PHASES: ${{ runner.temp }}/boot-phases.tsv
       run: |
         mapfile -t services < <(grep -vE '^(#|[[:space:]]*$)' test-stack.services)
+        export PHASE_START
+        PHASE_START=$(python3 -c 'import time; print(f"{time.time():.3f}")')
+        set +e
         docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --no-build --remove-orphans "${services[@]}"
+        code=$?
+        set -e
+        python3 - << 'PY'
+        import os
+        import time
+        from pathlib import Path
+
+        elapsed = time.time() - float(os.environ["PHASE_START"])
+        with Path(os.environ["BOOT_PHASES"]).open("a") as handle:
+            handle.write(f"compose up\t{elapsed:.3f}\n")
+        PY
+        exit "$code"
     - name: Wait until each service kind is ready
       if: ${{ inputs.start == 'true' }}
       shell: bash
@@ -67,6 +111,7 @@ runs:
       env:
         WIREMOCK: ${{ inputs.install-wiremock-catch-all }}
         ADMIN_TOKEN: ${{ inputs.ensure-admin-token }}
+        BOOT_PHASES: ${{ runner.temp }}/boot-phases.tsv
       run: |
         flags=()
         if [[ "$WIREMOCK" == "true" ]]; then
@@ -76,3 +121,21 @@ runs:
           flags+=(--ensure-admin-token)
         fi
         uv run python -m saas_testkit.infra.compose wait "${flags[@]}"
+    - name: Publish stack boot times
+      if: ${{ always() && inputs.start == 'true' }}
+      shell: bash
+      working-directory: ${{ github.workspace }}/testing
+      env:
+        BOOT_PHASES: ${{ runner.temp }}/boot-phases.tsv
+      run: |
+        uv run python - << 'PY'
+        import os
+        from pathlib import Path
+
+        from saas_testkit.infra import write_boot_summary
+
+        summary = os.environ.get("GITHUB_STEP_SUMMARY", "")
+        phases = Path(os.environ["BOOT_PHASES"])
+        if summary and phases.is_file():
+            write_boot_summary(phases, Path(summary))
+        PY
