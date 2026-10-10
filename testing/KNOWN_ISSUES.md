@@ -13,6 +13,9 @@
 - BUG-7: webhook-dispatcher sets `Idempotency-Key` to `str(payload.id)`. `task_created` and both `task_updated` deliveries for one task share that key.
 - BUG-8: external-service-simulator `trigger_event` logs `event=body.event`. structlog already uses that name, so the call raises `TypeError` and `POST /trigger-event` returns 500 instead of 202. The background POST is scheduled before the log. `xfail(strict=True)` on the 202 response.
 - BUG-9: auth-service login queries `users.username`. A NUL byte is invalid UTF-8 (`0x00`), asyncpg raises, and `POST /auth/token` returns 500. `xfail(strict=True)` on that login. Schemathesis discards generated values that contain NUL.
+- BUG-10: **opentelemetry.instrumentation.instrumentor** **error** ++Oct 8, 6:56:40.346 AM UTC++ SQLAlchemyInstrumentor only instruments "sqlalchemy >= 1.0.0, < 2.1.0", but currently installed version ("sqlalchemy 2.1.3") falls outside of that range, so nothing can be instrumented. During refactoring (R0) along with lockfile: to lock `sqlalchemy>=2.0,<2.1` in services and `saas_shared`, or update`opentelemetry-instrumentation-sqlalchemy`, to the version with `sqlalchemy 2.1`support.
+
+
 
 ### Candidates to confirm
 
@@ -23,6 +26,8 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - The `role` claim is written at login and copied by gateway `verify_token` and `/auth/me`. No route checks it. There is no authZ.
 - `GET /tasks` returns every row (`list_all`; no limit or offset).
 
+
+
 ## Testability changes
 
 - `infra/docker-compose.datadog.yml`, service `requirements.txt`, `saas_shared.logging`, `saas_shared.sentry_setup`, `saas_shared.telemetry`: removed Datadog (`ddtrace-run`, the `ddtrace` requirement, the log processor, and the Sentry hooks) so a missing package does not stamp `dd_trace_error` on every log line.
@@ -31,6 +36,8 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - Compose healthchecks for mailhog, postgres-exporter, kafka-exporter, and the frontend. FastAPI `/health` checks were already present. `infra/test-stack.services` lists the test stack. `frontend/Dockerfile` `preview` stage runs `vite build` then `vite preview`; the default stage stays `dev`. `infra/docker-compose.test.yml` selects `preview`.
 - `frontend/src/pages/LoginPage.tsx`: the login error `div` has `role="alert"` so `LoginPage` can use `get_by_role("alert")`. The message and the class are unchanged.
 - `frontend/Dockerfile` preview `VITE_API_URL` build-arg (default `http://localhost`) and api-gateway `CORS_ORIGINS` (default empty, lab origins unchanged). The test stack publishes the UI on 5174 and nginx on 9080, so the bundle and the browser origin are not the lab's.
+
+
 
 ## Decisions since the plan
 
@@ -96,3 +103,4 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - Nightly: the flaky pass and the duration refresh run integration and `e2e_ui` in separate pytest processes. Playwright's sync plugin leaves an event loop running, and a later async test raises `Runner.run() cannot be called from a running event loop`. The UI flaky pass uses `--reruns 1` so one missed board drag is reported and retried.
 - Nightly: the report job sets `GH_REPO` and does not checkout. `gh issue` was failing with `not a git repository` because that job has no `.git`.
 - P9-isolate: the test stack project is `saas-test`. `container_name` is reset. Compose 2.19 ignores `!override` and appends ports, so `docker-compose.test.yml` clears lab host ports with `!reset []` and `docker-compose.test.ports.yml` publishes nginx `9080`, frontend `5174` (`UI_URL`), simulator `8002`, mailhog `8026`, toxiproxy `8475`. Postgres `5434`, Redis `6381`, Kafka `9095`, gateway `8010`, and worker metrics `9111`–`9113` stay off the ports the current `infra` project already publishes. `compose.py` refuses to start when `COMPOSE_PROJECT_NAME` is set to anything else. The synthetic probe and `testing/synthetic/compose.probe.yml` still target the dev lab (`infra_default`).
+

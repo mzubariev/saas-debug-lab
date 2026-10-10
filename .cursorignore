@@ -40,3 +40,5 @@ testing/docs/cursor/plan/00-workflow.md
 testing/docs/cursor/plan/01-prompt-template.md
 testing/docs/human
 test-results
+testing/.hypothesis
+testing/reports
