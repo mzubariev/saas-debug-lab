@@ -12,6 +12,7 @@
 - BUG-6: api-gateway OpenAPI reuses operationIds across methods (`proxy_auth_auth__path__post`, and the same pattern on `/tasks`, `/tasks/{path}`, and `/webhooks/{path}`). Which method name wins changes between processes. `openapi-spec-validator` rejects the document. `GET /openapi.json` is still 200. `xfail(strict=True)` on document validity. The snapshot rewrites a duplicated operationId to `method path` and pins the rest.
 - BUG-7: webhook-dispatcher sets `Idempotency-Key` to `str(payload.id)`. `task_created` and both `task_updated` deliveries for one task share that key.
 - BUG-8: external-service-simulator `trigger_event` logs `event=body.event`. structlog already uses that name, so the call raises `TypeError` and `POST /trigger-event` returns 500 instead of 202. The background POST is scheduled before the log. `xfail(strict=True)` on the 202 response.
+- BUG-9: auth-service login queries `users.username`. A NUL byte is invalid UTF-8 (`0x00`), asyncpg raises, and `POST /auth/token` returns 500. `xfail(strict=True)` on that login. Schemathesis discards generated values that contain NUL.
 
 ### Candidates to confirm
 
@@ -91,4 +92,5 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P9.1: built services in the test overlay set `image: infra-<service>:latest`. Bake loads that tag. Compose, run from `infra/`, looks up the same name. Container names stay unprefixed.
 - P9.1: test nginx gets `extra_hosts` for `otel-collector`. `nginx.conf` resolves that name at startup, and the test stack does not run the collector.
 - P9-perf: CI writes stack-boot phase times to the job summary. `test-stack.services` does not start kafka-ui, exporters, or observability. Integration and ui-e2e bake with `cache-from: type=gha`.
+- Nightly: Schemathesis discards generated values that contain NUL. Postgres rejects `0x00` in text, and auth login returns 500 (BUG-9). The other generated calls still fail on a 500.
 - P9-isolate: the test stack project is `saas-test`. `container_name` is reset. Compose 2.19 ignores `!override` and appends ports, so `docker-compose.test.yml` clears lab host ports with `!reset []` and `docker-compose.test.ports.yml` publishes nginx `9080`, frontend `5174` (`UI_URL`), simulator `8002`, mailhog `8026`, toxiproxy `8475`. Postgres `5434`, Redis `6381`, Kafka `9095`, gateway `8010`, and worker metrics `9111`–`9113` stay off the ports the current `infra` project already publishes. `compose.py` refuses to start when `COMPOSE_PROJECT_NAME` is set to anything else. The synthetic probe and `testing/synthetic/compose.probe.yml` still target the dev lab (`infra_default`).
