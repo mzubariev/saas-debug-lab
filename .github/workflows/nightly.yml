@@ -287,6 +287,7 @@ jobs:
           NEEDS: ${{ toJSON(needs) }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           if echo "$NEEDS" | jq -e 'all(.[]; .result == "success")' >/dev/null; then
             exit 0
