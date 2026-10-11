@@ -6,6 +6,7 @@
 import argparse
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -14,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import httpx
 import jwt
@@ -68,6 +69,8 @@ _HEALTH_PROBE = (
     "import urllib.request; "
     "urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"
 )
+_ADMIN_USER = "admin"
+_ADMIN_PASSWORD = "admin123"
 _HASHER = PasswordHasher()
 
 
@@ -88,6 +91,8 @@ class _SessionFile(BaseModel):
     base_url: str
     nginx_url: str
     access_token: str
+    compose_project: str
+    postgres_id: str
 
 
 def stack_up() -> Stack:
@@ -100,17 +105,22 @@ def stack_up() -> Stack:
     os.environ.setdefault("UI_URL", _UI_URL)
     _stack_dir().mkdir(parents=True, exist_ok=True)
     with FileLock(_lock_path(), timeout=_BUILD_TIMEOUT_S):
+        if _postgres_container_id() is None:
+            _session_path().unlink(missing_ok=True)
         _require("up", "-d", "--build", "--remove-orphans", *_services(), timeout=_BUILD_TIMEOUT_S)
         _bring_up_migrations(time.monotonic(), {})
     return Stack(base_url=f"http://127.0.0.1:{_GATEWAY_PORT}", nginx_url=nginx, owned=True)
 
 
 def stack_down() -> None:
-    """`docker compose --profile core down -v`. Compose 2.19 skips profiled services otherwise."""
+    """`docker compose --profile core down -v`, then remove `testing/.stack`."""
     _refuse_foreign_project()
     completed = _compose("--profile", "core", "down", "-v", "--remove-orphans", timeout=180)
     if completed.returncode != 0:
         raise RuntimeError(completed.stderr.strip() or "docker compose down failed")
+    directory = _stack_dir()
+    if directory.is_dir():
+        shutil.rmtree(directory)
 
 
 def release_stack() -> None:
@@ -121,14 +131,20 @@ def release_stack() -> None:
 
 
 def ensure_admin_token(stack: Stack) -> str:
-    """Seed once and log in once per run. Refresh when the JWT is close to `exp`."""
+    """Reuse the file only when this postgres and a live admin login both still match it."""
     _stack_dir().mkdir(parents=True, exist_ok=True)
     with FileLock(_lock_path(), timeout=120):
-        current = _read_token()
-        if current is None or _expires_soon(current):
+        identity = _stack_identity()
+        current = _reusable_token(stack, identity)
+        if current is None:
             _seed()
             current = _login(stack.base_url)
-        _write_session(stack, current)
+            identity = _stack_identity()
+        if identity is None:
+            raise RuntimeError(
+                f"postgres container id is unavailable; cannot write {_session_path()}"
+            )
+        _write_session(stack, current, identity)
         if stack.owned:
             WireMockSink("http://127.0.0.1:8089").install_catch_all()
         return current
@@ -388,25 +404,11 @@ def _string_keys(value: object) -> dict[str, object] | None:
 
 
 def _seed() -> None:
-    admin_hash = _HASHER.hash("admin123")
+    admin_hash = _HASHER.hash(_ADMIN_PASSWORD)
     user_hash = _HASHER.hash("user123")
     with psycopg.connect(_database_url(), autocommit=True) as conn:
-        conn.execute(
-            """
-            INSERT INTO users (username, hashed_password, role)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (username) DO NOTHING
-            """,
-            ("admin", admin_hash, "admin"),
-        )
-        conn.execute(
-            """
-            INSERT INTO users (username, hashed_password, role)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (username) DO NOTHING
-            """,
-            ("user", user_hash, "user"),
-        )
+        _upsert_user(conn, _ADMIN_USER, admin_hash, "admin")
+        _upsert_user(conn, "user", user_hash, "user")
     username = os.environ.get("SYNTHETIC_USER", "").strip()
     password = os.environ.get("SYNTHETIC_PASSWORD", "").strip()
     if username and password:
@@ -488,19 +490,90 @@ asyncio.run(main())
         raise RuntimeError(detail or "docker exec auth-service failed")
 
 
-def _login(base_url: str) -> str:
-    response = httpx.post(
-        f"{base_url}/auth/token",
-        data={"username": "admin", "password": "admin123"},
+def _upsert_user(
+    conn: psycopg.Connection[tuple[object, ...]],
+    username: str,
+    hashed: str,
+    role: str,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO users (username, hashed_password, role)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (username) DO UPDATE
+        SET hashed_password = EXCLUDED.hashed_password, role = EXCLUDED.role
+        """,
+        (username, hashed, role),
+    )
+
+
+def _reusable_token(stack: Stack, identity: tuple[str, str] | None) -> str | None:
+    if identity is None:
+        return None
+    session = _read_session()
+    if session is None or _expires_soon(session.access_token):
+        return None
+    if (session.compose_project, session.postgres_id) != identity:
+        return None
+    return _try_login(stack.base_url)
+
+
+def _post_login(base_url: str) -> httpx.Response:
+    return httpx.post(
+        f"{base_url.rstrip('/')}/auth/token",
+        data={"username": _ADMIN_USER, "password": _ADMIN_PASSWORD},
         timeout=15,
     )
+
+
+def _try_login(base_url: str) -> str | None:
+    try:
+        response = _post_login(base_url)
+    except httpx.HTTPError:
+        return None
     if response.status_code != 200:
-        raise RuntimeError(f"admin login failed: {response.status_code} {response.text}")
-    body = cast(dict[str, object], response.json())
-    token = body.get("access_token")
-    if not isinstance(token, str) or not token:
-        raise RuntimeError("admin login did not return access_token")
+        return None
+    return _access_token(response)
+
+
+def _login(base_url: str) -> str:
+    url = f"{base_url.rstrip('/')}/auth/token"
+    try:
+        response = _post_login(base_url)
+    except httpx.HTTPError as exc:
+        raise RuntimeError(_seed_login_error(url, exc.__class__.__name__)) from exc
+    token = _access_token(response) if response.status_code == 200 else None
+    if token is None:
+        raise RuntimeError(_seed_login_error(url, response.status_code))
     return token
+
+
+def _access_token(response: httpx.Response) -> str | None:
+    try:
+        body = cast(dict[str, object], response.json())
+    except ValueError:
+        return None
+    token = body.get("access_token")
+    if isinstance(token, str) and token:
+        return token
+    return None
+
+
+def _seed_login_error(url: str, detail: object) -> str:
+    return (
+        f"seeded admin login failed: POST {url} as {_ADMIN_USER} "
+        f"against {_database_endpoint()} returned {detail}"
+    )
+
+
+def _database_endpoint() -> str:
+    override = os.environ.get("DATABASE_URL", "").strip()
+    if not override:
+        return f"127.0.0.1:{_POSTGRES_HOST_PORT}"
+    parsed = urlparse(override)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port if parsed.port is not None else _POSTGRES_HOST_PORT
+    return f"{host}:{port}"
 
 
 def _database_url() -> str:
@@ -512,22 +585,24 @@ def _database_url() -> str:
     return f"postgresql://{user}:{password}@127.0.0.1:{_POSTGRES_HOST_PORT}/saas"
 
 
-def _read_token() -> str | None:
+def _read_session() -> _SessionFile | None:
     path = _session_path()
     if not path.is_file():
         return None
     try:
-        session = _SessionFile.model_validate_json(path.read_text())
+        return _SessionFile.model_validate_json(path.read_text())
     except ValueError:
         return None
-    return session.access_token
 
 
-def _write_session(stack: Stack, token: str) -> None:
+def _write_session(stack: Stack, token: str, identity: tuple[str, str]) -> None:
+    project, postgres_id = identity
     document = _SessionFile(
         base_url=stack.base_url,
         nginx_url=stack.nginx_url,
         access_token=token,
+        compose_project=project,
+        postgres_id=postgres_id,
     )
     path = _session_path()
     temporary = path.with_suffix(".tmp")
@@ -547,6 +622,24 @@ def _expires_soon(token: str) -> bool:
     if isinstance(exp, bool) or not isinstance(exp, int | float):
         return True
     return exp - time.time() < _TOKEN_SKEW_S
+
+
+def _stack_identity() -> tuple[str, str] | None:
+    container_id = _postgres_container_id()
+    if container_id is None:
+        return None
+    return _PROJECT, container_id
+
+
+def _postgres_container_id() -> str | None:
+    completed = _compose("ps", "-q", "postgres", timeout=30)
+    if completed.returncode != 0:
+        return None
+    for line in completed.stdout.splitlines():
+        container_id = line.strip()
+        if container_id:
+            return container_id
+    return None
 
 
 def _stack_dir() -> Path:
