@@ -7,19 +7,15 @@ import pytest
 from fastapi import FastAPI
 
 from saas_testkit.adapters.http import GatewayUpstream, HttpGatewayApi
-from saas_testkit.config import SERVICES
 from saas_testkit.context import RunContext
 from saas_testkit.flows import GatewayFlow
-from saas_testkit.infra import import_service_app, open_app_lifespan
 
 
 @pytest.fixture(scope="session")
-async def service_app(service_env: None) -> AsyncIterator[FastAPI]:
-    app = import_service_app(SERVICES["api-gateway"])
-    if not isinstance(app, FastAPI):
+def service_app(open_app_lifespan: object) -> FastAPI:
+    if not isinstance(open_app_lifespan, FastAPI):
         raise RuntimeError("api-gateway did not expose a FastAPI app")
-    async with open_app_lifespan(app):
-        yield app
+    return open_app_lifespan
 
 
 @pytest.fixture

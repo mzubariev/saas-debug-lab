@@ -6,5 +6,7 @@
 htmlcov/
 reports/
 .stack/
+test-results/
+.test_durations
 synthetic/.env
 *.egg-info/

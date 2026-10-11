@@ -2,7 +2,7 @@
 
 import asyncio
 import os
-from collections.abc import AsyncIterator, Callable
+from collections.abc import Callable
 
 import pytest
 from fastapi import FastAPI
@@ -13,16 +13,6 @@ from schemathesis.checks import not_a_server_error, response_schema_conformance
 from schemathesis.openapi import from_dict
 from schemathesis.schemas import BaseSchema
 from schemathesis.specs.openapi.schemas import OpenApiSchema
-from tests.component.conftest import (  # noqa: F401
-    _seed_factories,
-    events,
-    flush_redis,
-    infra,
-    run_context,
-    run_id,
-    service_env,
-    worker_db,
-)
 
 _DEFAULT_EXAMPLES = 40
 _GATEWAY_OPENAPI = "BUG-6: duplicate operationIds fail OpenAPI validation"
@@ -35,16 +25,6 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     for item in items:
         if item.name == "test_openapi_document_is_valid":
             item.add_marker(marker)
-
-
-@pytest.fixture
-async def client(service_app: FastAPI) -> AsyncIterator[AsyncClient]:
-    transport = ASGITransport(app=service_app, raise_app_exceptions=False)
-    try:
-        async with AsyncClient(transport=transport, base_url="http://test") as http:
-            yield http
-    finally:
-        service_app.dependency_overrides.clear()
 
 
 def schema_examples() -> int:

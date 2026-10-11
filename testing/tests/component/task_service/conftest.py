@@ -10,19 +10,15 @@ from redis.asyncio import Redis
 from saas_testkit.adapters.http import HttpTaskApi
 from saas_testkit.adapters.kafka import KafkaEventReader
 from saas_testkit.adapters.redis import TaskCache
-from saas_testkit.config import SERVICES
 from saas_testkit.context import RunContext
 from saas_testkit.flows import TaskLifecycle
-from saas_testkit.infra import import_service_app, open_app_lifespan
 
 
 @pytest.fixture(scope="session")
-async def service_app(service_env: None) -> AsyncIterator[FastAPI]:
-    app = import_service_app(SERVICES["task-service"])
-    if not isinstance(app, FastAPI):
+def service_app(open_app_lifespan: object) -> FastAPI:
+    if not isinstance(open_app_lifespan, FastAPI):
         raise RuntimeError("task-service did not expose a FastAPI app")
-    async with open_app_lifespan(app):
-        yield app
+    return open_app_lifespan
 
 
 @pytest.fixture

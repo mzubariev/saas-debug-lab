@@ -12,7 +12,7 @@ from saas_testkit.adapters.playwright import BoardPage, LoginPage
 from saas_testkit.config import KitSettings
 from saas_testkit.context import RunContext, using_context
 from saas_testkit.domain.tasks import Task
-from saas_testkit.factories import TaskCreateFactory, seed_factories_once
+from saas_testkit.factories import TaskCreateFactory
 from saas_testkit.infra import read_session
 
 # frontend/src/lib/apiClient.ts TOKEN_KEY
@@ -75,8 +75,8 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _seed_factories(pytestconfig: pytest.Config) -> None:
-    seed_factories_once(pytestconfig.getoption("randomly_seed"))
+def _seed_factories(seed_factories: None) -> None:
+    """One seed per run, so the pytest-randomly number reproduces factory data too."""
 
 
 @pytest.fixture(scope="session")

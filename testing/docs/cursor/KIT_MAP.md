@@ -4,12 +4,17 @@ What `saas_testkit` offers now. Extend an entry here instead of adding a second 
 
 ## Fixtures
 
-Component session (`tests/component/conftest.py`). The controller stores an `InfraHandle` on `config._infra`; workers load `Infra` from `workerinput["infra"]`.
+In-process fixtures are `saas_testkit.plugins.in_process_service` (`src/saas_testkit/plugins/in_process_service.py`). `seed_factories` is `saas_testkit.plugins.factory_seed` (`src/saas_testkit/plugins/factory_seed.py`). Root `testing/conftest.py` registers both once with `pytest_plugins`. Neither plugin uses `autouse`.
+
+`tests/component/conftest.py` and `tests/contract/conftest.py` turn `seed_factories` and `flush_redis` on with autouse wrappers. Component also autouses `clean_db` and `run_context`; contract autouses `run_context`. `tests/integration/conftest.py`, `tests/e2e_ui/conftest.py`, and `tests/smoke/conftest.py` depend on `seed_factories`. Unit tests do not.
+
+The controller stores an `InfraHandle` on `config._infra`; workers load `Infra` from `workerinput["infra"]`.
 
 - `infra`: connection URLs for this session.
 - `worker_db`: `test_<service>_<layer>_<worker>` (hyphens become underscores), cloned from the migrated template and dropped at session end.
 - `session_maker`, `db`: async session on that database. The app builds its own engine; do not override `get_db`.
 - `service_env`: `POSTGRES_*` from `DbUrls.postgres_env()`, `REDIS_URL` for the worker index, `KAFKA_BOOTSTRAP_SERVERS`, `SERVICE_NAME`, `OTLP_ENDPOINT=""`, `SENTRY_DSN=""`. Import the app after this.
+- `open_app_lifespan`: session fixture. Imports the `--service` app after `service_env` and enters its lifespan once per worker. auth-service sets `TOKEN_EXPIRE_MINUTES=45` before import. Layer `service_app` fixtures yield that app.
 - `flush_redis`: `FLUSHDB` on this worker's Redis index before each test.
 - `clean_db`: no-op unless the test has `@pytest.mark.clean_db`, then truncates tables listed in `_touched`.
 - `run_context`: binds `RunContext` (`run_id`, `test_id`) so `unique_title` works.
@@ -111,7 +116,7 @@ One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_
 
 ## P7 e2e_ui
 
-`tests/e2e_ui/conftest.py`. `base_url` and the `storage_state` origin are both `KitSettings.ui_url` (`UI_URL`, default `http://127.0.0.1:5173`). `browser_context_args` sets `service_workers=block` and `storage_state` from `session.json` (`saas_debug_token`, `frontend/src/lib/apiClient.ts`) unless the test is `@pytest.mark.anonymous`. A failure keeps a trace and a screenshot (`--tracing retain-on-failure`, `--screenshot only-on-failure`). `admin` is the seeded user. `login` is `LoginPage`. `board` is `BoardPage`. `tasks` is `UiTasks` (sync httpx on the gateway): `create` may assert, `find` returns the first title match and raises when a second exists.
+`tests/e2e_ui/conftest.py`. `base_url` and the `storage_state` origin are both `KitSettings.ui_url` (`UI_URL`, default `http://127.0.0.1:5174`). `browser_context_args` sets `service_workers=block` and `storage_state` from `session.json` (`saas_debug_token`, `frontend/src/lib/apiClient.ts`) unless the test is `@pytest.mark.anonymous`. A failure keeps a trace and a screenshot (`--tracing retain-on-failure`, `--screenshot only-on-failure`). `admin` is the seeded user. `login` is `LoginPage`. `board` is `BoardPage`. `tasks` is `UiTasks` (sync httpx on the gateway): `create` may assert, `find` returns the first title match and raises when a second exists.
 
 `LoginPage.open`, `sign_in`, `expect_form`, `expect_login_page`, `expect_invalid_credentials`, `expect_board`. `BoardPage.open`, `reload`, `create_task`, `move_task`, `expect_open`, `expect_task`, `task_id`. `move_task` drags with `mouse.move(..., steps=40)` and waits for the move response. The context viewport is 1920×1080 so a long title does not push a column off screen. `KanbanColumn.reveal` walks the 10-card pages. `TaskCard.expect_visible` and `task_id` (the card's `title` attribute).
 
@@ -131,7 +136,7 @@ One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_
 
 ## P5 CI
 
-`.github/workflows/ci.yml`: `lint`, `security`, `unit`, `component-contract` (matrix `task-service`, `auth-service`, `api-gateway`, `webhook-receiver`, `external-service-simulator`), `ci-gate`. `open_app_lifespan` enters a service lifespan once per process.
+`.github/workflows/ci.yml`: `lint`, `security`, `unit`, `component-contract` (matrix `task-service`, `auth-service`, `api-gateway`, `webhook-receiver`, `external-service-simulator`), `ci-gate`. `open_app_lifespan` enters a service lifespan once per worker.
 
 ## P9 CI
 

@@ -34,23 +34,13 @@ def install_service_paths(spec: ServiceSpec) -> None:
 
 @asynccontextmanager
 async def open_app_lifespan(app: object) -> AsyncGenerator[None]:
-    """Enter lifespan once. Component and contract each have a session fixture."""
-    state = getattr(app, "state", None)
-    if state is not None and getattr(state, "test_lifespan_open", False):
-        yield
-        return
+    """Enter the service lifespan. ``ASGITransport`` does not run it."""
     router = getattr(app, "router", None)
     enter = getattr(router, "lifespan_context", None)
     if enter is None:
         raise RuntimeError("service app has no lifespan")
     async with enter(app):
-        if state is not None:
-            state.test_lifespan_open = True
-        try:
-            yield
-        finally:
-            if state is not None:
-                state.test_lifespan_open = False
+        yield
 
 
 def import_service_app(spec: ServiceSpec) -> object:

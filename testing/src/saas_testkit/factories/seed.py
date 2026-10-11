@@ -1,16 +1,10 @@
-"""One Polyfactory seed per process."""
+"""Polyfactory seed for one pytest session. The session fixture calls this once."""
 
 from polyfactory.factories.base import BaseFactory
 
-_seeded = False
-
 
 def seed_factories_once(seed: object) -> None:
-    """Call ``seed_random`` once. A second call would rewind ids already inserted."""
-    global _seeded
-    if _seeded:
-        return
+    """Call ``seed_random`` with the pytest-randomly integer."""
     if not isinstance(seed, int):
         raise RuntimeError("pytest-randomly did not provide an integer seed")
     BaseFactory.seed_random(seed)
-    _seeded = True

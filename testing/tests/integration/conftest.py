@@ -11,15 +11,13 @@ from saas_testkit.adapters.kafka import KafkaEventReader
 from saas_testkit.adapters.mail import MailHogInbox
 from saas_testkit.adapters.wiremock import WireMockSink
 from saas_testkit.context import RunContext, using_context
-from saas_testkit.factories import seed_factories_once
 from saas_testkit.flows import AuthFlow, ExternalReceiver, TaskLifecycle, WebhookDelivery
 from saas_testkit.infra import KAFKA_TOPICS, read_session
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _seed_factories(pytestconfig: pytest.Config) -> None:
+def _seed_factories(seed_factories: None) -> None:
     """One seed per run, so the pytest-randomly number reproduces factory data too."""
-    seed_factories_once(pytestconfig.getoption("randomly_seed"))
 
 
 @pytest.fixture(scope="session")

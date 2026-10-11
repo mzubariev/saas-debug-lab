@@ -12,7 +12,6 @@ import pytest
 from saas_testkit.adapters.http import HttpAuthApi, HttpTaskApi
 from saas_testkit.config import KitSettings
 from saas_testkit.context import RunContext, using_context
-from saas_testkit.factories import seed_factories_once
 from saas_testkit.flows import AuthFlow, TaskLifecycle
 
 _TIMEOUT = httpx.Timeout(10.0, connect=2.0)
@@ -45,8 +44,8 @@ def _collects_smoke(session: pytest.Session) -> bool:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _seed_factories(pytestconfig: pytest.Config) -> None:
-    seed_factories_once(pytestconfig.getoption("randomly_seed"))
+def _seed_factories(seed_factories: None) -> None:
+    """One seed per run, so the pytest-randomly number reproduces factory data too."""
 
 
 @pytest.fixture(scope="session")

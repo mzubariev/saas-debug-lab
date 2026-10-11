@@ -9,27 +9,15 @@ from redis.asyncio import Redis
 
 from saas_testkit.adapters.http import HttpAuthApi
 from saas_testkit.adapters.redis import UserCache
-from saas_testkit.config import SERVICES
 from saas_testkit.context import RunContext
 from saas_testkit.flows import AuthFlow
-from saas_testkit.infra import import_service_app, open_app_lifespan
-
-# Distinct from the 30-minute default so a hardcoded lifetime fails.
-_TOKEN_EXPIRE_MINUTES = "45"
 
 
 @pytest.fixture(scope="session")
-async def service_app(service_env: None) -> AsyncIterator[FastAPI]:
-    patch = pytest.MonkeyPatch()
-    patch.setenv("TOKEN_EXPIRE_MINUTES", _TOKEN_EXPIRE_MINUTES)
-    try:
-        app = import_service_app(SERVICES["auth-service"])
-        if not isinstance(app, FastAPI):
-            raise RuntimeError("auth-service did not expose a FastAPI app")
-        async with open_app_lifespan(app):
-            yield app
-    finally:
-        patch.undo()
+def service_app(open_app_lifespan: object) -> FastAPI:
+    if not isinstance(open_app_lifespan, FastAPI):
+        raise RuntimeError("auth-service did not expose a FastAPI app")
+    return open_app_lifespan
 
 
 @pytest.fixture

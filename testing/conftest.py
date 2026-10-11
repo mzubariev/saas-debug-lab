@@ -23,6 +23,11 @@ from saas_testkit.infra import (
     start_or_attach_infra,
 )
 
+pytest_plugins = [
+    "saas_testkit.plugins.factory_seed",
+    "saas_testkit.plugins.in_process_service",
+]
+
 _MARKERS: dict[str, pytest.MarkDecorator] = {
     "unit": pytest.mark.unit,
     "contract": pytest.mark.contract,
