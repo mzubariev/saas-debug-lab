@@ -4,8 +4,10 @@
 """
 
 import argparse
+import functools
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -31,6 +33,8 @@ _READY_TIMEOUT_S = 180.0
 _BUILD_TIMEOUT_S = 900.0
 _TOKEN_SKEW_S = 60
 _PROJECT = "saas-test"
+_COMPOSE_MIN = (2, 24)
+_COMPOSE_VERSION = re.compile(r"v?(\d+)\.(\d+)")
 _POSTGRES_HOST_PORT = 5434
 _REDIS_HOST_PORT = 6381
 _KAFKA_HOST_PORT = 9095
@@ -672,8 +676,34 @@ def _refuse_foreign_project() -> None:
         )
 
 
+@functools.cache
+def _require_compose_version() -> None:
+    command = ["docker", "compose", "version"]
+    try:
+        completed = subprocess.run(  # noqa: S603
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except OSError as exc:
+        raise RuntimeError(
+            "docker compose unknown is installed; 2.24 or newer is required"
+        ) from exc
+    match = _COMPOSE_VERSION.search(f"{completed.stdout}\n{completed.stderr}")
+    if match is None:
+        found = "unknown"
+    else:
+        found = match.group(0)
+        if (int(match.group(1)), int(match.group(2))) >= _COMPOSE_MIN:
+            return
+    raise RuntimeError(f"docker compose {found} is installed; 2.24 or newer is required")
+
+
 def _compose(*args: str, timeout: float) -> subprocess.CompletedProcess[str]:
     _refuse_foreign_project()
+    _require_compose_version()
     command = [
         "docker",
         "compose",
@@ -683,8 +713,6 @@ def _compose(*args: str, timeout: float) -> subprocess.CompletedProcess[str]:
         "docker-compose.yml",
         "-f",
         "docker-compose.test.yml",
-        "-f",
-        "docker-compose.test.ports.yml",
         *args,
     ]
     return subprocess.run(  # noqa: S603

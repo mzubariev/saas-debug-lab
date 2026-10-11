@@ -1,17 +1,16 @@
 # Test-stack override. Does not change `docker compose --profile core`.
 #
 # Project `saas-test` (the lab project is the directory name `infra`). `down -v` only
-# removes this project's volumes. `container_name` is reset. Compose 2.19 appends
-# port sequences and ignores `!override`, so lab host ports are cleared here with
-# `!reset []` and republished by `docker-compose.test.ports.yml` (nginx 9080,
-# frontend 5174 / `UI_URL`, simulator 8002, mailhog 8026, toxiproxy 8475).
+# removes this project's volumes. `container_name` is reset. Built images are
+# `saas-test-<service>:latest`, so a test build does not replace the lab's `infra-*` tags.
+# Compose >= 2.24 replaces port sequences with `!override` (nginx 9080, frontend 5174 /
+# `UI_URL`, simulator 8002, mailhog 8026, toxiproxy 8475).
 #
 # Explicit service list (not the whole core profile; exporters stay out):
 # infra/test-stack.services
 #
 #   docker compose -p saas-test -f docker-compose.yml -f docker-compose.test.yml \
-#     -f docker-compose.test.ports.yml up -d --build \
-#     $(grep -v '^#' test-stack.services)
+#     up -d --build $(grep -v '^#' test-stack.services)
 #
 # Frontend uses the Dockerfile `preview` stage (`vite build` then `vite preview`).
 # Workers have no HTTP app; the test kit checks their metrics port.
@@ -64,7 +63,7 @@ services:
 
   api-gateway:
     container_name: !reset null
-    image: infra-api-gateway:latest
+    image: saas-test-api-gateway:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -79,7 +78,7 @@ services:
 
   auth-service:
     container_name: !reset null
-    image: infra-auth-service:latest
+    image: saas-test-auth-service:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -94,7 +93,7 @@ services:
 
   task-service:
     container_name: !reset null
-    image: infra-task-service:latest
+    image: saas-test-task-service:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -109,7 +108,7 @@ services:
 
   webhook-receiver:
     container_name: !reset null
-    image: infra-webhook-receiver:latest
+    image: saas-test-webhook-receiver:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -118,7 +117,7 @@ services:
 
   webhook-dispatcher:
     container_name: !reset null
-    image: infra-webhook-dispatcher:latest
+    image: saas-test-webhook-dispatcher:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -135,7 +134,7 @@ services:
 
   notification-worker:
     container_name: !reset null
-    image: infra-notification-worker:latest
+    image: saas-test-notification-worker:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -150,18 +149,19 @@ services:
 
   external-service-simulator:
     container_name: !reset null
-    image: infra-external-service-simulator:latest
+    image: saas-test-external-service-simulator:latest
     # localhost inside this container is not the gateway. The lab file uses that host URL.
     env_file: !reset []
     environment:
       <<: *telemetry
       SERVICE_NAME: external-service-simulator
       INTEGRATION_SERVICE_WEBHOOK_URL: http://api-gateway:8000/webhooks/inbound
-    ports: !reset []
+    ports: !override
+      - "8002:8000"
 
   scheduler-worker:
     container_name: !reset null
-    image: infra-scheduler-worker:latest
+    image: saas-test-scheduler-worker:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -185,7 +185,7 @@ services:
 
   migrations:
     container_name: !reset null
-    image: infra-migrations:latest
+    image: saas-test-migrations:latest
     env_file: !reset []
     environment:
       <<: *telemetry
@@ -197,29 +197,33 @@ services:
 
   frontend:
     container_name: !reset null
-    image: infra-frontend:latest
+    image: saas-test-frontend:latest
     build:
       context: ..
       dockerfile: frontend/Dockerfile
       target: preview
       args:
         VITE_API_URL: http://127.0.0.1:9080
-    ports: !reset []
+    ports: !override
+      - "5174:5173"
 
   nginx:
     container_name: !reset null
     # nginx.conf resolves otel-collector at startup. The test stack does not run it.
     extra_hosts:
       - "otel-collector:127.0.0.1"
-    ports: !reset []
+    ports: !override
+      - "9080:80"
 
   mailhog:
     container_name: !reset null
-    ports: !reset []
+    ports: !override
+      - "8026:8025"
 
   toxiproxy:
     container_name: !reset null
-    ports: !reset []
+    ports: !override
+      - "8475:8474"
 
   wiremock:
     image: wiremock/wiremock:3.13.1
