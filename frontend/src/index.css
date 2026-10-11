@@ -105,6 +105,7 @@ body {
   flex-direction: column;
   transition: border-color 0.15s, background 0.15s;
   min-height: 200px;
+  min-width: 0;
 }
 
 .column--over {
@@ -203,6 +204,7 @@ body {
   color: var(--color-text);
   line-height: 1.4;
   margin-bottom: 8px;
+  overflow-wrap: anywhere;
 }
 
 .task-card__meta {

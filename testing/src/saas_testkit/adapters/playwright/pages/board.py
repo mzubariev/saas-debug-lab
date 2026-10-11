@@ -64,8 +64,6 @@ class BoardPage:
 
     def _drag(self, source: Locator, target: Locator) -> None:
         """Move the pointer in steps so dnd-kit's 5px activation distance is crossed."""
-        target.scroll_into_view_if_needed()
-        source.scroll_into_view_if_needed()
         start = _center(source)
         end = _center(target.locator(".column__header"))
         mouse = self._page.mouse

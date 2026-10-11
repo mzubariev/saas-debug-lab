@@ -1,5 +1,8 @@
 """Self-tests for Polyfactory `.build()`. No database and no Docker."""
 
+import hashlib
+import re
+
 from saas_shared.models import TaskStatus
 
 from saas_testkit.context import RunContext, using_context
@@ -9,14 +12,16 @@ from saas_testkit.factories import TaskCreateFactory, TaskRowFactory, UserRowFac
 _USERNAME_MAX = 64
 
 
-def test_task_create_build_with_context_embeds_run_and_test() -> None:
+def test_task_create_build_with_context_uses_a_short_title() -> None:
     ctx = RunContext.create(run_id="run1", test_id="test1")
+    digest = hashlib.sha256(b"test1").hexdigest()[:6]
 
     with using_context(ctx):
         body = TaskCreateFactory.build()
 
     assert isinstance(body, TaskCreate)
-    assert body.title.startswith("task-run1-test1-")
+    assert re.fullmatch(rf"task-run1-{digest}-[0-9a-f]{{6}}", body.title)
+    assert "test1" not in body.title
 
 
 def test_task_row_build_with_context_uses_created_status() -> None:

@@ -36,6 +36,7 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - Compose healthchecks for mailhog, postgres-exporter, kafka-exporter, and the frontend. FastAPI `/health` checks were already present. `infra/test-stack.services` lists the test stack. `frontend/Dockerfile` `preview` stage runs `vite build` then `vite preview`; the default stage stays `dev`. `infra/docker-compose.test.yml` selects `preview`.
 - `frontend/src/pages/LoginPage.tsx`: the login error `div` has `role="alert"` so `LoginPage` can use `get_by_role("alert")`. The message and the class are unchanged.
 - `frontend/Dockerfile` preview `VITE_API_URL` build-arg (default `http://localhost`) and api-gateway `CORS_ORIGINS` (default empty, lab origins unchanged). The test stack publishes the UI on 5174 and nginx on 9080, so the bundle and the browser origin are not the lab's.
+- BUG-11: `frontend/src/index.css` `.task-card__title` (`overflow-wrap: anywhere`) and `.column` (`min-width: 0`). A title with no spaces is one long word, so the board grid grows past the viewport and the target column leaves the screen. Wrapping keeps the word inside the column.
 
 
 

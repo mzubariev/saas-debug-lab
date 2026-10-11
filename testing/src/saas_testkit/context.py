@@ -1,5 +1,6 @@
 """Per-run and per-test identity, plus the headers a test's HTTP calls carry."""
 
+import hashlib
 import secrets
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -63,6 +64,11 @@ def using_context(ctx: RunContext) -> Generator[RunContext]:
 
 
 def unique_title(prefix: str = "task") -> str:
-    """A title unique to this test and this call. Requires a bound `RunContext`."""
+    """A short title unique to this test and this call. Requires a bound `RunContext`.
+
+    About 30 characters: `prefix`, 6 of `run_id`, 6 of a hash of `test_id`, 6 random.
+    The nodeid stays in `X-Request-ID` and `traceparent`.
+    """
     ctx = current_context()
-    return f"{prefix}-{ctx.run_id}-{ctx.test_id}-{uuid4().hex[:8]}"
+    digest = hashlib.sha256(ctx.test_id.encode()).hexdigest()[:6]
+    return f"{prefix}-{ctx.run_id[:6]}-{digest}-{secrets.token_hex(3)}"
