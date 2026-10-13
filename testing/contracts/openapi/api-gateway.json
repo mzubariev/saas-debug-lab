@@ -70,7 +70,7 @@
   "paths": {
     "/auth/{path}": {
       "delete": {
-        "operationId": "delete /auth/{path}",
+        "operationId": "proxy_auth_delete",
         "parameters": [
           {
             "in": "path",
@@ -105,7 +105,7 @@
         "summary": "Proxy Auth"
       },
       "get": {
-        "operationId": "get /auth/{path}",
+        "operationId": "proxy_auth_get",
         "parameters": [
           {
             "in": "path",
@@ -140,7 +140,7 @@
         "summary": "Proxy Auth"
       },
       "post": {
-        "operationId": "post /auth/{path}",
+        "operationId": "proxy_auth_post",
         "parameters": [
           {
             "in": "path",
@@ -175,7 +175,7 @@
         "summary": "Proxy Auth"
       },
       "put": {
-        "operationId": "put /auth/{path}",
+        "operationId": "proxy_auth_put",
         "parameters": [
           {
             "in": "path",
@@ -244,7 +244,7 @@
     },
     "/tasks": {
       "delete": {
-        "operationId": "delete /tasks",
+        "operationId": "proxy_tasks_root_delete",
         "responses": {
           "200": {
             "content": {
@@ -263,7 +263,7 @@
         "summary": "Proxy Tasks Root"
       },
       "get": {
-        "operationId": "get /tasks",
+        "operationId": "proxy_tasks_root_get",
         "responses": {
           "200": {
             "content": {
@@ -282,7 +282,7 @@
         "summary": "Proxy Tasks Root"
       },
       "patch": {
-        "operationId": "patch /tasks",
+        "operationId": "proxy_tasks_root_patch",
         "responses": {
           "200": {
             "content": {
@@ -301,7 +301,7 @@
         "summary": "Proxy Tasks Root"
       },
       "post": {
-        "operationId": "post /tasks",
+        "operationId": "proxy_tasks_root_post",
         "responses": {
           "200": {
             "content": {
@@ -320,7 +320,7 @@
         "summary": "Proxy Tasks Root"
       },
       "put": {
-        "operationId": "put /tasks",
+        "operationId": "proxy_tasks_root_put",
         "responses": {
           "200": {
             "content": {
@@ -341,7 +341,7 @@
     },
     "/tasks/{path}": {
       "delete": {
-        "operationId": "delete /tasks/{path}",
+        "operationId": "proxy_tasks_delete",
         "parameters": [
           {
             "in": "path",
@@ -381,7 +381,7 @@
         "summary": "Proxy Tasks"
       },
       "get": {
-        "operationId": "get /tasks/{path}",
+        "operationId": "proxy_tasks_get",
         "parameters": [
           {
             "in": "path",
@@ -421,7 +421,7 @@
         "summary": "Proxy Tasks"
       },
       "patch": {
-        "operationId": "patch /tasks/{path}",
+        "operationId": "proxy_tasks_patch",
         "parameters": [
           {
             "in": "path",
@@ -461,7 +461,7 @@
         "summary": "Proxy Tasks"
       },
       "post": {
-        "operationId": "post /tasks/{path}",
+        "operationId": "proxy_tasks_post",
         "parameters": [
           {
             "in": "path",
@@ -501,7 +501,7 @@
         "summary": "Proxy Tasks"
       },
       "put": {
-        "operationId": "put /tasks/{path}",
+        "operationId": "proxy_tasks_put",
         "parameters": [
           {
             "in": "path",
@@ -543,7 +543,7 @@
     },
     "/webhooks/{path}": {
       "delete": {
-        "operationId": "delete /webhooks/{path}",
+        "operationId": "proxy_webhooks_delete",
         "parameters": [
           {
             "in": "path",
@@ -578,7 +578,7 @@
         "summary": "Proxy Webhooks"
       },
       "get": {
-        "operationId": "get /webhooks/{path}",
+        "operationId": "proxy_webhooks_get",
         "parameters": [
           {
             "in": "path",
@@ -613,7 +613,7 @@
         "summary": "Proxy Webhooks"
       },
       "patch": {
-        "operationId": "patch /webhooks/{path}",
+        "operationId": "proxy_webhooks_patch",
         "parameters": [
           {
             "in": "path",
@@ -648,7 +648,7 @@
         "summary": "Proxy Webhooks"
       },
       "post": {
-        "operationId": "post /webhooks/{path}",
+        "operationId": "proxy_webhooks_post",
         "parameters": [
           {
             "in": "path",
@@ -683,7 +683,7 @@
         "summary": "Proxy Webhooks"
       },
       "put": {
-        "operationId": "put /webhooks/{path}",
+        "operationId": "proxy_webhooks_put",
         "parameters": [
           {
             "in": "path",
