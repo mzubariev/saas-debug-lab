@@ -15,16 +15,6 @@ from schemathesis.schemas import BaseSchema
 from schemathesis.specs.openapi.schemas import OpenApiSchema
 
 _DEFAULT_EXAMPLES = 40
-_GATEWAY_OPENAPI = "BUG-6: duplicate operationIds fail OpenAPI validation"
-
-
-def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    if config.getoption("service") != "api-gateway":
-        return
-    marker = pytest.mark.xfail(strict=True, reason=_GATEWAY_OPENAPI)
-    for item in items:
-        if item.name == "test_openapi_document_is_valid":
-            item.add_marker(marker)
 
 
 def schema_examples() -> int:
