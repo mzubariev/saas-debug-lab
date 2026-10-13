@@ -126,7 +126,8 @@ Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE
 | Process | Database | Kafka | HTTP |
 | --- | --- | --- | --- |
 | auth, task | SQLAlchemy 2 async + asyncpg. Engine object at import | task: aiokafka producer in the lifespan | none |
-| webhook-receiver, dispatcher | none | aiokafka producer and (dispatcher) consumer, both inside startup / `main` | dispatcher: `httpx.AsyncClient` |
+| webhook-receiver | none | aiokafka producer in the lifespan | none |
+| dispatcher | none | aiokafka consumer inside `main` | `httpx.AsyncClient` |
 | notification-worker | none | aiokafka consumer inside `consume()` | `aiosmtplib` |
 | scheduler-worker | SQLAlchemy sync + psycopg2, lazy engine | kafka-python `KafkaConsumer`, per DLQ tick | `httpx.Client` per POST |
 | migrations | asyncpg via Alembic | none | none |
@@ -136,7 +137,8 @@ Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE
 
 | Process | Compose check | What the code actually exposes |
 | --- | --- | --- |
-| api-gateway, webhook-receiver, simulator | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres, Redis, or Kafka. Dependency connections are `@app.on_event("startup")` (gateway and simulator have no such handler). |
+| api-gateway, simulator | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres, Redis, or Kafka. Neither registers `@app.on_event("startup")`. |
+| webhook-receiver | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Kafka. The lifespan starts the Kafka producer. Shutdown stops it. |
 | auth | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres or Redis. The lifespan connects Redis. Shutdown stops Redis, then disposes the engine. |
 | task | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres, Redis, or Kafka. The lifespan connects Kafka then Redis. Shutdown stops Redis, then Kafka, then disposes the engine. |
 | webhook-dispatcher, notification-worker | none | `prometheus_client.start_http_server` on `METRICS_PORT` (default 9100) at the start of `main` / `run`, then the consume loop. Not bound at import. |
