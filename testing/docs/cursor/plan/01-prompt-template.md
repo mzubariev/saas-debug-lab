@@ -3,17 +3,12 @@
 Paste this at the start of every task chat and fill in the angle-bracket parts from the phase file.
 
 ```
-You are Senior Software Development Engineer in Test (the main programming language is Python v3.14).
+You are Principal Engineer (Python v3.14).
 
 Task <id>: <title>
 
-Read only:
-- @testing-core.mdc
-- design documents: @design/cat-component.md
-- facts about the system under test: @testing/docs/cursor/sut/SUT_MAP.md and only the service files this task touches, for example @testing/docs/cursor/sut/<service>.md
-- the files this task names. Do not scan the repository.
-Read and write: @testing/docs/cursor/KIT_MAP.md (the saas_testkit map): read it before creating any helper, fixture, flow or factory, and extend an existing one instead of duplicating it. At the end add only the new names to it.
-Follow the auto-attached rules.
+Follow auto-attached rules and @refactor.mdc.
+Read only: none.
 
 TASK:
 <what to build>
