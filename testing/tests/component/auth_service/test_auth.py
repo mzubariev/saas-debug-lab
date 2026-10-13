@@ -216,9 +216,18 @@ async def test_second_login_uses_the_user_cache(auth: AuthFlow, rows: Rows) -> N
     assert user.role == "user"
 
 
+async def test_wrong_password_leaves_no_user_cache(auth: AuthFlow, rows: Rows) -> None:
+    user = await rows.user.create_async()
+
+    response = await auth.login(username=user.username, password="wrong-password")
+
+    assert response.status == 401
+    assert await auth.cached_user(user.username) is None
+
+
 @pytest.mark.xfail(
     strict=True,
-    reason="BUG-4: login cache stores hashed_password at user:{username}",
+    reason="BUG-4b: login cache stores hashed_password at user:{username}",
 )
 async def test_user_cache_omits_the_password_hash(auth: AuthFlow, rows: Rows) -> None:
     user = await rows.user.create_async()

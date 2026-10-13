@@ -53,6 +53,7 @@ class AuthService:
         key = _user_key(username)
 
         cached_user = await cache_get(self._redis, key)
+        user: User | None = None
 
         if cached_user is not None:
             logger.debug("cache_hit", key=key)
@@ -71,13 +72,6 @@ class AuthService:
                 )
                 raise HTTPException(status_code=401, detail="Invalid credentials")
 
-            await cache_set(
-                self._redis,
-                key,
-                {"username": user.username, "hashed_password": user.hashed_password, "role": user.role},
-                ttl=_USER_CACHE_TTL,
-            )
-
             hashed_password = user.hashed_password
             role = user.role
             db_username = user.username
@@ -90,6 +84,14 @@ class AuthService:
                 level="warning",
             )
             raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        if user is not None:
+            await cache_set(
+                self._redis,
+                key,
+                {"username": user.username, "hashed_password": user.hashed_password, "role": user.role},
+                ttl=_USER_CACHE_TTL,
+            )
 
         token = self._create_token(db_username, role)
 
