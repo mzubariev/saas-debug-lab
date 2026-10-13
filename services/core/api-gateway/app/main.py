@@ -1,20 +1,38 @@
+from collections.abc import AsyncIterator
+from contextlib import AsyncExitStack, asynccontextmanager
+
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from saas_shared.logging import install_request_context_middleware, install_unhandled_exception_middleware
+from saas_shared.health import router as health_router
+from saas_shared.logging import (
+    install_request_context_middleware,
+    install_unhandled_exception_middleware,
+    setup_logging,
+)
 from saas_shared.metrics import router as metrics_router
 from saas_shared.prometheus_http import install_http_metrics_middleware
 from saas_shared.sentry_setup import setup_sentry_fastapi
-
-from saas_shared.health import router as health_router
-from saas_shared.logging import setup_logging
 from saas_shared.telemetry import setup_telemetry
 
+from .api.routes import proxy
 from .core.config import settings
 
 
 setup_logging(service_name=settings.service_name, log_level=settings.log_level)
 
-app = FastAPI(title="api-gateway", redirect_slashes=False)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # After setup_telemetry: HTTPXClientInstrumentor wraps clients created after instrument().
+    async with AsyncExitStack() as stack:
+        client = httpx.AsyncClient(timeout=settings.gateway_timeout)
+        app.state.http_client = client
+        stack.push_async_callback(client.aclose)
+        yield
+
+
+app = FastAPI(title="api-gateway", redirect_slashes=False, lifespan=lifespan)
 
 # Bridge is registered on the app before setup_telemetry so that OTel's middleware
 # ends up outermost (Starlette LIFO). Request flow: OTel → CORS → Bridge → handler.
@@ -57,16 +75,10 @@ setup_telemetry(
     settings.otlp_endpoint,
 )
 
-# Import proxy only after telemetry: proxy pulls in the shared httpx.AsyncClient, which must be
-# constructed after HTTPXClientInstrumentor().instrument() or outbound calls won't inject
-# traceparent and downstream services break trace continuity.
-from .api.routes import proxy
-
 app.include_router(health_router)
 app.include_router(metrics_router)
 app.include_router(proxy.router)
 
+install_unhandled_exception_middleware(app)
 install_http_metrics_middleware(app)
 install_request_context_middleware(app)
-install_unhandled_exception_middleware(app)
-
