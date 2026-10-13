@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 import structlog
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import BaseModel
 
 from ...core.config import settings
@@ -31,7 +31,7 @@ async def receive_webhook(
     response: Response,
     fail_rate: float | None = Query(default=None, ge=0.0, le=1.0),
     delay: float | None = Query(default=None, ge=0.0),
-    status: int | None = Query(default=None),
+    status_override: int | None = Query(default=None, alias="status", title="Status"),
 ) -> dict[str, Any]:
     """
     Acts as the external system receiving outbound webhooks from webhook-dispatcher.
@@ -53,7 +53,7 @@ async def receive_webhook(
 
     effective_fail_rate = fail_rate if fail_rate is not None else settings.default_fail_rate
     effective_delay = delay if delay is not None else settings.default_delay
-    effective_status = status if status is not None else settings.default_status
+    effective_status = status_override if status_override is not None else settings.default_status
 
     if effective_delay > 0:
         await asyncio.sleep(effective_delay)
@@ -68,10 +68,10 @@ async def receive_webhook(
 
     if random.random() < effective_fail_rate:
         logger.warning("outbound_webhook_simulated_failure", idempotency_key=idempotency_key)
-        response.status_code = 500
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
         return {"status": "error", "reason": "simulated_failure"}
 
-    if effective_status != 200:
+    if effective_status != status.HTTP_200_OK:
         response.status_code = effective_status
         return {"status": "custom_status", "code": effective_status}
 
@@ -83,7 +83,7 @@ async def receive_webhook(
     return {"status": "received", "payload": payload}
 
 
-@router.post("/trigger-event", status_code=202)
+@router.post("/trigger-event", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_event(
     body: InboundTrigger,
     retry: int = Query(default=0, ge=0),
