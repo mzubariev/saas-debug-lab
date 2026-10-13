@@ -8,7 +8,10 @@
 - BUG-2: task-service `TaskCreate.title` is an unconstrained string. `POST /tasks` stores an empty title and a 10000-character title and returns 201. Expected 422. `xfail(strict=True)` on those two cases. A non-string title does return 422.
   - Fixed. `TaskCreate.title` is `Field(min_length=1, max_length=255)`. Limit 255 chosen by the owner; DB column stays unbounded.
 - BUG-3: task-service commits in the repository, then calls `publish_event`. A Kafka failure returns 500, the task row remains (a create stays stored, a start stays `in_progress`), the event is not published, and `cache_delete` does not run. `xfail(strict=True)` on create and start.
-- BUG-4: auth-service login writes `hashed_password` to Redis (`user:{username}`, TTL 300 s) before it checks the password. `xfail(strict=True)` expects that cache entry to omit the hash. A second login reads the cached row.
+- BUG-4a: auth-service login wrote `user:{username}` (TTL 300 s) before it checked the password.
+  - Fixed. The cache write runs only after the password check succeeds. A wrong password leaves no key. The payload is still `username`, `hashed_password`, and `role`, and a second login still reads that row.
+- BUG-4b: the `user:{username}` entry stores `hashed_password`. `xfail(strict=True)` expects that entry to omit the hash.
+  - Deferred. The proper fix caches only `username` and `role` and verifies against the DB hash, which changes the cache's purpose.
 - BUG-5: webhook-receiver `receive_inbound` logs `event=<payload event>` after a successful publish, and the failure log does the same. structlog already takes that name as the message, so the call raises `TypeError` and the route returns 500 instead of 200. The Kafka message is published before the success log. `xfail(strict=True)` on the 200 response, on the consumer-model check, and on Schemathesis for `POST /webhooks/inbound`.
   - Fixed. Renamed the log kwarg to `event_name` on the success and failure logs, so `POST /webhooks/inbound` returns 200.
 - BUG-6: api-gateway OpenAPI reuses operationIds across methods (`proxy_auth_auth__path__post`, and the same pattern on `/tasks`, `/tasks/{path}`, and `/webhooks/{path}`). Which method name wins changes between processes. `openapi-spec-validator` rejects the document. `GET /openapi.json` is still 200. `xfail(strict=True)` on document validity. The snapshot rewrites a duplicated operationId to `method path` and pins the rest.
@@ -120,5 +123,6 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - Deferred, not today: full R0 (pyproject per service, uv workspace, src/), layered api/application/domain/infrastructure, async scheduler-worker, service unit tests, engine-in-lifespan for services other than task/auth, thin-router case study.
 - BUG-1 deferred: fixing the nginx zone key puts every test, smoke, UI login, synthetic user and k6 script behind one 5r/m bucket; needs test-stack and load-test rework.
 - BUG-3 deferred: correct fix is a transactional outbox. BUG-7 deferred: idempotency key choice is a product decision.
+- BUG-4b deferred: the cache stores `hashed_password` so a second login can verify without Postgres. Caching only `username` and `role` and verifying against the DB hash changes that purpose.
 - P3.5/P3.6 are written now against current worker structure (not after a refactor); dispatcher tests use real Redpanda, only sleep/jitter/HTTP are patched.
 
