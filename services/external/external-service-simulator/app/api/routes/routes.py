@@ -101,7 +101,7 @@ async def trigger_event(
             delay,
         )
     )
-    logger.info("inbound_trigger_queued", event=body.event, retry=retry, delay=delay)
+    logger.info("inbound_trigger_queued", event_name=body.event, retry=retry, delay=delay)
     return {"status": "triggered", "event": body.event}
 
 
