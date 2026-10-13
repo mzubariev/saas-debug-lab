@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, status
 from pydantic import BaseModel
 
 from ...services import webhook_service
@@ -11,7 +11,7 @@ class WebhookPayload(BaseModel):
     data: dict = {}
 
 
-@router.post("/webhooks/inbound", status_code=200)
+@router.post("/webhooks/inbound", status_code=status.HTTP_200_OK)
 async def receive_inbound_webhook(payload: WebhookPayload, request: Request):
     """
     Inbound webhook receiver — called by external-service-simulator's /trigger-event.
