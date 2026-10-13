@@ -22,7 +22,7 @@ async def receive_inbound(request: Request, *, event: str, data: dict) -> dict:
     except Exception as exc:
         logger.error(
             "inbound_webhook_publish_failed",
-            event=event,
+            event_name=event,
             topic=settings.topic_webhook_inbound,
             error=str(exc)
         )
@@ -30,7 +30,7 @@ async def receive_inbound(request: Request, *, event: str, data: dict) -> dict:
         raise
     logger.info(
         "inbound_webhook_received",
-        event=event,
+        event_name=event,
         topic=settings.topic_webhook_inbound,
     )
     return {"status": "received", "event": event}

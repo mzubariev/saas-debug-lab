@@ -8,10 +8,6 @@ from saas_testkit.domain import WebhookInboundPayload
 from saas_testkit.flows import InboundWebhook
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-5: the success log passes event= and the route returns 500",
-)
 async def test_inbound_returns_received(inbound: InboundWebhook) -> None:
     accepted = await inbound.accept()
 
