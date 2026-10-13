@@ -14,6 +14,7 @@
 - BUG-8: external-service-simulator `trigger_event` logs `event=body.event`. structlog already uses that name, so the call raises `TypeError` and `POST /trigger-event` returns 500 instead of 202. The background POST is scheduled before the log. `xfail(strict=True)` on the 202 response.
 - BUG-9: auth-service login queries `users.username`. A NUL byte is invalid UTF-8 (`0x00`), asyncpg raises, and `POST /auth/token` returns 500. `xfail(strict=True)` on that login. Schemathesis discards generated values that contain NUL.
 - BUG-10: **opentelemetry.instrumentation.instrumentor** **error** ++Oct 8, 6:56:40.346 AM UTC++ SQLAlchemyInstrumentor only instruments "sqlalchemy >= 1.0.0, < 2.1.0", but currently installed version ("sqlalchemy 2.1.3") falls outside of that range, so nothing can be instrumented. During refactoring (R0) along with lockfile: to lock `sqlalchemy>=2.0,<2.1` in services and `saas_shared`, or update`opentelemetry-instrumentation-sqlalchemy`, to the version with `sqlalchemy 2.1`support.
+  - Fixed. Pinned `sqlalchemy>=2.0,<2.1` so SQLAlchemyInstrumentor (supports `<2.1`) can instrument it; 2.1.3 was installed.
 
 
 
@@ -106,6 +107,8 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P10: fixtures live in purpose-named plugins registered once via pytest_plugins; autouse lives in the layer conftests; guards removed because double registration is no longer possible.
 - P9-isolate: the test stack project is `saas-test`. `container_name` is reset. The ports file is removed. Compose >= 2.24 is required so `!override` replaces lab host ports in `docker-compose.test.yml`: nginx `9080`, frontend `5174` (`UI_URL`), simulator `8002`, mailhog `8026`, toxiproxy `8475`. Postgres `5434`, Redis `6381`, Kafka `9095`, gateway `8010`, and worker metrics `9111`–`9113` stay off the ports the current `infra` project already publishes. `compose.py` refuses to start when `COMPOSE_PROJECT_NAME` is set to anything else, and when Compose is older than 2.24. The synthetic probe and `testing/synthetic/compose.probe.yml` still target the dev lab (`infra_default`).
 - P10-session-stale: `testing/.stack/session.json` outlived `down -v`. Tmpfs Postgres was empty, but an unexpired JWT skipped seed and login, so UI and `POST /auth/token` as admin returned 401. Reuse now requires the compose project, the postgres container id, and a live admin login.
+
+
 
 ## Refactor decisions
 

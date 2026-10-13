@@ -8,7 +8,7 @@ python-multipart
 PyJWT
 passlib[argon2]
 
-sqlalchemy[asyncio]
+sqlalchemy[asyncio]>=2.0,<2.1
 asyncpg
 
 redis[asyncio]
