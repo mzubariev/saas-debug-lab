@@ -1,0 +1,13 @@
+---
+description: Light prod refactoring under the test safety net (attach manually with @)
+alwaysApply: false
+---
+- Scope is only what the current task lists. No restructuring, no new layers, no renames, no moving to src/.
+- Behaviour-neutral, except a task that fixes a named BUG-n.
+- Bug fix flow: find the xfail(strict) test for BUG-n -> fix prod -> remove the xfail and any workaround for that bug in the kit/tests -> update KNOWN_ISSUES.md (status "Fixed", one line).
+- One commit per bug or per mechanical change. Give a commit message per change and list the paths for each, so I can `git add <paths>`.
+- Contract snapshots (`make contracts-update`) go in their own commit and the diff must match the intended change only.
+- Keep names and state keys the tests rely on (app.state.redis, app.state.kafka, app.state.kafka_producer, module `app.main:app`).
+- Do not touch scheduler-worker, dispatcher or notification-worker prod code unless the task says so.
+- Do not fix BUG-1, BUG-3, BUG-7. Do not add unit tests inside services.
+- New defects found while working: record BUG-n in KNOWN_ISSUES.md + xfail(strict). Do not fix them.

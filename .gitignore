@@ -22,3 +22,6 @@ node_modules/
 dist/
 build/
 *cache
+
+# Local notes
+testing/docs/local/
