@@ -5,21 +5,21 @@
 ### Confirmed
 
 - BUG-1: nginx `location /auth/token` is `limit_req zone=auth` at `5r/m` burst 3, keyed by `$http_authorization`. Ten logins within a few seconds, with no `Authorization` header, all return 200. An empty zone key is not accounted, so the documented limit does not apply.
-- BUG-2: task-service `TaskCreate.title` is an unconstrained string. `POST /tasks` stores an empty title and a 10000-character title and returns 201. Expected 422. `xfail(strict=True)` on those two cases. A non-string title does return 422.
+- BUG-2: task-service `TaskCreate.title` was an unconstrained string. `POST /tasks` stored an empty title and a 10000-character title and returned 201.
   - Fixed. `TaskCreate.title` is `Field(min_length=1, max_length=255)`. Limit 255 chosen by the owner; DB column stays unbounded.
 - BUG-3: task-service commits in the repository, then calls `publish_event`. A Kafka failure returns 500, the task row remains (a create stays stored, a start stays `in_progress`), the event is not published, and `cache_delete` does not run. `xfail(strict=True)` on create and start.
 - BUG-4a: auth-service login wrote `user:{username}` (TTL 300 s) before it checked the password.
   - Fixed. The cache write runs only after the password check succeeds. A wrong password leaves no key. The payload is still `username`, `hashed_password`, and `role`, and a second login still reads that row.
 - BUG-4b: the `user:{username}` entry stores `hashed_password`. `xfail(strict=True)` expects that entry to omit the hash.
   - Deferred. The proper fix caches only `username` and `role` and verifies against the DB hash, which changes the cache's purpose.
-- BUG-5: webhook-receiver `receive_inbound` logs `event=<payload event>` after a successful publish, and the failure log does the same. structlog already takes that name as the message, so the call raises `TypeError` and the route returns 500 instead of 200. The Kafka message is published before the success log. `xfail(strict=True)` on the 200 response, on the consumer-model check, and on Schemathesis for `POST /webhooks/inbound`.
+- BUG-5: webhook-receiver `receive_inbound` logged `event=<payload event>` after a successful publish, and the failure log did the same. structlog already takes that name as the message, so the call raised `TypeError` and the route returned 500 instead of 200. The Kafka message was published before the success log.
   - Fixed. Renamed the log kwarg to `event_name` on the success and failure logs, so `POST /webhooks/inbound` returns 200.
-- BUG-6: api-gateway OpenAPI reuses operationIds across methods (`proxy_auth_auth__path__post`, and the same pattern on `/tasks`, `/tasks/{path}`, and `/webhooks/{path}`). Which method name wins changes between processes. `openapi-spec-validator` rejects the document. `GET /openapi.json` is still 200. `xfail(strict=True)` on document validity. The snapshot rewrites a duplicated operationId to `method path` and pins the rest.
-  - Fixed. Each proxy method is its own route with an explicit operationId, so the document validates.
+- BUG-6: api-gateway OpenAPI reused operationIds across methods (`proxy_auth_auth__path__post`, and the same pattern on `/tasks`, `/tasks/{path}`, and `/webhooks/{path}`). Which method name won changed between processes. `openapi-spec-validator` rejected the document. `GET /openapi.json` was still 200.
+  - Fixed. Each proxy method is its own route with an explicit operationId, so the document validates. The snapshot keeps those operationIds.
 - BUG-7: webhook-dispatcher sets `Idempotency-Key` to `str(payload.id)`. `task_created` and both `task_updated` deliveries for one task share that key.
-- BUG-8: external-service-simulator `trigger_event` logs `event=body.event`. structlog already uses that name, so the call raises `TypeError` and `POST /trigger-event` returns 500 instead of 202. The background POST is scheduled before the log. `xfail(strict=True)` on the 202 response.
+- BUG-8: external-service-simulator `trigger_event` logged `event=body.event`. structlog already uses that name, so the call raised `TypeError` and `POST /trigger-event` returned 500 instead of 202. The background POST was scheduled before the log.
   - Fixed. Renamed the log kwarg to `event_name`, so `POST /trigger-event` returns 202.
-- BUG-9: auth-service login queries `users.username`. A NUL byte is invalid UTF-8 (`0x00`), asyncpg raises, and `POST /auth/token` returns 500. `xfail(strict=True)` on that login. Schemathesis discards generated values that contain NUL.
+- BUG-9: auth-service login queried `users.username`. A NUL byte is invalid UTF-8 (`0x00`), asyncpg raised, and `POST /auth/token` returned 500.
   - Fixed. Login rejects a NUL byte in the username with 422 before the query. Schemathesis no longer discards NUL.
 - BUG-10: **opentelemetry.instrumentation.instrumentor** **error** ++Oct 8, 6:56:40.346 AM UTC++ SQLAlchemyInstrumentor only instruments "sqlalchemy >= 1.0.0, < 2.1.0", but currently installed version ("sqlalchemy 2.1.3") falls outside of that range, so nothing can be instrumented. During refactoring (R0) along with lockfile: to lock `sqlalchemy>=2.0,<2.1` in services and `saas_shared`, or update`opentelemetry-instrumentation-sqlalchemy`, to the version with `sqlalchemy 2.1`support.
   - Fixed. Pinned `sqlalchemy>=2.0,<2.1` so SQLAlchemyInstrumentor (supports `<2.1`) can instrument it; 2.1.3 was installed.
