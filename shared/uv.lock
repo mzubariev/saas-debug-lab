@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -588,7 +588,7 @@ requires-dist = [
     { name = "opentelemetry-sdk", marker = "extra == 'services'" },
     { name = "prometheus-client", marker = "extra == 'services'" },
     { name = "redis", extras = ["asyncio"], marker = "extra == 'services'" },
-    { name = "sqlalchemy", specifier = ">=2.0" },
+    { name = "sqlalchemy", specifier = ">=2.0,<2.1" },
     { name = "structlog" },
 ]
 provides-extras = ["services"]
