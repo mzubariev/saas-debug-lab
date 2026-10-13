@@ -103,23 +103,35 @@ async def _proxy(request: Request, url: str) -> Response:
 
 
 # Auth routes — no token required (this is where you obtain a token).
-@router.api_route("/auth/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def proxy_auth(path: str, request: Request):
     return await _proxy(request, f"{settings.auth_service_url}/auth/{path}")
 
 
 # Task routes — valid JWT required.
-@router.api_route("/tasks", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def proxy_tasks_root(request: Request, _: dict = Depends(verify_token)):
     return await _proxy(request, f"{settings.task_service_url}/tasks")
 
 
-@router.api_route("/tasks/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def proxy_tasks(path: str, request: Request, _: dict = Depends(verify_token)):
     return await _proxy(request, f"{settings.task_service_url}/tasks/{path}")
 
 
 # Webhook routes — no token required (inbound webhooks arrive from external systems).
-@router.api_route("/webhooks/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def proxy_webhooks(path: str, request: Request):
     return await _proxy(request, f"{settings.integration_service_url}/webhooks/{path}")
+
+
+# One route per method: a multi-method APIRoute shares a single operationId.
+for _path, _endpoint, _methods in (
+    ("/auth/{path:path}", proxy_auth, ("GET", "POST", "PUT", "DELETE")),
+    ("/tasks", proxy_tasks_root, ("GET", "POST", "PUT", "PATCH", "DELETE")),
+    ("/tasks/{path:path}", proxy_tasks, ("GET", "POST", "PUT", "PATCH", "DELETE")),
+    ("/webhooks/{path:path}", proxy_webhooks, ("GET", "POST", "PUT", "PATCH", "DELETE")),
+):
+    for _method in _methods:
+        router.add_api_route(
+            _path,
+            _endpoint,
+            methods=[_method],
+            operation_id=f"{_endpoint.__name__}_{_method.lower()}",
+        )

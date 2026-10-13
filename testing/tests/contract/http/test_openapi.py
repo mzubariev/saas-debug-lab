@@ -57,44 +57,11 @@ async def _document(client: AsyncClient) -> dict[str, object]:
     return cast(dict[str, object], body)
 
 
-_METHODS = frozenset({"delete", "get", "head", "options", "patch", "post", "put", "trace"})
-
-
 def _normalise(document: dict[str, object]) -> dict[str, object]:
-    """Drop `servers`. Rewrite duplicate operationIds; FastAPI's suffix is not stable (BUG-6)."""
+    """Drop `servers`."""
     cleaned = cast(dict[str, object], json.loads(json.dumps(document)))
     cleaned.pop("servers", None)
-    _rewrite_duplicate_operation_ids(cleaned)
     return cleaned
-
-
-def _rewrite_duplicate_operation_ids(document: dict[str, object]) -> None:
-    paths = document.get("paths")
-    if not isinstance(paths, dict):
-        return
-    counts: dict[str, int] = {}
-    for item in paths.values():
-        for operation in _operations(item).values():
-            operation_id = operation.get("operationId")
-            if isinstance(operation_id, str):
-                counts[operation_id] = counts.get(operation_id, 0) + 1
-    for path, item in paths.items():
-        if not isinstance(path, str):
-            continue
-        for method, operation in _operations(item).items():
-            operation_id = operation.get("operationId")
-            if isinstance(operation_id, str) and counts.get(operation_id, 0) > 1:
-                operation["operationId"] = f"{method} {path}"
-
-
-def _operations(item: object) -> dict[str, dict[str, object]]:
-    if not isinstance(item, dict):
-        return {}
-    found: dict[str, dict[str, object]] = {}
-    for method, operation in item.items():
-        if isinstance(method, str) and method in _METHODS and isinstance(operation, dict):
-            found[method] = cast(dict[str, object], operation)
-    return found
 
 
 def _canonical(document: dict[str, object]) -> str:
