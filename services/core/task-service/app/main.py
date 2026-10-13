@@ -1,26 +1,42 @@
+from collections.abc import AsyncIterator
+from contextlib import AsyncExitStack, asynccontextmanager
+
 from fastapi import FastAPI
-from saas_shared.logging import install_request_context_middleware, install_unhandled_exception_middleware
+from saas_shared.health import router as health_router
+from saas_shared.logging import (
+    install_request_context_middleware,
+    install_unhandled_exception_middleware,
+    setup_logging,
+)
 from saas_shared.metrics import router as metrics_router
 from saas_shared.prometheus_http import install_http_metrics_middleware
 from saas_shared.sentry_setup import setup_sentry_fastapi
-from saas_shared.telemetry import instrument_sqlalchemy_async_engine
+from saas_shared.telemetry import instrument_sqlalchemy_async_engine, setup_telemetry
 
-from saas_shared.health import router as health_router
-from saas_shared.logging import setup_logging
-from saas_shared.telemetry import setup_telemetry
-
-from .core.config import settings
 from .api.routes import tasks
-from .infrastructure.messaging.producer import start_kafka, stop_kafka
+from .core.config import settings
 from .infrastructure.cache.client import start_redis, stop_redis
 from .infrastructure.db.session import engine
+from .infrastructure.messaging.producer import start_kafka, stop_kafka
 
 
 setup_logging(service_name=settings.service_name, log_level=settings.log_level)
 
 # Schema is created by the shared `migrations` one-shot container before startup.
 
-app = FastAPI(title="task-service", redirect_slashes=False)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    async with AsyncExitStack() as stack:
+        stack.push_async_callback(engine.dispose)
+        await start_kafka(app)
+        stack.push_async_callback(stop_kafka, app)
+        await start_redis(app, settings.redis_url)
+        stack.push_async_callback(stop_redis, app)
+        yield
+
+
+app = FastAPI(title="task-service", redirect_slashes=False, lifespan=lifespan)
 
 setup_sentry_fastapi(service_name=settings.service_name, dsn=settings.sentry_dsn, app=app)
 
@@ -32,23 +48,11 @@ setup_telemetry(
 instrument_sqlalchemy_async_engine(engine)
 
 
-@app.on_event("startup")
-async def startup():
-    await start_kafka(app)
-    await start_redis(app, settings.redis_url)
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    await stop_kafka(app)
-    await stop_redis(app)
-
-
 app.include_router(health_router)
 app.include_router(metrics_router)
 app.include_router(tasks.router)
 
+install_unhandled_exception_middleware(app)
 install_http_metrics_middleware(app)
 install_request_context_middleware(app)
-install_unhandled_exception_middleware(app)
 

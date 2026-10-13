@@ -125,7 +125,7 @@ Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE
 
 | Process | Database | Kafka | HTTP |
 | --- | --- | --- | --- |
-| auth, task | SQLAlchemy 2 async + asyncpg. Engine object at import | task: aiokafka producer at startup | none |
+| auth, task | SQLAlchemy 2 async + asyncpg. Engine object at import | task: aiokafka producer in the lifespan | none |
 | webhook-receiver, dispatcher | none | aiokafka producer and (dispatcher) consumer, both inside startup / `main` | dispatcher: `httpx.AsyncClient` |
 | notification-worker | none | aiokafka consumer inside `consume()` | `aiosmtplib` |
 | scheduler-worker | SQLAlchemy sync + psycopg2, lazy engine | kafka-python `KafkaConsumer`, per DLQ tick | `httpx.Client` per POST |
@@ -136,7 +136,8 @@ Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE
 
 | Process | Compose check | What the code actually exposes |
 | --- | --- | --- |
-| api-gateway, auth, task, webhook-receiver, simulator | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres, Redis, or Kafka. Dependency connections are `@app.on_event("startup")` (gateway and simulator have no such handler). |
+| api-gateway, auth, webhook-receiver, simulator | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres, Redis, or Kafka. Dependency connections are `@app.on_event("startup")` (gateway and simulator have no such handler). |
+| task | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres, Redis, or Kafka. The lifespan connects Kafka then Redis. Shutdown stops Redis, then Kafka, then disposes the engine. |
 | webhook-dispatcher, notification-worker | none | `prometheus_client.start_http_server` on `METRICS_PORT` (default 9100) at the start of `main` / `run`, then the consume loop. Not bound at import. |
 | scheduler-worker | none | Same port, but only in one prefork child (`worker_process_init`), not in the beat parent and not at import. |
 | migrations | `service_completed_successfully` | process exit 0 |
@@ -146,7 +147,7 @@ Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE
 
 `infra/test-stack.services` is the explicit test stack (no exporters). `infra/docker-compose.test.yml` selects the frontend `preview` image stage (`vite build` then `vite preview` on port 5173). Toxiproxy has no shell or HTTP client in the image, so it has no healthcheck.
 
-`ASGITransport` does not run `on_event`, so a test that needs Redis or Kafka must enter the app lifespan itself. `get_db` closes over the module-level `SessionLocal` built from the environment at import.
+`ASGITransport` does not run the lifespan or `on_event`, so a test that needs Redis or Kafka must enter the app lifespan itself. `get_db` closes over the module-level `SessionLocal` built from the environment at import.
 
 ## Hazards
 

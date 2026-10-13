@@ -1,9 +1,12 @@
 """Characterised task-service behaviour. The flow returns the response; the test decides."""
 
 import asyncio
+import re
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from pytest_mock import MockerFixture
@@ -14,6 +17,7 @@ from saas_testkit.flows import TaskLifecycle
 
 _TITLE_LIMIT = 255
 _OVERSIZE = 10_000
+_HTTP_STATUS_500 = re.compile(r'http_requests_total\{[^}]*status="500"')
 
 
 async def test_create_task_returns_created_status(lifecycle: TaskLifecycle) -> None:
@@ -241,6 +245,48 @@ async def test_get_reads_the_database_when_redis_is_down(
     assert response.status == 200
     assert response.data is not None
     assert response.data.title == task.title
+
+
+async def test_create_publish_failure_is_a_logged_server_error(
+    lifecycle: TaskLifecycle,
+    client: httpx.AsyncClient,
+    mocker: MockerFixture,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    mocker.patch(
+        "app.services.task_service.publish_event",
+        autospec=True,
+        side_effect=RuntimeError("kafka down"),
+    )
+    capfd.readouterr()
+
+    response = await lifecycle.create(title=unique_title("kafka-error"))
+    metrics = await client.get("/metrics")
+    captured = capfd.readouterr()
+    error_log = "\n".join(
+        line
+        for line in f"{captured.out}\n{captured.err}".splitlines()
+        if "unhandled_exception" in line
+    )
+
+    assert response.status == 500
+    assert _HTTP_STATUS_500.search(metrics.text)
+    assert "request_id" in error_log
+
+
+async def test_lifespan_closes_redis(service_app: FastAPI, mocker: MockerFixture) -> None:
+    app_engine = mocker.Mock()
+    app_engine.dispose = AsyncMock()
+    mocker.patch("app.main.engine", app_engine)
+    mocker.patch("app.main.start_kafka", new_callable=AsyncMock)
+    mocker.patch("app.main.stop_kafka", new_callable=AsyncMock)
+    mocker.patch("app.main.start_redis", new_callable=AsyncMock)
+    stop_redis = mocker.patch("app.main.stop_redis", new_callable=AsyncMock)
+
+    async with service_app.router.lifespan_context(service_app):
+        pass
+
+    stop_redis.assert_awaited_once_with(service_app)
 
 
 @pytest.mark.xfail(
