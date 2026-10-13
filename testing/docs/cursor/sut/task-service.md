@@ -1,6 +1,6 @@
 # task-service (SUT facts)
 
-Directory `services/core/task-service`. Same async engine-at-import pattern as auth (`postgresql+asyncpg`). Startup connects Kafka (`AIOKafkaProducer.start`, `app.state.kafka`) and Redis. Shutdown stops both. No JWT check in this service.
+Directory `services/core/task-service`. Same async engine-at-import pattern as auth (`postgresql+asyncpg`). The lifespan connects Kafka (`AIOKafkaProducer.start`, `app.state.kafka`) then Redis. Shutdown stops Redis, then Kafka, then disposes the engine. No JWT check in this service.
 
 Routes `app/api/routes/tasks.py`, models `app/schemas/task.py` (`TaskCreate.title`, `TaskOut` id/title/status/created_at/updated_at). OpenAPI: `GET,POST /tasks`, `GET /tasks/{task_id}`, `PATCH /tasks/{task_id}/start`, `PATCH /tasks/{task_id}/complete`. `POST /tasks` is 201. DI: `get_db`; `get_task_service` passes `app.state.redis` and `app.state.kafka`. Repository commits inside `create` and `save`.
 

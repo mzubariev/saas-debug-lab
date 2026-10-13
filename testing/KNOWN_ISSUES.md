@@ -46,6 +46,7 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - `frontend/src/pages/LoginPage.tsx`: the login error `div` has `role="alert"` so `LoginPage` can use `get_by_role("alert")`. The message and the class are unchanged.
 - `frontend/Dockerfile` preview `VITE_API_URL` build-arg (default `http://localhost`) and api-gateway `CORS_ORIGINS` (default empty, lab origins unchanged). The test stack publishes the UI on 5174 and nginx on 9080, so the bundle and the browser origin are not the lab's.
 - BUG-11: `frontend/src/index.css` `.task-card__title` (`overflow-wrap: anywhere`) and `.column` (`min-width: 0`). A title with no spaces is one long word, so the board grid grows past the viewport and the target column leaves the screen. Wrapping keeps the word inside the column.
+- task-service: `@app.on_event` startup and shutdown are one lifespan (`AsyncExitStack`: `engine.dispose` is registered first and runs last; `start_kafka` then `stop_kafka`; `start_redis` then `stop_redis`). Routes take `TaskServiceDep` (`DbSession` inside it). `POST /tasks` still returns 201.
 
 
 
