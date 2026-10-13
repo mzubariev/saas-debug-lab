@@ -12,6 +12,7 @@ from saas_testkit.context import unique_title
 from saas_testkit.domain import Task, TaskCreatedPayload, TaskStatus, TaskUpdatedPayload
 from saas_testkit.flows import TaskLifecycle
 
+_TITLE_LIMIT = 255
 _OVERSIZE = 10_000
 
 
@@ -36,22 +37,9 @@ async def test_create_task_publishes_task_created(lifecycle: TaskLifecycle) -> N
 @pytest.mark.parametrize(
     "title",
     [
-        pytest.param(
-            "",
-            id="empty",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="BUG-2: empty title is stored and returns 201",
-            ),
-        ),
-        pytest.param(
-            "x" * _OVERSIZE,
-            id="oversize",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="BUG-2: a 10000-character title is stored and returns 201",
-            ),
-        ),
+        pytest.param("", id="empty"),
+        pytest.param("x" * (_TITLE_LIMIT + 1), id="over-limit"),
+        pytest.param("x" * _OVERSIZE, id="oversize"),
         pytest.param(1, id="wrong-type"),
     ],
 )
@@ -59,6 +47,12 @@ async def test_create_rejects_a_bad_title(lifecycle: TaskLifecycle, title: objec
     response = await lifecycle.submit_title(title)
 
     assert response.status == 422
+
+
+async def test_create_accepts_a_title_at_the_length_limit(lifecycle: TaskLifecycle) -> None:
+    response = await lifecycle.submit_title("x" * _TITLE_LIMIT)
+
+    assert response.status == 201
 
 
 async def test_get_returns_the_task(lifecycle: TaskLifecycle) -> None:
