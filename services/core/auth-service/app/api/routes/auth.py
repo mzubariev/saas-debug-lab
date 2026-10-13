@@ -1,5 +1,6 @@
 import structlog
 from fastapi import APIRouter, Depends, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,10 +19,25 @@ def get_auth_service(request: Request, db: AsyncSession = Depends(get_db)) -> Au
     return AuthService(db, request.app.state.redis)
 
 
+def login_form(form: OAuth2PasswordRequestForm = Depends()) -> OAuth2PasswordRequestForm:
+    if "\x00" not in form.username:
+        return form
+    raise RequestValidationError(
+        [
+            {
+                "type": "value_error",
+                "loc": ("body", "username"),
+                "msg": "Value error, NUL byte is not allowed",
+                "input": form.username,
+            }
+        ]
+    )
+
+
 @router.post("/token", response_model=TokenResponse)
 async def login(
     request: Request,
-    form: OAuth2PasswordRequestForm = Depends(),
+    form: OAuth2PasswordRequestForm = Depends(login_form),
     service: AuthService = Depends(get_auth_service),
 ):
     # Emits one JSON object on stdout: includes request_id (middleware), trace_id (OTEL), message=event.
