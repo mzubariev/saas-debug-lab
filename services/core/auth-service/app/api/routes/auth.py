@@ -2,9 +2,8 @@ import structlog
 from fastapi import APIRouter, Depends, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...dependencies import get_db
+from ...dependencies import AuthServiceDep
 from ...schemas.auth import TokenResponse, UserInfo
 from ...services.auth_service import AuthService
 
@@ -13,10 +12,6 @@ router = APIRouter(prefix="/auth")
 logger = structlog.get_logger()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
-
-
-def get_auth_service(request: Request, db: AsyncSession = Depends(get_db)) -> AuthService:
-    return AuthService(db, request.app.state.redis)
 
 
 def login_form(form: OAuth2PasswordRequestForm = Depends()) -> OAuth2PasswordRequestForm:
@@ -37,8 +32,8 @@ def login_form(form: OAuth2PasswordRequestForm = Depends()) -> OAuth2PasswordReq
 @router.post("/token", response_model=TokenResponse)
 async def login(
     request: Request,
+    service: AuthServiceDep,
     form: OAuth2PasswordRequestForm = Depends(login_form),
-    service: AuthService = Depends(get_auth_service),
 ):
     # Emits one JSON object on stdout: includes request_id (middleware), trace_id (OTEL), message=event.
     logger.info(

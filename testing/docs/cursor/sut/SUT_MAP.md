@@ -136,7 +136,8 @@ Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE
 
 | Process | Compose check | What the code actually exposes |
 | --- | --- | --- |
-| api-gateway, auth, webhook-receiver, simulator | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres, Redis, or Kafka. Dependency connections are `@app.on_event("startup")` (gateway and simulator have no such handler). |
+| api-gateway, webhook-receiver, simulator | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres, Redis, or Kafka. Dependency connections are `@app.on_event("startup")` (gateway and simulator have no such handler). |
+| auth | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres or Redis. The lifespan connects Redis. Shutdown stops Redis, then disposes the engine. |
 | task | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres, Redis, or Kafka. The lifespan connects Kafka then Redis. Shutdown stops Redis, then Kafka, then disposes the engine. |
 | webhook-dispatcher, notification-worker | none | `prometheus_client.start_http_server` on `METRICS_PORT` (default 9100) at the start of `main` / `run`, then the consume loop. Not bound at import. |
 | scheduler-worker | none | Same port, but only in one prefork child (`worker_process_init`), not in the beat parent and not at import. |

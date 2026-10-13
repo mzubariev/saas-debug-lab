@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import jwt
 import sentry_sdk
 import structlog
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +26,7 @@ def _user_key(username: str) -> str:
 class AuthService:
     """Login flow, JWT issue/decode, and Redis cache-aside for user rows.
 
-    Does not import FastAPI beyond HTTPException for error signalling.
+    Does not import FastAPI beyond HTTPException and status for error signalling.
     """
 
     def __init__(self, db: AsyncSession, redis: Redis) -> None:
@@ -44,10 +44,10 @@ class AuthService:
             return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
         except jwt.ExpiredSignatureError as exc:
             logger.info("token_expired")
-            raise HTTPException(status_code=401, detail="Token expired") from exc
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired") from exc
         except jwt.InvalidTokenError as exc:
             logger.warning("token_invalid", error=str(exc))
-            raise HTTPException(status_code=401, detail=f"Invalid token: {exc}") from exc
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {exc}") from exc
 
     async def login(self, username: str, password: str) -> TokenResponse:
         key = _user_key(username)
@@ -70,7 +70,7 @@ class AuthService:
                     message=f"Login failed: unknown user '{username}'",
                     level="warning",
                 )
-                raise HTTPException(status_code=401, detail="Invalid credentials")
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
             hashed_password = user.hashed_password
             role = user.role
@@ -83,7 +83,7 @@ class AuthService:
                 message=f"Login failed: wrong password for '{username}'",
                 level="warning",
             )
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
         if user is not None:
             await cache_set(
