@@ -2,14 +2,13 @@ import time
 
 import httpx
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
 
 from saas_shared.prometheus_metrics import downstream_request_duration_seconds, downstream_requests_total
 
 from ...core.config import settings
-from ...dependencies import verify_token
-from ...infrastructure.http.client import client
+from ...dependencies import HttpClient, verify_token
 
 router = APIRouter()
 
@@ -42,7 +41,7 @@ def _service_label(url: str) -> str:
     return "unknown"
 
 
-async def _proxy(request: Request, url: str) -> Response:
+async def _proxy(request: Request, url: str, client: httpx.AsyncClient) -> Response:
     body = await request.body()
     service = _service_label(url)
 
@@ -61,14 +60,20 @@ async def _proxy(request: Request, url: str) -> Response:
             headers=headers,
         )
     except httpx.TimeoutException as exc:
-        downstream_requests_total.labels(service=service, status=504).inc()
+        downstream_requests_total.labels(
+            service=service, status=status.HTTP_504_GATEWAY_TIMEOUT
+        ).inc()
         downstream_request_duration_seconds.labels(service=service).observe(
             time.perf_counter() - t0
         )
         logger.error("proxy_timeout", method=request.method, url=url)
-        raise HTTPException(status_code=504, detail="Downstream timeout") from exc
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Downstream timeout"
+        ) from exc
     except httpx.RequestError as exc:
-        downstream_requests_total.labels(service=service, status=502).inc()
+        downstream_requests_total.labels(
+            service=service, status=status.HTTP_502_BAD_GATEWAY
+        ).inc()
         downstream_request_duration_seconds.labels(service=service).observe(
             time.perf_counter() - t0
         )
@@ -78,14 +83,16 @@ async def _proxy(request: Request, url: str) -> Response:
             url=url,
             error=str(exc),
         )
-        raise HTTPException(status_code=502, detail="Downstream unavailable") from exc
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="Downstream unavailable"
+        ) from exc
 
     elapsed = time.perf_counter() - t0
     status_label = str(resp.status_code)
     downstream_requests_total.labels(service=service, status=status_label).inc()
     downstream_request_duration_seconds.labels(service=service).observe(elapsed)
 
-    log = logger.warning if resp.status_code >= 400 else logger.info
+    log = logger.warning if resp.status_code >= status.HTTP_400_BAD_REQUEST else logger.info
     log(
         "proxy_request",
         method=request.method,
@@ -103,22 +110,27 @@ async def _proxy(request: Request, url: str) -> Response:
 
 
 # Auth routes — no token required (this is where you obtain a token).
-async def proxy_auth(path: str, request: Request):
-    return await _proxy(request, f"{settings.auth_service_url}/auth/{path}")
+async def proxy_auth(path: str, request: Request, client: HttpClient):
+    return await _proxy(request, f"{settings.auth_service_url}/auth/{path}", client)
 
 
 # Task routes — valid JWT required.
-async def proxy_tasks_root(request: Request, _: dict = Depends(verify_token)):
-    return await _proxy(request, f"{settings.task_service_url}/tasks")
+async def proxy_tasks_root(request: Request, client: HttpClient, _: dict = Depends(verify_token)):
+    return await _proxy(request, f"{settings.task_service_url}/tasks", client)
 
 
-async def proxy_tasks(path: str, request: Request, _: dict = Depends(verify_token)):
-    return await _proxy(request, f"{settings.task_service_url}/tasks/{path}")
+async def proxy_tasks(
+    path: str,
+    request: Request,
+    client: HttpClient,
+    _: dict = Depends(verify_token),
+):
+    return await _proxy(request, f"{settings.task_service_url}/tasks/{path}", client)
 
 
 # Webhook routes — no token required (inbound webhooks arrive from external systems).
-async def proxy_webhooks(path: str, request: Request):
-    return await _proxy(request, f"{settings.integration_service_url}/webhooks/{path}")
+async def proxy_webhooks(path: str, request: Request, client: HttpClient):
+    return await _proxy(request, f"{settings.integration_service_url}/webhooks/{path}", client)
 
 
 # One route per method: a multi-method APIRoute shares a single operationId.
