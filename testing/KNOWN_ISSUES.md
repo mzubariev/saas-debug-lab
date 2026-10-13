@@ -6,6 +6,7 @@
 
 - BUG-1: nginx `location /auth/token` is `limit_req zone=auth` at `5r/m` burst 3, keyed by `$http_authorization`. Ten logins within a few seconds, with no `Authorization` header, all return 200. An empty zone key is not accounted, so the documented limit does not apply.
 - BUG-2: task-service `TaskCreate.title` is an unconstrained string. `POST /tasks` stores an empty title and a 10000-character title and returns 201. Expected 422. `xfail(strict=True)` on those two cases. A non-string title does return 422.
+  - Fixed. `TaskCreate.title` is `Field(min_length=1, max_length=255)`. Limit 255 chosen by the owner; DB column stays unbounded.
 - BUG-3: task-service commits in the repository, then calls `publish_event`. A Kafka failure returns 500, the task row remains (a create stays stored, a start stays `in_progress`), the event is not published, and `cache_delete` does not run. `xfail(strict=True)` on create and start.
 - BUG-4: auth-service login writes `hashed_password` to Redis (`user:{username}`, TTL 300 s) before it checks the password. `xfail(strict=True)` expects that cache entry to omit the hash. A second login reads the cached row.
 - BUG-5: webhook-receiver `receive_inbound` logs `event=<payload event>` after a successful publish, and the failure log does the same. structlog already takes that name as the message, so the call raises `TypeError` and the route returns 500 instead of 200. The Kafka message is published before the success log. `xfail(strict=True)` on the 200 response, on the consumer-model check, and on Schemathesis for `POST /webhooks/inbound`.
@@ -16,6 +17,7 @@
 - BUG-8: external-service-simulator `trigger_event` logs `event=body.event`. structlog already uses that name, so the call raises `TypeError` and `POST /trigger-event` returns 500 instead of 202. The background POST is scheduled before the log. `xfail(strict=True)` on the 202 response.
   - Fixed. Renamed the log kwarg to `event_name`, so `POST /trigger-event` returns 202.
 - BUG-9: auth-service login queries `users.username`. A NUL byte is invalid UTF-8 (`0x00`), asyncpg raises, and `POST /auth/token` returns 500. `xfail(strict=True)` on that login. Schemathesis discards generated values that contain NUL.
+  - Fixed. Login rejects a NUL byte in the username with 422 before the query. Schemathesis no longer discards NUL.
 - BUG-10: **opentelemetry.instrumentation.instrumentor** **error** ++Oct 8, 6:56:40.346 AM UTC++ SQLAlchemyInstrumentor only instruments "sqlalchemy >= 1.0.0, < 2.1.0", but currently installed version ("sqlalchemy 2.1.3") falls outside of that range, so nothing can be instrumented. During refactoring (R0) along with lockfile: to lock `sqlalchemy>=2.0,<2.1` in services and `saas_shared`, or update`opentelemetry-instrumentation-sqlalchemy`, to the version with `sqlalchemy 2.1`support.
   - Fixed. Pinned `sqlalchemy>=2.0,<2.1` so SQLAlchemyInstrumentor (supports `<2.1`) can instrument it; 2.1.3 was installed.
 
@@ -28,7 +30,7 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - Scheduler DLQ replay is final on any `httpx.HTTPStatusError` (`autoretry_for` is only `httpx.RequestError`). The DLQ consumer sets `enable_auto_commit=True` and `process_dlq` commits by consuming and closing before the Celery task performs the HTTP call, so a rejected replay is not returned to `webhook_dlq`.
 - Dispatcher `_produce` logs `kafka_produce_failed` and does not re-raise. Notification-worker catches `aiosmtplib.SMTPException` and `OSError`, counts them, and does not re-raise.
 - The `role` claim is written at login and copied by gateway `verify_token` and `/auth/me`. No route checks it. There is no authZ.
-- `GET /tasks` returns every row (`list_all`; no limit or offset).
+- `GET /tasks` returns every row (`list_all`; no limit or offset). There is ONLY Clietn-side pagination and no backend pagination.
 
 
 
@@ -104,7 +106,7 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P9.1: built services in the test overlay set `image: saas-test-<service>:latest`. Bake loads that tag. Compose, run from `infra/`, looks up the same name. Test images are `saas-test-*` and never overwrite the lab's `infra-*`. Container names stay unprefixed.
 - P9.1: test nginx gets `extra_hosts` for `otel-collector`. `nginx.conf` resolves that name at startup, and the test stack does not run the collector.
 - P9-perf: CI writes stack-boot phase times to the job summary. `test-stack.services` does not start kafka-ui, exporters, or observability. Integration and ui-e2e bake with `cache-from: type=gha`.
-- Nightly: Schemathesis discards generated values that contain NUL. Postgres rejects `0x00` in text, and auth login returns 500 (BUG-9). The other generated calls still fail on a 500.
+- Nightly: Schemathesis no longer discards NUL (BUG-9 fixed: a NUL username is 422). Postgres still rejects `0x00` in other text columns.
 - Nightly: the flaky pass and the duration refresh run integration and `e2e_ui` in separate pytest processes. Playwright's sync plugin leaves an event loop running, and a later async test raises `Runner.run() cannot be called from a running event loop`. The UI flaky pass uses `--reruns 1` so one missed board drag is reported and retried.
 - Nightly: the report job sets `GH_REPO` and does not checkout. `gh issue` was failing with `not a git repository` because that job has no `.git`.
 - P10: fixtures live in purpose-named plugins registered once via pytest_plugins; autouse lives in the layer conftests; guards removed because double registration is no longer possible.

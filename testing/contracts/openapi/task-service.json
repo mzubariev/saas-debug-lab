@@ -17,6 +17,8 @@
       "TaskCreate": {
         "properties": {
           "title": {
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Title",
             "type": "string"
           }
