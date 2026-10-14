@@ -1,13 +1,12 @@
 ---
-description: Python style. Testing code uses Python 3.14 features; production code stays 3.11-compatible until R0
+description: Python style. Testing and production code target Python 3.14
 globs: **/*.py
 alwaysApply: false
 ---
 # Python style
 
 ## Which Python version applies where
-- Code under `testing/` targets Python 3.14 and may use the modern features listed below.
-- Production code (`services/`, `workers/`, `shared/`, `migrations/`) still runs on `python:3.11` images. Until the R0 packaging step moves them to 3.14, keep production edits 3.11-compatible: no PEP 695 generics, no `type` statement, no `typing.override`, and keep the file's existing annotation style.
+- `testing/`, `services/`, `workers/`, `shared/`, and `migrations/` target Python 3.14 and may use the modern features listed below.
 
 ## General principles
 - Prefer simple code. Use a pure function unless there is real state or lifecycle, and prefer composition over inheritance.

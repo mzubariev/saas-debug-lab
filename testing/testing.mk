@@ -27,7 +27,7 @@ GATE_N = $(or $(N),$(N_$(LAYER)),auto)
 
 .PHONY: t-unit t-component t-component-all deps-up deps-down deps-clean \
 	t-contract contracts-update t-int t-ui t-smoke t-synthetic \
-	t-lint t-check t-gate stack-up stack-down
+	t-lint t-check t-gate stack-up stack-down lock
 
 t-unit:
 	cd $(TESTING_DIR) && uv run pytest tests/unit -n auto --maxprocesses=8 -q
@@ -106,4 +106,22 @@ t-gate:
 	while [ "$$i" -le 3 ]; do \
 		uv run pytest tests/$(LAYER) $$service_arg -n $(GATE_N) --maxprocesses=8 -q || exit 1; \
 		i=$$((i + 1)); \
+	done
+
+# Per-service locks from testing/. --only-group keeps kit deps out.
+# saas-shared itself is omitted; its [services] deps stay in the lock.
+lock:
+	cd $(TESTING_DIR) && set -eu; \
+	for spec in \
+		"task-service ../services/core/task-service/requirements.lock" \
+		"auth-service ../services/core/auth-service/requirements.lock" \
+		"api-gateway ../services/core/api-gateway/requirements.lock" \
+		"webhook-receiver ../services/core/webhook-receiver/requirements.lock" \
+		"webhook-dispatcher ../services/core/webhook-dispatcher/requirements.lock" \
+		"external-service-simulator ../services/external/external-service-simulator/requirements.lock" \
+		"notification-worker ../workers/notification-worker/requirements.lock" \
+		"scheduler-worker ../workers/scheduler-worker/requirements.lock"; \
+	do \
+		set -- $$spec; \
+		uv export --only-group "$$1" --no-emit-package saas-shared --no-hashes -o "$$2"; \
 	done

@@ -10,7 +10,7 @@ Before a component or contract session, install that service's group:
 Adapters are concrete classes. A `Protocol` appears only when a boundary has two implementations.
 The same flow runs at component and integration level. The injected `httpx.AsyncClient` transport is the swap point.
 
-Tests run on Python 3.14 with `uv.lock`. Service images still run Python 3.11 with unpinned `requirements.txt`. That gap closes in R0.
+Tested = shipped: tests and service images run Python 3.14, and images install a per-service `requirements.lock`.
 
 ## Environments
 
