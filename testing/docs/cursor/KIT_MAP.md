@@ -107,6 +107,12 @@ external-service-simulator (`tests/component/external_service_simulator/conftest
 
 `ExternalReceiver.receive`, `receive_again`, and `fail` (`simulated` is `fail_rate=1`, `custom` asks for status 503). `Delivery` is the response plus the idempotency `key` and `payload` sent. `HttpSimulatorApi.receive` posts `/receive-webhook` with `Idempotency-Key`. `SimulatorReceipt` is that body (`status`, and `payload`, `idempotency_key`, `reason`, or `code`).
 
+## R-3.1 webhook-dispatcher
+
+`tests/component/webhook_dispatcher/`. Tests call `process_consumed_message` (the consume loop stays down). respx answers `WEBHOOK_URL`. `asyncio.sleep` and `random.uniform` are patched (`autospec`); jitter is pinned so the default waits are `1.05` then `2.15`, and nothing is slept after the last attempt. `kafka_producer` is a real `AIOKafkaProducer`; `WebhookDelivery.dead_letter` reads `webhook_dlq`. A produce failure is an autospec `AIOKafkaProducer` whose `send_and_wait` raises; `kafka_produce_failed` is logged and the call returns.
+
+`deliver` posts one record. `test_webhook_posts_once_when_receiver_returns_2xx` (`Idempotency-Key` is `str(payload.id)`), `test_webhook_retries_with_backoff_when_delivery_fails` and `test_webhook_dead_letters_when_retries_are_exhausted` (`5xx`, `httpx.RequestError`), `test_webhook_dead_letters_without_retry_when_receiver_returns_4xx`, `test_webhook_posts_raw_json_when_message_is_legacy`, `test_consumer_returns_when_message_is_poison` (no `webhook_dlq`), `test_consumer_logs_and_returns_when_dlq_produce_fails`.
+
 ## P4.1 contract/events
 
 `Envelope` is `extra="forbid"`. Snapshots: `contracts/events/task_created.schema.json`, `task_updated.schema.json`, `webhook_inbound.schema.json`, `webhook_dlq.schema.json`. `event_contract_dir` and `event_schema_errors`. `test_event_schema_matches_snapshot` and `test_legacy_message_maps_to_unknown` are service-agnostic. `test_produced_task_created_matches_snapshot` and `test_produced_task_updated_matches_snapshot` collect only for `--service task-service`. `test_produced_webhook_inbound_matches_snapshot` collects only for `--service webhook-receiver`.
