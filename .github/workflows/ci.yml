@@ -31,6 +31,8 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pyright
+      - working-directory: .
+        run: make lock && git diff --exit-code
 
   security:
     runs-on: ubuntu-latest

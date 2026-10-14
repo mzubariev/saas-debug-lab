@@ -1,12 +1,12 @@
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
-COPY workers/scheduler-worker/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY workers/scheduler-worker/requirements.lock .
+RUN pip install --no-cache-dir -r requirements.lock
 
 COPY shared/ /app/shared
-RUN pip install -e "/app/shared[services]"
+RUN pip install --no-deps -e /app/shared
 
 COPY workers/scheduler-worker/app ./app
 
