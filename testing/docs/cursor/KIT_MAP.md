@@ -113,6 +113,12 @@ external-service-simulator (`tests/component/external_service_simulator/conftest
 
 `deliver` posts one record. `test_webhook_posts_once_when_receiver_returns_2xx` (`Idempotency-Key` is `str(payload.id)`), `test_webhook_retries_with_backoff_when_delivery_fails` and `test_webhook_dead_letters_when_retries_are_exhausted` (`5xx`, `httpx.RequestError`), `test_webhook_dead_letters_without_retry_when_receiver_returns_4xx`, `test_webhook_posts_raw_json_when_message_is_legacy`, `test_consumer_returns_when_message_is_poison` (no `webhook_dlq`), `test_consumer_logs_and_returns_when_dlq_produce_fails`.
 
+## R-3.2 notification-worker
+
+`tests/component/notification_worker/`. Tests call `consume` with a stand-in consumer (the real consumer stays down). `aiosmtplib.send` is patched (`autospec`) and the `MIMEMultipart` is captured. No SMTP.
+
+`mail_settings` is `email_from`, `email_to`, `smtp_host`. `test_notification_sends_multipart_mail_when_a_task_is_created` (`multipart/alternative`; text and html both contain the title; subject, from, and to come from settings; `emails_total` `success`), `test_notification_sends_the_next_message_when_smtp_fails` (`SMTPException` → `smtp_error`, `OSError` → `connection_error`; the next message is still sent), `test_notification_sends_only_the_valid_mail_when_the_previous_message_is_poison` (`b"{"` then a valid task; one mail), `test_notification_sends_mail_when_message_is_legacy`.
+
 ## P4.1 contract/events
 
 `Envelope` is `extra="forbid"`. Snapshots: `contracts/events/task_created.schema.json`, `task_updated.schema.json`, `webhook_inbound.schema.json`, `webhook_dlq.schema.json`. `event_contract_dir` and `event_schema_errors`. `test_event_schema_matches_snapshot` and `test_legacy_message_maps_to_unknown` are service-agnostic. `test_produced_task_created_matches_snapshot` and `test_produced_task_updated_matches_snapshot` collect only for `--service task-service`. `test_produced_webhook_inbound_matches_snapshot` collects only for `--service webhook-receiver`.
