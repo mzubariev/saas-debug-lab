@@ -75,8 +75,86 @@ jobs:
           name: junit-unit
           path: testing/reports/junit-unit.xml
 
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      services: ${{ steps.decide.outputs.services }}
+      stack: ${{ steps.decide.outputs.stack }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            task-service:
+              - 'services/core/task-service/**'
+            auth-service:
+              - 'services/core/auth-service/**'
+            api-gateway:
+              - 'services/core/api-gateway/**'
+            webhook-receiver:
+              - 'services/core/webhook-receiver/**'
+            external-service-simulator:
+              - 'services/external/external-service-simulator/**'
+            webhook-dispatcher:
+              - 'services/core/webhook-dispatcher/**'
+            notification-worker:
+              - 'workers/notification-worker/**'
+            scheduler-worker:
+              - 'workers/scheduler-worker/**'
+            frontend:
+              - 'frontend/**'
+            all:
+              - 'testing/**'
+              - 'shared/**'
+              - 'infra/**'
+              - 'migrations/**'
+              - '.github/**'
+              - 'uv.lock'
+              - '**/uv.lock'
+      - id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          python3 - << 'PY'
+          import json
+          import os
+
+          full = [
+              "task-service",
+              "auth-service",
+              "api-gateway",
+              "webhook-receiver",
+              "external-service-simulator",
+              "webhook-dispatcher",
+              "notification-worker",
+              "scheduler-worker",
+          ]
+          event = os.environ["EVENT_NAME"]
+          ref = os.environ["REF"]
+          changed = set(json.loads(os.environ.get("CHANGES") or "[]"))
+          run_all = (
+              event in {"schedule", "workflow_dispatch"}
+              or (event == "push" and ref == "refs/heads/main")
+              or "all" in changed
+          )
+          services = full if run_all else [name for name in full if name in changed]
+          stack = run_all or "frontend" in changed
+          with open(os.environ["GITHUB_OUTPUT"], "a") as handle:
+              handle.write(f"services={json.dumps(services)}\n")
+              handle.write(f"stack={'true' if stack else 'false'}\n")
+          PY
+
   component-contract:
-    needs: [lint, security, unit]
+    needs: [changes, lint, security, unit]
+    if: ${{ success() && needs.changes.outputs.services != '[]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -85,15 +163,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - task-service
-          - auth-service
-          - api-gateway
-          - webhook-receiver
-          - external-service-simulator
-          - webhook-dispatcher
-          - notification-worker
-          - scheduler-worker
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
     env:
       TEST_PG_URL: postgresql://postgres:test@localhost:5432/postgres
       TEST_REDIS_URL: redis://localhost:6379
@@ -174,7 +244,8 @@ jobs:
           use-actions-summary: true
 
   build:
-    needs: [lint, security, unit]
+    needs: [changes, lint, security, unit]
+    if: ${{ success() && needs.changes.outputs.stack == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -388,7 +459,7 @@ jobs:
 
   ci-gate:
     if: always()
-    needs: [lint, security, unit, component-contract, build, integration, ui-e2e, coverage]
+    needs: [changes, lint, security, unit, component-contract, build, integration, ui-e2e, coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
