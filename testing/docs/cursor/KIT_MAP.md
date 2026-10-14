@@ -119,6 +119,12 @@ external-service-simulator (`tests/component/external_service_simulator/conftest
 
 `mail_settings` is `email_from`, `email_to`, `smtp_host`. `test_notification_sends_multipart_mail_when_a_task_is_created` (`multipart/alternative`; text and html both contain the title; subject, from, and to come from settings; `emails_total` `success`), `test_notification_sends_the_next_message_when_smtp_fails` (`SMTPException` → `smtp_error`, `OSError` → `connection_error`; the next message is still sent), `test_notification_sends_only_the_valid_mail_when_the_previous_message_is_poison` (`b"{"` then a valid task; one mail), `test_notification_sends_mail_when_message_is_legacy`.
 
+## R-3.3 scheduler-worker
+
+`tests/component/scheduler_worker/`. Cleanup calls `cleanup_old_tasks.apply` against the worker database (sync psycopg2 engine from `POSTGRES_*`). Those tests are `@pytest.mark.clean_db` and insert with `rows.task.create_async` and an explicit `updated_at`. `cleanup_completed_tasks_minutes` is monkeypatched. Replay calls `retry_single_webhook.apply` (eager). respx answers `WEBHOOK_URL`. The DLQ drain stays down.
+
+`test_cleanup_deletes_only_completed_tasks_older_than_the_threshold` (completed just inside the cutoff is deleted; just outside, `in_progress`, and `created` stay), `test_cleanup_deletes_nothing_when_the_threshold_is_zero`, `test_replay_is_final_when_the_receiver_returns_an_http_error` (4xx and 5xx, one POST, no `Idempotency-Key`), `test_replay_retries_when_the_request_fails` (`httpx.RequestError`, `max_retries` 5), `test_replay_retries_when_the_receiver_returns_5xx` (`xfail` BUG-12).
+
 ## P4.1 contract/events
 
 `Envelope` is `extra="forbid"`. Snapshots: `contracts/events/task_created.schema.json`, `task_updated.schema.json`, `webhook_inbound.schema.json`, `webhook_dlq.schema.json`. `event_contract_dir` and `event_schema_errors`. `test_event_schema_matches_snapshot` and `test_legacy_message_maps_to_unknown` are service-agnostic. `test_produced_task_created_matches_snapshot` and `test_produced_task_updated_matches_snapshot` collect only for `--service task-service`. `test_produced_webhook_inbound_matches_snapshot` collects only for `--service webhook-receiver`.

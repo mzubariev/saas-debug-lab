@@ -23,6 +23,7 @@
   - Fixed. Login rejects a NUL byte in the username with 422 before the query. Schemathesis no longer discards NUL.
 - BUG-10: **opentelemetry.instrumentation.instrumentor** **error** ++Oct 8, 6:56:40.346 AM UTC++ SQLAlchemyInstrumentor only instruments "sqlalchemy >= 1.0.0, < 2.1.0", but currently installed version ("sqlalchemy 2.1.3") falls outside of that range, so nothing can be instrumented. During refactoring (R0) along with lockfile: to lock `sqlalchemy>=2.0,<2.1` in services and `saas_shared`, or update`opentelemetry-instrumentation-sqlalchemy`, to the version with `sqlalchemy 2.1`support.
   - Fixed. Pinned `sqlalchemy>=2.0,<2.1` so SQLAlchemyInstrumentor (supports `<2.1`) can instrument it; 2.1.3 was installed.
+- BUG-12: scheduler-worker `retry_single_webhook` treats any `httpx.HTTPStatusError` as final (`autoretry_for` is only `httpx.RequestError`). A 4xx and a 5xx are each one POST. `xfail(strict=True)` expects a 5xx to be retried like `httpx.RequestError` (`max_retries` 5).
 
 
 
@@ -30,7 +31,7 @@
 
 Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xfail(strict=True)`.
 
-- Scheduler DLQ replay is final on any `httpx.HTTPStatusError` (`autoretry_for` is only `httpx.RequestError`). The DLQ consumer sets `enable_auto_commit=True` and `process_dlq` commits by consuming and closing before the Celery task performs the HTTP call, so a rejected replay is not returned to `webhook_dlq`.
+- The scheduler DLQ consumer sets `enable_auto_commit=True`, and `process_dlq` commits by consuming and closing before `retry_single_webhook` performs the HTTP call, so a rejected replay is not returned to `webhook_dlq`. The component tests call the Celery task directly and do not run the drain.
 - Dispatcher `_produce` logs `kafka_produce_failed` and does not re-raise. Notification-worker catches `aiosmtplib.SMTPException` and `OSError`, counts them, and does not re-raise.
 - The `role` claim is written at login and copied by gateway `verify_token` and `/auth/me`. No route checks it. There is no authZ.
 - `GET /tasks` returns every row (`list_all`; no limit or offset). There is ONLY Clietn-side pagination and no backend pagination.
@@ -130,4 +131,5 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - BUG-3 deferred: correct fix is a transactional outbox. BUG-7 deferred: idempotency key choice is a product decision.
 - BUG-4b deferred: the cache stores `hashed_password` so a second login can verify without Postgres. Caching only `username` and `role` and verifying against the DB hash changes that purpose.
 - P3.5/P3.6 are written now against current worker structure (not after a refactor); dispatcher tests use real Redpanda, only sleep/jitter/HTTP are patched.
+- R-3.3: scheduler component calls `cleanup_old_tasks.apply` and `retry_single_webhook.apply`. The DLQ drain (`process_dlq`) stays untested, so the auto-commit candidate is not confirmed.
 
