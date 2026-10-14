@@ -44,8 +44,20 @@ _FRONTEND_PORT = 5174
 _SIMULATOR_PORT = 8002
 _MAILHOG_PORT = 8026
 _TOXIPROXY_PORT = 8475
+_JAEGER_UI_PORT = 16687
+_OTLP_ENDPOINT = "http://jaeger:4317"
 _UI_URL = f"http://127.0.0.1:{_FRONTEND_PORT}"
 _NGINX_URL = f"http://127.0.0.1:{_NGINX_PORT}"
+_OTLP_SERVICES = (
+    "api-gateway",
+    "auth-service",
+    "task-service",
+    "webhook-receiver",
+    "external-service-simulator",
+    "webhook-dispatcher",
+    "notification-worker",
+    "scheduler-worker",
+)
 
 _FASTAPI_EXEC = ("auth-service", "task-service", "webhook-receiver")
 _FASTAPI_HTTP = (
@@ -104,6 +116,11 @@ def stack_up() -> Stack:
     base = os.environ.get("BASE_URL", "").strip()
     nginx = os.environ.get("NGINX_URL", _NGINX_URL).strip().rstrip("/")
     if base:
+        if _tracing():
+            raise RuntimeError(
+                "TRACING=1 cannot attach to BASE_URL; the stack is already up "
+                "and this process cannot apply the tracing overlay"
+            )
         return Stack(base_url=base.rstrip("/"), nginx_url=nginx, owned=False)
     _refuse_foreign_project()
     os.environ.setdefault("UI_URL", _UI_URL)
@@ -111,7 +128,25 @@ def stack_up() -> Stack:
     with FileLock(_lock_path(), timeout=_BUILD_TIMEOUT_S):
         if _postgres_container_id() is None:
             _session_path().unlink(missing_ok=True)
-        _require("up", "-d", "--build", "--remove-orphans", *_services(), timeout=_BUILD_TIMEOUT_S)
+        _require(
+            "up",
+            "-d",
+            "--build",
+            "--remove-orphans",
+            *_services(),
+            timeout=_BUILD_TIMEOUT_S,
+            with_tracing=False,
+        )
+        if _tracing():
+            _require("up", "-d", "--force-recreate", "--no-deps", "jaeger", timeout=180)
+            _require(
+                "up",
+                "-d",
+                "--force-recreate",
+                "--no-deps",
+                *_OTLP_SERVICES,
+                timeout=300,
+            )
         _bring_up_migrations(time.monotonic(), {})
     return Stack(base_url=f"http://127.0.0.1:{_GATEWAY_PORT}", nginx_url=nginx, owned=True)
 
@@ -119,7 +154,15 @@ def stack_up() -> Stack:
 def stack_down() -> None:
     """`docker compose --profile core down -v`, then remove `testing/.stack`."""
     _refuse_foreign_project()
-    completed = _compose("--profile", "core", "down", "-v", "--remove-orphans", timeout=180)
+    completed = _compose(
+        "--profile",
+        "core",
+        "down",
+        "-v",
+        "--remove-orphans",
+        timeout=180,
+        with_tracing=True,
+    )
     if completed.returncode != 0:
         raise RuntimeError(completed.stderr.strip() or "docker compose down failed")
     directory = _stack_dir()
@@ -208,6 +251,7 @@ def _bring_up_migrations(origin: float, ready: dict[str, float]) -> None:
     _wait_until(_postgres_ready, "postgres")
     _require("up", "-d", "--force-recreate", "--no-deps", "migrations", timeout=180)
     _wait_ready(origin, ready)
+    _require_tracing_applied()
 
 
 def _wait_ready(origin: float, ready: dict[str, float]) -> None:
@@ -240,6 +284,8 @@ def _readiness_names() -> tuple[str, ...]:
     names.extend(name for name, _url in _HTTP)
     names.extend(name for name, _port in _WORKERS)
     names.extend(name for name, _port in _TCP)
+    if _tracing():
+        names.append("jaeger")
     return tuple(names)
 
 
@@ -309,6 +355,8 @@ def _not_ready() -> tuple[str, ...]:
     for name, port in _TCP:
         if not _tcp_open(port):
             pending.append(name)
+    if _tracing() and not _tcp_open(_JAEGER_UI_PORT):
+        pending.append("jaeger")
     return tuple(pending)
 
 
@@ -658,8 +706,37 @@ def _session_path() -> Path:
     return _stack_dir() / "session.json"
 
 
-def _require(*args: str, timeout: float) -> subprocess.CompletedProcess[str]:
-    completed = _compose(*args, timeout=timeout)
+def _tracing() -> bool:
+    return os.environ.get("TRACING") == "1"
+
+
+def _require_tracing_applied() -> None:
+    if not _tracing():
+        return
+    endpoint = _service_env("api-gateway", "OTLP_ENDPOINT")
+    if endpoint == _OTLP_ENDPOINT:
+        return
+    shown = endpoint or "empty"
+    raise RuntimeError(
+        "test stack is already up without tracing "
+        f"(api-gateway OTLP_ENDPOINT is {shown!r} after force-recreate). "
+        "Run `make stack-down` and start again with TRACING=1."
+    )
+
+
+def _service_env(service: str, key: str) -> str:
+    completed = _compose("exec", "-T", service, "printenv", key, timeout=30)
+    if completed.returncode != 0:
+        return ""
+    return completed.stdout.strip()
+
+
+def _require(
+    *args: str,
+    timeout: float,
+    with_tracing: bool | None = None,
+) -> subprocess.CompletedProcess[str]:
+    completed = _compose(*args, timeout=timeout, with_tracing=with_tracing)
     if completed.returncode != 0:
         detail = (completed.stdout + completed.stderr).strip()
         raise RuntimeError(f"docker compose failed\n{detail}")
@@ -701,20 +778,18 @@ def _require_compose_version() -> None:
     raise RuntimeError(f"docker compose {found} is installed; 2.24 or newer is required")
 
 
-def _compose(*args: str, timeout: float) -> subprocess.CompletedProcess[str]:
+def _compose(
+    *args: str,
+    timeout: float,
+    with_tracing: bool | None = None,
+) -> subprocess.CompletedProcess[str]:
     _refuse_foreign_project()
     _require_compose_version()
-    command = [
-        "docker",
-        "compose",
-        "-p",
-        _PROJECT,
-        "-f",
-        "docker-compose.yml",
-        "-f",
-        "docker-compose.test.yml",
-        *args,
-    ]
+    use_tracing = _tracing() if with_tracing is None else with_tracing
+    files = ["-f", "docker-compose.yml", "-f", "docker-compose.test.yml"]
+    if use_tracing:
+        files.extend(["-f", "docker-compose.test.tracing.yml"])
+    command = ["docker", "compose", "-p", _PROJECT, *files, *args]
     return subprocess.run(  # noqa: S603
         command,
         cwd=repo_root() / "infra",

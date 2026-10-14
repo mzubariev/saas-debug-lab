@@ -43,6 +43,8 @@ dependencies = [
     "ruff",
     "pyright",
     "pip-audit",
+    "opentelemetry-sdk>=1.45.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.45.0",
 ]
 
 [dependency-groups]

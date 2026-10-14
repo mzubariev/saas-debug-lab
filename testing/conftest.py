@@ -26,6 +26,8 @@ from saas_testkit.infra import (
 pytest_plugins = [
     "saas_testkit.plugins.factory_seed",
     "saas_testkit.plugins.in_process_service",
+    "saas_testkit.reporting",
+    "saas_testkit.plugins.otel_trace",
 ]
 
 _MARKERS: dict[str, pytest.MarkDecorator] = {

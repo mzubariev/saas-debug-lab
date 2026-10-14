@@ -3,7 +3,7 @@
 Paste this at the start of every task chat and fill in the angle-bracket parts from the phase file.
 
 ```
-You are Principal Engineer (Python v3.14).
+You are Senior Software Development Engineer in Test (Python v3.14).
 
 Task <id>: <title>
 

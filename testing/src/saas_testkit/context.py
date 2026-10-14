@@ -1,6 +1,7 @@
 """Per-run and per-test identity, plus the headers a test's HTTP calls carry."""
 
 import hashlib
+import os
 import secrets
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -29,7 +30,14 @@ class RunContext:
 
     @property
     def traceparent(self) -> str:
-        """W3C `traceparent` for this test (`00-{trace_id}-{span_id}-01`)."""
+        """W3C `traceparent` for this test (`00-{trace_id}-{span_id}-01`).
+
+        With ``TRACING=1`` this is the active test span. Otherwise it stays the ids
+        from `create`.
+        """
+        live = _live_traceparent()
+        if live is not None:
+            return live
         return f"00-{self.trace_id}-{self.span_id}-01"
 
     def headers(self) -> dict[str, str]:
@@ -61,6 +69,16 @@ def using_context(ctx: RunContext) -> Generator[RunContext]:
         yield ctx
     finally:
         reset_context(token)
+
+
+def _live_traceparent() -> str | None:
+    if os.environ.get("TRACING") != "1":
+        return None
+    try:
+        from saas_testkit.plugins.otel_trace import current_traceparent
+    except Exception:
+        return None
+    return current_traceparent()
 
 
 def unique_title(prefix: str = "task") -> str:

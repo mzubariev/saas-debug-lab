@@ -1,0 +1,48 @@
+# Opt-in trace sink. `compose.py` adds this file only when TRACING=1.
+# The base test overlay keeps OTLP_ENDPOINT empty. Lab Jaeger owns host 16686;
+# this file publishes the UI on 16687 and OTLP gRPC on 4319.
+# Image tag jaegertracing/all-in-one:1.55 matches infra/docker-compose.yml (OTLP on).
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:1.55
+    container_name: !reset null
+    profiles: !override []
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+      SPAN_STORAGE_TYPE: memory
+    ports: !override
+      - "16687:16686"
+      - "4319:4317"
+
+  api-gateway:
+    environment:
+      OTLP_ENDPOINT: http://jaeger:4317
+
+  auth-service:
+    environment:
+      OTLP_ENDPOINT: http://jaeger:4317
+
+  task-service:
+    environment:
+      OTLP_ENDPOINT: http://jaeger:4317
+
+  webhook-receiver:
+    environment:
+      OTLP_ENDPOINT: http://jaeger:4317
+
+  external-service-simulator:
+    environment:
+      OTLP_ENDPOINT: http://jaeger:4317
+
+  webhook-dispatcher:
+    environment:
+      OTLP_ENDPOINT: http://jaeger:4317
+
+  notification-worker:
+    environment:
+      OTLP_ENDPOINT: http://jaeger:4317
+
+  scheduler-worker:
+    environment:
+      OTLP_ENDPOINT: http://jaeger:4317

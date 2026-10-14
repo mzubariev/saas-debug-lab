@@ -26,7 +26,7 @@ N_synthetic := 0
 GATE_N = $(or $(N),$(N_$(LAYER)),auto)
 
 .PHONY: t-unit t-component t-component-all deps-up deps-down deps-clean \
-	t-contract contracts-update t-int t-ui t-smoke t-synthetic \
+	t-contract contracts-update t-int t-int-traced t-ui t-smoke t-synthetic \
 	t-lint t-check t-gate stack-up stack-down lock
 
 t-unit:
@@ -67,6 +67,9 @@ contracts-update:
 
 t-int:
 	cd $(TESTING_DIR) && COMPOSE_PROJECT_NAME=$(STACK_PROJECT) uv run pytest tests/integration -n 3 --dist loadgroup -q
+
+t-int-traced:
+	cd $(TESTING_DIR) && COMPOSE_PROJECT_NAME=$(STACK_PROJECT) TRACING=1 uv run pytest tests/integration -n 3 --dist loadgroup -q
 
 stack-up:
 	cd $(TESTING_DIR) && COMPOSE_PROJECT_NAME=$(STACK_PROJECT) uv run python -c "from saas_testkit.infra import stack_up; stack_up()"
