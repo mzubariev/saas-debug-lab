@@ -65,7 +65,10 @@ def _instrument_client_libraries() -> None:
 
         from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
-        HTTPXClientInstrumentor().instrument()
+        HTTPXClientInstrumentor().instrument(
+            request_hook=_name_http_client_span,
+            async_request_hook=_name_http_client_span_async,
+        )
     except Exception:  # noqa: BLE001
         _log.debug("otel_httpx_instrumentation_skipped", exc_info=True)
 
@@ -100,6 +103,21 @@ def instrument_sqlalchemy_sync_engine(engine: object) -> None:
         _log.exception("otel_sqlalchemy_sync_instrumentation_failed")
 
 
+def _name_http_client_span(span: trace.Span, request: object) -> None:
+    """Rename an httpx client span to ``METHOD /path``."""
+    raw_method = getattr(request, "method", b"")
+    method = raw_method.decode() if isinstance(raw_method, bytes) else str(raw_method)
+    url = getattr(request, "url", None)
+    path = getattr(url, "path", "")
+    if not isinstance(path, str):
+        path = ""
+    span.update_name(f"{method} {path}")
+
+
+async def _name_http_client_span_async(span: trace.Span, request: object) -> None:
+    _name_http_client_span(span, request)
+
+
 def setup_telemetry(
     app,
     service_name: str,
@@ -107,7 +125,11 @@ def setup_telemetry(
 ) -> None:
     """FastAPI services: OTLP export + ``FastAPIInstrumentor``."""
     setup_tracer_provider(service_name=service_name, otlp_endpoint=otlp_endpoint)
-    FastAPIInstrumentor.instrument_app(app)
+    FastAPIInstrumentor.instrument_app(
+        app,
+        exclude_spans=["receive", "send"],
+        excluded_urls="health,ready,metrics",
+    )
 
 
 def setup_worker_telemetry(
