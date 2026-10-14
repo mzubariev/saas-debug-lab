@@ -91,6 +91,9 @@ jobs:
           - api-gateway
           - webhook-receiver
           - external-service-simulator
+          - webhook-dispatcher
+          - notification-worker
+          - scheduler-worker
     env:
       TEST_PG_URL: postgresql://postgres:test@localhost:5432/postgres
       TEST_REDIS_URL: redis://localhost:6379

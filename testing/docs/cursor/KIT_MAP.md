@@ -15,7 +15,8 @@ The controller stores an `InfraHandle` on `config._infra`; workers load `Infra` 
 - `session_maker`, `db`: async session on that database. The app builds its own engine; do not override `get_db`.
 - `service_env`: `POSTGRES_*` from `DbUrls.postgres_env()`, `REDIS_URL` for the worker index, `KAFKA_BOOTSTRAP_SERVERS`, `SERVICE_NAME`, `OTLP_ENDPOINT=""`, `SENTRY_DSN=""`. Import the app after this.
 - `open_app_lifespan`: session fixture. Imports the `--service` app after `service_env` and enters its lifespan once per worker. auth-service sets `TOKEN_EXPIRE_MINUTES=45` before import. Layer `service_app` fixtures yield that app.
-- `flush_redis`: `FLUSHDB` on this worker's Redis index before each test.
+- `flush_redis`: `FLUSHDB` on this worker's Redis index before each test. webhook-dispatcher and notification-worker override it as a no-op (they do not use Redis; the block is shared). scheduler-worker keeps the flush.
+- Worker component conftests (`webhook_dispatcher`, `notification_worker`, `scheduler_worker`) import `app.run`, `app.worker`, and `app.core.celery` after `service_env`. They do not use `open_app_lifespan`.
 - `clean_db`: no-op unless the test has `@pytest.mark.clean_db`, then truncates tables listed in `_touched`.
 - `run_context`: binds `RunContext` (`run_id`, `test_id`) so `unique_title` works.
 - `rows`: per-test `TaskRowFactory` and `UserRowFactory` subclasses with `__async_session__` set to `db`. `create_async` commits.
@@ -136,7 +137,7 @@ One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_
 
 ## P5 CI
 
-`.github/workflows/ci.yml`: `lint`, `security`, `unit`, `component-contract` (matrix `task-service`, `auth-service`, `api-gateway`, `webhook-receiver`, `external-service-simulator`), `ci-gate`. `open_app_lifespan` enters a service lifespan once per worker.
+`.github/workflows/ci.yml`: `lint`, `security`, `unit`, `component-contract` (matrix `task-service`, `auth-service`, `api-gateway`, `webhook-receiver`, `external-service-simulator`, `webhook-dispatcher`, `notification-worker`, `scheduler-worker`), `ci-gate`. `open_app_lifespan` enters a service lifespan once per worker. Nightly Schemathesis stays the five HTTP services.
 
 ## P9 CI
 

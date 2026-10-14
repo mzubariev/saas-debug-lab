@@ -37,6 +37,7 @@ _HTTP_SERVICES = {
     "external_service_simulator": "external-service-simulator",
     "api_gateway": "api-gateway",
 }
+_HTTP_SERVICE_NAMES = frozenset(_HTTP_SERVICES.values())
 
 
 def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:
@@ -48,6 +49,8 @@ def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool 
         return None
     service = config.getoption("service")
     if not isinstance(service, str) or not service:
+        return True
+    if service not in _HTTP_SERVICE_NAMES:
         return True
     if len(parts) < 4:
         return None
