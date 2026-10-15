@@ -21,11 +21,11 @@ Zones are keyed by `$http_authorization`, not by client IP. Both zones use `10m`
 | none | | `location /auth/` (so `/auth/me`) | no `limit_req` |
 | none | | `location /external/` | proxy to `external-service-simulator:8000/`, prefix stripped |
 
-A request with no `Authorization` header has an empty zone key. nginx does not account requests with an empty key (limit_req_zone documentation), so unauthenticated requests, including `POST /auth/token` (a login carries no `Authorization` header), are effectively not limited, whatever the `5r/m` setting says. This is unverified empirically: the P6.2 edge test sends about 10 logins within a minute and expects no 429; if confirmed, record it as BUG-1 (the documentation claims 5 requests per minute). `/` and `/webhooks/` are separate locations; the longer prefix wins.
+A request with no `Authorization` header has an empty zone key. nginx does not account requests with an empty key (limit_req_zone documentation), so unauthenticated requests, including `POST /auth/token` (a login carries no `Authorization` header), are not limited, whatever the `5r/m` setting says. Confirmed as BUG-1: ten logins within a few seconds, with no `Authorization` header, all return 200. `/` and `/webhooks/` are separate locations; the longer prefix wins.
 
 ## Postgres, Redis, Kafka images
 
-`infra/docker-compose.yml` service `postgres` uses image `postgres:15` (major 15; the tag is not minor-pinned). No host port is published. Command sets `shared_preload_libraries=pg_stat_statements`. Redis image `redis:7`, no host port. Kafka is `confluentinc/cp-kafka:7.5.0` plus `confluentinc/cp-zookeeper:7.5.0`. Listeners `PLAINTEXT://kafka:9092` and `PLAINTEXT_HOST://localhost:9093`; neither is published in this compose file.
+`infra/docker-compose.yml` service `postgres` uses image `postgres:15` (major 15; the tag is not minor-pinned). No host port is published. Command sets `shared_preload_libraries=pg_stat_statements`. Redis image `redis:7`, no host port. Kafka is `confluentinc/cp-kafka:7.5.0` in KRaft combined mode (`broker,controller`, no ZooKeeper). Listeners `PLAINTEXT://kafka:9092`, `CONTROLLER://kafka:9094`, and `PLAINTEXT_HOST://localhost:9093`; none is published in this compose file.
 
 There is no Flower service in `infra/docker-compose.yml`.
 
@@ -52,7 +52,7 @@ Task payload fields are `id`, `title`, `status`. Inbound payload is `event`, `da
 
 ## saas_shared (`shared/saas_shared`)
 
-Installed in every Python image as `pip install -e /app/shared[services]` (migrations install the base package only). Base dependencies are structlog and `sqlalchemy>=2.0`. The `services` extra adds fastapi, prometheus-client, `redis[asyncio]`, the OTEL SDK, FastAPI/httpx/SQLAlchemy/Redis instrumentors, and `opentelemetry-exporter-otlp-proto-grpc`.
+Installed in every Python image as `pip install -e /app/shared[services]` (migrations install the base package only). Base dependencies are structlog and `sqlalchemy>=2.0,<2.1`. The `services` extra adds fastapi, prometheus-client, `redis[asyncio]`, the OTEL SDK, FastAPI/httpx/SQLAlchemy/Redis instrumentors, and `opentelemetry-exporter-otlp-proto-grpc`. SQLAlchemyInstrumentor accepts `sqlalchemy < 2.1`, so this pin is what it instruments.
 
 | Module | Role |
 | --- | --- |
@@ -64,7 +64,7 @@ Installed in every Python image as `pip install -e /app/shared[services]` (migra
 | `sentry_setup.py` | Empty `dsn` returns before `sentry_sdk.init`. `traces_sample_rate=0.1` when a DSN is set. |
 | `logging.py` | `setup_logging` configures structlog JSON on stdout. No Datadog fields. |
 | `redis_cache.py` | `start_redis` sets `app.state.redis`. Cache get/set/delete swallow errors and log a warning. |
-| `models/` | `User` table `users` (`id`, `username` unique, `hashed_password`, `role` default `user`). `Task` table `tasks` (`id` UUID, `title`, `status` enum `taskstatus`: `created`, `in_progress`, `completed`, `created_at`, `updated_at`). Indexes `ix_tasks_status`, `ix_tasks_created_at`. |
+| `models/` | `User` table `users` (`id`, `username` unique, `hashed_password`, `role` default `user`). `Task` table `tasks` (`id` UUID, `title` as `sa.String()` with no length, `status` enum `taskstatus`: `created`, `in_progress`, `completed`, `created_at`, `updated_at`). Indexes `ix_tasks_status`, `ix_tasks_created_at`. |
 
 Base Dockerfiles run uvicorn or `python -m`. Datadog (`ddtrace`, `docker-compose.datadog.yml`, `ddtrace-run`) is removed.
 
@@ -125,8 +125,9 @@ Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE
 
 | Process | Database | Kafka | HTTP |
 | --- | --- | --- | --- |
-| auth, task | SQLAlchemy 2 async + asyncpg. Engine object at import | task: aiokafka producer at startup | none |
-| webhook-receiver, dispatcher | none | aiokafka producer and (dispatcher) consumer, both inside startup / `main` | dispatcher: `httpx.AsyncClient` |
+| auth, task | SQLAlchemy 2 async + asyncpg. Engine object at import | task: aiokafka producer in the lifespan | none |
+| webhook-receiver | none | aiokafka producer in the lifespan | none |
+| dispatcher | none | aiokafka consumer inside `main` | `httpx.AsyncClient` |
 | notification-worker | none | aiokafka consumer inside `consume()` | `aiosmtplib` |
 | scheduler-worker | SQLAlchemy sync + psycopg2, lazy engine | kafka-python `KafkaConsumer`, per DLQ tick | `httpx.Client` per POST |
 | migrations | asyncpg via Alembic | none | none |
@@ -136,7 +137,10 @@ Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE
 
 | Process | Compose check | What the code actually exposes |
 | --- | --- | --- |
-| api-gateway, auth, task, webhook-receiver, simulator | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres, Redis, or Kafka. Dependency connections are `@app.on_event("startup")` (gateway and simulator have no such handler). |
+| api-gateway, simulator | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres, Redis, or Kafka. Neither registers `@app.on_event("startup")`. The gateway lifespan creates the shared `httpx.AsyncClient` and closes it on shutdown. |
+| webhook-receiver | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Kafka. The lifespan starts the Kafka producer. Shutdown stops it. |
+| auth | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres or Redis. The lifespan connects Redis. Shutdown stops Redis, then disposes the engine. |
+| task | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres, Redis, or Kafka. The lifespan connects Kafka then Redis. Shutdown stops Redis, then Kafka, then disposes the engine. |
 | webhook-dispatcher, notification-worker | none | `prometheus_client.start_http_server` on `METRICS_PORT` (default 9100) at the start of `main` / `run`, then the consume loop. Not bound at import. |
 | scheduler-worker | none | Same port, but only in one prefork child (`worker_process_init`), not in the beat parent and not at import. |
 | migrations | `service_completed_successfully` | process exit 0 |
@@ -144,54 +148,53 @@ Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE
 | postgres-exporter, kafka-exporter | `wget` `/metrics` on 9187 and 9308 | process metrics |
 | frontend | `node` fetch `http://127.0.0.1:5173/` | Vite dev server on the default image stage |
 
-`infra/test-stack.services` is the explicit test stack (no exporters). `infra/docker-compose.test.yml` selects the frontend `preview` image stage (`vite build` then `vite preview` on port 5173). Toxiproxy has no shell or HTTP client in the image, so it has no healthcheck.
+`infra/test-stack.services` is the explicit test stack (no exporters). `infra/docker-compose.test.yml` selects the frontend `preview` image stage (`vite build` then `vite preview` on port 5173) and publishes that UI on host `5174` and nginx on `9080`. The login error element has `role="alert"`. `.task-card__title` uses `overflow-wrap: anywhere` and `.column` uses `min-width: 0`, so a title with no spaces stays inside the column. Toxiproxy has no shell or HTTP client in the image, so it has no healthcheck.
 
-`ASGITransport` does not run `on_event`, so a test that needs Redis or Kafka must enter the app lifespan itself. `get_db` closes over the module-level `SessionLocal` built from the environment at import.
+`ASGITransport` does not run the lifespan or `on_event`, so a test that needs Redis or Kafka must enter the app lifespan itself. `get_db` closes over the module-level `SessionLocal` built from the environment at import.
 
 ## Hazards
 
-- nginx limits by the `Authorization` value. One shared bearer token is one `20r/s` bucket on `location /`. `/auth/token` carries no `Authorization` header, so its key is empty and nginx does not account it: the `5r/m` limit is probably inactive (BUG-1 candidate, confirm in P6.2). `/auth/me` is not limited. `/webhooks/` is `20r/s` burst 20 `nodelay`, not the `location /` burst of 100.
+- nginx limits by the `Authorization` value. One shared bearer token is one `20r/s` bucket on `location /`. `/auth/token` carries no `Authorization` header, so its key is empty and nginx does not account it: the `5r/m` limit is inactive (BUG-1). `/auth/me` is not limited. `/webhooks/` is `20r/s` burst 20 `nodelay`, not the `location /` burst of 100.
 - `GET /ready` stays 200 when Redis, Kafka, or Postgres is down. Compose treats that as healthy for the FastAPI services.
 - Importing any FastAPI `app.main` starts `OtelBatchSpanRecordProcessor` and it tries `OTLP_ENDPOINT` (`http://otel-collector:4317` if unset). The scratch run logged `StatusCode.UNAVAILABLE` for that DNS name after `/openapi.json`.
 - Every service package is named `app`. Two services cannot be imported in one process. `prometheus_metrics` registers global collectors at import. Scheduler import sets `PROMETHEUS_MULTIPROC_DIR` and creates that directory.
-- `requirements.txt` does not pin SQLAlchemy and does not list the OTEL SDK. This venv resolved SQLAlchemy 2.1.3, and the SQLAlchemy instrumentor then instrumented nothing. Import still succeeded. Images only import because the Dockerfile installs `shared[services]`.
-- Gateway OpenAPI has duplicate operation IDs (warning, HTTP 200).
-- Dispatcher backoff is `1 * 2^(attempt-1)` plus 0..10% and, with the default 3 attempts, waits twice (~1 s, ~2 s). Scheduler DLQ replay does not send `Idempotency-Key`, and it treats 5xx as final. Notification SMTP failures are swallowed. `tenacity` is unused.
-- User cache stores `hashed_password` for 300 s. Task cache returns dicts on hit and ORM rows on miss.
+- `requirements.txt` does not list the OTEL SDK. Images import it because the Dockerfile installs `shared[services]`. SQLAlchemy is pinned `>=2.0,<2.1` in the services and `saas_shared`, so SQLAlchemyInstrumentor instruments it.
+- Dispatcher backoff is `1 * 2^(attempt-1)` plus 0..10% and, with the default 3 attempts, waits twice (~1 s, ~2 s). Scheduler DLQ replay does not send `Idempotency-Key`, and it treats 5xx as final (BUG-12). Notification SMTP failures are swallowed. `tenacity` is unused.
+- User cache writes `user:{username}` only after the password check succeeds, and the value still includes `hashed_password` for 300 s (BUG-4b). A wrong password leaves no key. Task cache returns dicts on hit and ORM rows on miss. A Kafka failure after the task commit returns 500 and leaves the row (BUG-3).
 - `scripts/seed_dev.py` is not run by compose. Postgres is not published, so the script's default `localhost:5432` does not match this compose file.
 - Alembic `script_location` is relative to the cwd. Running it outside `migrations/` fails with `Path doesn't exist: alembic` before it connects.
 
 
 # api-gateway (SUT facts)
 
-Directory `services/core/api-gateway`. Entrypoint `app.main:app` (uvicorn `:8000`, not published). No startup handler. Import calls `setup_logging`, `setup_sentry_fastapi` (`httpx=True`), `setup_telemetry`, then constructs `httpx.AsyncClient(timeout=gateway_timeout)` in `app/infrastructure/http/client.py`. That client is never closed.
+Directory `services/core/api-gateway`. Entrypoint `app.main:app` (uvicorn `:8000`, not published). Lifespan creates `httpx.AsyncClient(timeout=gateway_timeout)`, stores it on `app.state.http_client`, and closes it on shutdown. Import calls `setup_logging`, `setup_sentry_fastapi` (`httpx=True`), and `setup_telemetry` before that client exists. Proxy routes take it through `get_http_client`.
 
-Routes in `app/api/routes/proxy.py` (no response models). OpenAPI paths: `GET,POST,PUT,DELETE /auth/{path}`; `GET,POST,PUT,PATCH,DELETE /tasks` and `/tasks/{path}`; `GET,POST,PUT,PATCH,DELETE /webhooks/{path}`; plus `/health` and `/ready`. `/tasks` and `/tasks/{path}` depend on `verify_token` (`HTTPBearer`, `auto_error=False`). `/auth/*` and `/webhooks/*` do not. Proxy drops headers `host`, `sentry-trace`, `baggage`, `traceparent`, `tracestate`. `CORSMiddleware` allows `http://localhost:5173`, `http://127.0.0.1:5173`, and `http://localhost`. Downstream timeout → 504 `Downstream timeout`. Other `httpx.RequestError` → 502 `Downstream unavailable`. Upstream status and body are passed through. Compose healthcheck: Python `urllib` `GET http://localhost:8000/health` (this image has no curl).
+Routes in `app/api/routes/proxy.py` (no response models). Each proxy method is its own route with an explicit operationId, so the OpenAPI document validates. Paths: `GET,POST,PUT,DELETE /auth/{path}`; `GET,POST,PUT,PATCH,DELETE /tasks` and `/tasks/{path}`; `GET,POST,PUT,PATCH,DELETE /webhooks/{path}`; plus `/health` and `/ready`. `/tasks` and `/tasks/{path}` depend on `verify_token` (`HTTPBearer`, `auto_error=False`). `/auth/*` and `/webhooks/*` do not. Proxy drops headers `host`, `sentry-trace`, `baggage`, `traceparent`, `tracestate`. `CORS_ORIGINS` defaults to empty. The lab allows `http://localhost:5173`, `http://127.0.0.1:5173`, and `http://localhost`. Downstream timeout → 504 `Downstream timeout`. Other `httpx.RequestError` → 502 `Downstream unavailable`. Upstream status and body are passed through. Compose healthcheck: Python `urllib` `GET http://localhost:8000/health` (this image has no curl).
 
 # auth-service (SUT facts)
 
-Directory `services/core/auth-service`. Import builds `create_async_engine(postgres_dsn)` and calls `setup_telemetry` plus `instrument_sqlalchemy_async_engine`. No connection until the engine is used. `@app.on_event("startup")` calls `start_redis` (`app.state.redis`); shutdown closes it.
+Directory `services/core/auth-service`. Import builds `create_async_engine(postgres_dsn)` and calls `setup_telemetry` plus `instrument_sqlalchemy_async_engine`. No connection until the engine is used. The lifespan calls `start_redis` (`app.state.redis`). Shutdown stops Redis, then disposes the engine.
 
 | Method | Path | Request | Response | Auth |
 | --- | --- | --- | --- | --- |
 | POST | `/auth/token` | `application/x-www-form-urlencoded` `OAuth2PasswordRequestForm` (`username`, `password`). Schema `Body_login_auth_token_post` | `TokenResponse` `access_token`, `token_type` default `bearer` (`app/schemas/auth.py`) | none |
 | GET | `/auth/me` | `OAuth2PasswordBearer` tokenUrl `/auth/token` | `UserInfo` `username`, `role` | Bearer. Decode only; no database read |
 
-DI: `get_db` yields `SessionLocal` (`app/dependencies.py`). `get_auth_service` builds `AuthService(db, request.app.state.redis)`. Passwords: passlib argon2 (`app/security.py`). Cache JSON stores `username`, `hashed_password`, `role`. Compose healthcheck: `curl -f http://localhost:8000/health`. Depends on postgres, redis, and migrations completed.
+DI: `get_db` yields `SessionLocal` (`app/dependencies.py`). `AuthServiceDep` builds `AuthService(db, request.app.state.redis)`. Passwords: passlib argon2 (`app/security.py`). A NUL byte in the username is 422 before the query. The cache write runs only after the password check succeeds. A wrong password leaves no `user:{username}` key. The stored JSON is still `username`, `hashed_password`, and `role`. Compose healthcheck: `curl -f http://localhost:8000/health`. Depends on postgres, redis, and migrations completed.
 
 # task-service (SUT facts)
 
-Directory `services/core/task-service`. Same async engine-at-import pattern as auth (`postgresql+asyncpg`). Startup connects Kafka (`AIOKafkaProducer.start`, `app.state.kafka`) and Redis. Shutdown stops both. No JWT check in this service.
+Directory `services/core/task-service`. Same async engine-at-import pattern as auth (`postgresql+asyncpg`). The lifespan connects Kafka (`AIOKafkaProducer.start`, `app.state.kafka`) then Redis. Shutdown stops Redis, then Kafka, then disposes the engine. No JWT check in this service.
 
-Routes `app/api/routes/tasks.py`, models `app/schemas/task.py` (`TaskCreate.title`, `TaskOut` id/title/status/created_at/updated_at). OpenAPI: `GET,POST /tasks`, `GET /tasks/{task_id}`, `PATCH /tasks/{task_id}/start`, `PATCH /tasks/{task_id}/complete`. `POST /tasks` is 201. DI: `get_db`; `get_task_service` passes `app.state.redis` and `app.state.kafka`. Repository commits inside `create` and `save`.
+Routes `app/api/routes/tasks.py`, models `app/schemas/task.py` (`TaskCreate.title` is `Field(min_length=1, max_length=255)`; `TaskOut` id/title/status/created_at/updated_at). An empty title, a title longer than 255, a NUL byte, and a lone surrogate are 422. Migration 0002 leaves `tasks.title` unbounded. OpenAPI: `GET,POST /tasks`, `GET /tasks/{task_id}`, `PATCH /tasks/{task_id}/start`, `PATCH /tasks/{task_id}/complete`. `POST /tasks` is 201. DI: `get_db`; `get_task_service` passes `app.state.redis` and `app.state.kafka`. Repository commits inside `create` and `save`.
 
-Transitions: `start` only from `created`, `complete` only from `in_progress`. Else 409 `Cannot start task in status '{status}'. Expected 'created'.` or the complete equivalent with `in_progress`. Missing row: 404 `Task not found`. A cache hit returns the stored JSON dict; a miss returns the ORM row. `response_model` is `TaskOut` either way. Publish happens after the DB commit, then the list key (and the item key on transition) is deleted. Compose healthcheck curls `:8000/health`. Depends on postgres, kafka, redis, migrations.
+Transitions: `start` only from `created`, `complete` only from `in_progress`. Else 409 `Cannot start task in status '{status}'. Expected 'created'.` or the complete equivalent with `in_progress`. Missing row: 404 `Task not found`. A cache hit returns the stored JSON dict; a miss returns the ORM row. `response_model` is `TaskOut` either way. Publish happens after the DB commit, then the list key (and the item key on transition) is deleted. A Kafka failure after that commit returns 500 and leaves the row (BUG-3): a create stays stored, a start stays `in_progress`, the event is not published, and the cache delete does not run. Compose healthcheck curls `:8000/health`. Depends on postgres, kafka, redis, migrations.
 
 # webhook-receiver (SUT facts)
 
-Directory `services/core/webhook-receiver`. Startup only: `AIOKafkaProducer` on `app.state.kafka_producer`. No database or Redis.
+Directory `services/core/webhook-receiver`. The lifespan starts `AIOKafkaProducer` (`app.state.kafka_producer`). Shutdown stops it. No database or Redis.
 
-`POST /webhooks/inbound` (`app/api/routes/webhooks.py`), body `WebhookPayload` (`event: str`, `data: dict` default `{}`), status 200, body `{"status":"received","event": ...}`. No auth. Publish failure is logged and re-raised. Compose healthcheck curls `:8000/health`. Depends on kafka healthy.
+`POST /webhooks/inbound` (`app/api/routes/webhooks.py`), body `WebhookPayload` (`event: str`, `data: dict` default `{}`), status 200, body `{"status":"received","event": ...}`. No auth. The success and failure logs pass the payload event as `event_name`. Publish failure is logged and re-raised. Compose healthcheck curls `:8000/health`. Depends on kafka healthy.
 
 # external-service-simulator (SUT facts)
 
@@ -200,7 +203,7 @@ Directory `services/external/external-service-simulator`. No startup handler, no
 | Method | Path | Request | Behaviour |
 | --- | --- | --- | --- |
 | POST | `/receive-webhook` | JSON object (free-form). Query `fail_rate` 0..1, `delay` ≥ 0, `status` int, all optional | `Idempotency-Key` already stored → 200 `{"status":"duplicate","idempotency_key":...}` before delay. Else sleep `delay`, then `random.random() < fail_rate` → 500 `{"status":"error","reason":"simulated_failure"}` (key not stored). Else non-200 `status` → that code `{"status":"custom_status","code":...}` (key not stored). Else 200 `{"status":"received","payload":...}` and the key is stored. Defaults from settings: fail 0.0, delay 0.0, status 200. |
-| POST | `/trigger-event` | `InboundTrigger` `event`, `data` default `{}`. Query `retry` default 0, `delay` default 1.0 | 202 `{"status":"triggered","event":...}` immediately. Background `httpx.AsyncClient.post` to `integration_service_webhook_url`. |
+| POST | `/trigger-event` | `InboundTrigger` `event`, `data` default `{}`. Query `retry` default 0, `delay` default 1.0 | 202 `{"status":"triggered","event":...}` immediately. The log passes the payload event as `event_name`. Background `httpx.AsyncClient.post` to `integration_service_webhook_url`. |
 
 Compose healthcheck curls `:8000/health`. No `depends_on`.
 
@@ -208,7 +211,7 @@ Compose healthcheck curls `:8000/health`. No `depends_on`.
 
 Directory `services/core/webhook-dispatcher` (not `workers/`). No FastAPI app. Entry `python -m app.run` → `main()`. `main` calls `setup_logging`, `setup_worker_telemetry`, `setup_sentry_worker`, `start_http_server(metrics_port)`, then `_async_main` (producer, `httpx.AsyncClient`, consumer). Import of `app.run` does not do that; it does register Prometheus metrics because `consumer` imports `dispatcher_service`.
 
-Consumer: `AIOKafkaConsumer` on `task_created` and `task_updated` (`CONSUME_TOPICS`, not env), `group_id` default `webhook-dispatcher`, `auto_offset_reset=earliest`. Each POST sends `Idempotency-Key` set to `str(payload.get("id", ""))`. Backoff base is `WEBHOOK_BACKOFF_BASE` (default 1.0). 4xx stops and writes the DLQ. 5xx and `httpx.RequestError` retry. Permanent failure produces to `webhook_dlq`. Produce errors are logged and swallowed. There is no compose healthcheck and no published port. Depends on kafka and external-service-simulator healthy. Readiness that exists in code is `GET /metrics` on `METRICS_PORT` after `main()` has started the server.
+Consumer: `AIOKafkaConsumer` on `task_created` and `task_updated` (`CONSUME_TOPICS`, not env), `group_id` default `webhook-dispatcher`, `auto_offset_reset=earliest`. Each POST sends `Idempotency-Key` set to `str(payload.get("id", ""))`. `task_created` and both `task_updated` deliveries for one task share that key (BUG-7). Backoff base is `WEBHOOK_BACKOFF_BASE` (default 1.0). 4xx stops and writes the DLQ. 5xx and `httpx.RequestError` retry. Permanent failure produces to `webhook_dlq`. Produce errors are logged and swallowed. There is no compose healthcheck and no published port. Depends on kafka and external-service-simulator healthy. Readiness that exists in code is `GET /metrics` on `METRICS_PORT` after `main()` has started the server.
 
 # notification-worker (SUT facts)
 

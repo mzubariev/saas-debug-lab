@@ -21,7 +21,7 @@ Zones are keyed by `$http_authorization`, not by client IP. Both zones use `10m`
 | none | | `location /auth/` (so `/auth/me`) | no `limit_req` |
 | none | | `location /external/` | proxy to `external-service-simulator:8000/`, prefix stripped |
 
-A request with no `Authorization` header has an empty zone key. nginx does not account requests with an empty key (limit_req_zone documentation), so unauthenticated requests, including `POST /auth/token` (a login carries no `Authorization` header), are effectively not limited, whatever the `5r/m` setting says. Confirmed as BUG-1: ten logins within a minute all return 200 (the documentation claims 5 requests per minute). `/` and `/webhooks/` are separate locations; the longer prefix wins.
+A request with no `Authorization` header has an empty zone key. nginx does not account requests with an empty key (limit_req_zone documentation), so unauthenticated requests, including `POST /auth/token` (a login carries no `Authorization` header), are not limited, whatever the `5r/m` setting says. Confirmed as BUG-1: ten logins within a few seconds, with no `Authorization` header, all return 200. `/` and `/webhooks/` are separate locations; the longer prefix wins.
 
 ## Postgres, Redis, Kafka images
 
@@ -52,7 +52,7 @@ Task payload fields are `id`, `title`, `status`. Inbound payload is `event`, `da
 
 ## saas_shared (`shared/saas_shared`)
 
-Installed in every Python image as `pip install -e /app/shared[services]` (migrations install the base package only). Base dependencies are structlog and `sqlalchemy>=2.0`. The `services` extra adds fastapi, prometheus-client, `redis[asyncio]`, the OTEL SDK, FastAPI/httpx/SQLAlchemy/Redis instrumentors, and `opentelemetry-exporter-otlp-proto-grpc`.
+Installed in every Python image as `pip install -e /app/shared[services]` (migrations install the base package only). Base dependencies are structlog and `sqlalchemy>=2.0,<2.1`. The `services` extra adds fastapi, prometheus-client, `redis[asyncio]`, the OTEL SDK, FastAPI/httpx/SQLAlchemy/Redis instrumentors, and `opentelemetry-exporter-otlp-proto-grpc`. SQLAlchemyInstrumentor accepts `sqlalchemy < 2.1`, so this pin is what it instruments.
 
 | Module | Role |
 | --- | --- |
@@ -64,7 +64,7 @@ Installed in every Python image as `pip install -e /app/shared[services]` (migra
 | `sentry_setup.py` | Empty `dsn` returns before `sentry_sdk.init`. `traces_sample_rate=0.1` when a DSN is set. |
 | `logging.py` | `setup_logging` configures structlog JSON on stdout. No Datadog fields. |
 | `redis_cache.py` | `start_redis` sets `app.state.redis`. Cache get/set/delete swallow errors and log a warning. |
-| `models/` | `User` table `users` (`id`, `username` unique, `hashed_password`, `role` default `user`). `Task` table `tasks` (`id` UUID, `title`, `status` enum `taskstatus`: `created`, `in_progress`, `completed`, `created_at`, `updated_at`). Indexes `ix_tasks_status`, `ix_tasks_created_at`. |
+| `models/` | `User` table `users` (`id`, `username` unique, `hashed_password`, `role` default `user`). `Task` table `tasks` (`id` UUID, `title` as `sa.String()` with no length, `status` enum `taskstatus`: `created`, `in_progress`, `completed`, `created_at`, `updated_at`). Indexes `ix_tasks_status`, `ix_tasks_created_at`. |
 
 Base Dockerfiles run uvicorn or `python -m`. Datadog (`ddtrace`, `docker-compose.datadog.yml`, `ddtrace-run`) is removed.
 
@@ -137,7 +137,7 @@ Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE
 
 | Process | Compose check | What the code actually exposes |
 | --- | --- | --- |
-| api-gateway, simulator | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres, Redis, or Kafka. Neither registers `@app.on_event("startup")`. |
+| api-gateway, simulator | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres, Redis, or Kafka. Neither registers `@app.on_event("startup")`. The gateway lifespan creates the shared `httpx.AsyncClient` and closes it on shutdown. |
 | webhook-receiver | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Kafka. The lifespan starts the Kafka producer. Shutdown stops it. |
 | auth | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres or Redis. The lifespan connects Redis. Shutdown stops Redis, then disposes the engine. |
 | task | `GET :8000/health` | `/health` and `/ready` are static JSON. They do not ping Postgres, Redis, or Kafka. The lifespan connects Kafka then Redis. Shutdown stops Redis, then Kafka, then disposes the engine. |
@@ -148,7 +148,7 @@ Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE
 | postgres-exporter, kafka-exporter | `wget` `/metrics` on 9187 and 9308 | process metrics |
 | frontend | `node` fetch `http://127.0.0.1:5173/` | Vite dev server on the default image stage |
 
-`infra/test-stack.services` is the explicit test stack (no exporters). `infra/docker-compose.test.yml` selects the frontend `preview` image stage (`vite build` then `vite preview` on port 5173). Toxiproxy has no shell or HTTP client in the image, so it has no healthcheck.
+`infra/test-stack.services` is the explicit test stack (no exporters). `infra/docker-compose.test.yml` selects the frontend `preview` image stage (`vite build` then `vite preview` on port 5173) and publishes that UI on host `5174` and nginx on `9080`. The login error element has `role="alert"`. `.task-card__title` uses `overflow-wrap: anywhere` and `.column` uses `min-width: 0`, so a title with no spaces stays inside the column. Toxiproxy has no shell or HTTP client in the image, so it has no healthcheck.
 
 `ASGITransport` does not run the lifespan or `on_event`, so a test that needs Redis or Kafka must enter the app lifespan itself. `get_db` closes over the module-level `SessionLocal` built from the environment at import.
 
@@ -158,9 +158,8 @@ Also required, no host default: gateway `AUTH_SERVICE_URL`, `INTEGRATION_SERVICE
 - `GET /ready` stays 200 when Redis, Kafka, or Postgres is down. Compose treats that as healthy for the FastAPI services.
 - Importing any FastAPI `app.main` starts `OtelBatchSpanRecordProcessor` and it tries `OTLP_ENDPOINT` (`http://otel-collector:4317` if unset). The scratch run logged `StatusCode.UNAVAILABLE` for that DNS name after `/openapi.json`.
 - Every service package is named `app`. Two services cannot be imported in one process. `prometheus_metrics` registers global collectors at import. Scheduler import sets `PROMETHEUS_MULTIPROC_DIR` and creates that directory.
-- `requirements.txt` does not pin SQLAlchemy and does not list the OTEL SDK. This venv resolved SQLAlchemy 2.1.3, and the SQLAlchemy instrumentor then instrumented nothing. Import still succeeded. Images only import because the Dockerfile installs `shared[services]`.
-- Gateway OpenAPI has duplicate operation IDs (warning, HTTP 200).
-- Dispatcher backoff is `1 * 2^(attempt-1)` plus 0..10% and, with the default 3 attempts, waits twice (~1 s, ~2 s). Scheduler DLQ replay does not send `Idempotency-Key`, and it treats 5xx as final. Notification SMTP failures are swallowed. `tenacity` is unused.
-- User cache stores `hashed_password` for 300 s. Task cache returns dicts on hit and ORM rows on miss.
+- `requirements.txt` does not list the OTEL SDK. Images import it because the Dockerfile installs `shared[services]`. SQLAlchemy is pinned `>=2.0,<2.1` in the services and `saas_shared`, so SQLAlchemyInstrumentor instruments it.
+- Dispatcher backoff is `1 * 2^(attempt-1)` plus 0..10% and, with the default 3 attempts, waits twice (~1 s, ~2 s). Scheduler DLQ replay does not send `Idempotency-Key`, and it treats 5xx as final (BUG-12). Notification SMTP failures are swallowed. `tenacity` is unused.
+- User cache writes `user:{username}` only after the password check succeeds, and the value still includes `hashed_password` for 300 s (BUG-4b). A wrong password leaves no key. Task cache returns dicts on hit and ORM rows on miss. A Kafka failure after the task commit returns 500 and leaves the row (BUG-3).
 - `scripts/seed_dev.py` is not run by compose. Postgres is not published, so the script's default `localhost:5432` does not match this compose file.
 - Alembic `script_location` is relative to the cwd. Running it outside `migrations/` fails with `Path doesn't exist: alembic` before it connects.

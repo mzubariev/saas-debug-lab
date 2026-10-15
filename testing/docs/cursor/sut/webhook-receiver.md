@@ -2,6 +2,6 @@
 
 Directory `services/core/webhook-receiver`. The lifespan starts `AIOKafkaProducer` (`app.state.kafka_producer`). Shutdown stops it. No database or Redis.
 
-`POST /webhooks/inbound` (`app/api/routes/webhooks.py`), body `WebhookPayload` (`event: str`, `data: dict` default `{}`), status 200, body `{"status":"received","event": ...}`. No auth. Publish failure is logged and re-raised. Compose healthcheck curls `:8000/health`. Depends on kafka healthy.
+`POST /webhooks/inbound` (`app/api/routes/webhooks.py`), body `WebhookPayload` (`event: str`, `data: dict` default `{}`), status 200, body `{"status":"received","event": ...}`. No auth. The success and failure logs pass the payload event as `event_name`. Publish failure is logged and re-raised. Compose healthcheck curls `:8000/health`. Depends on kafka healthy.
 
 Common facts (nginx, JWT, envelope, settings, timings, readiness, hazards): `testing/docs/cursor/sut/SUT_MAP.md`.
