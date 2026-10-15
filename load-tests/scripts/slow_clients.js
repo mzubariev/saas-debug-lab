@@ -6,7 +6,7 @@
  */
 
 import { check, group, sleep } from 'k6'
-import { Counter, Gauge } from 'k6/metrics'
+import { Counter, Trend } from 'k6/metrics'
 import { randomIntBetween, login, listTasks, getTask, reqTags } from '../lib/helpers.js'
 
 // ─── Custom metrics ────────────────────────────────────────────────────────
@@ -14,7 +14,7 @@ const timeouts504 = new Counter('nginx_504_timeouts')
 const slowBrowserReads = new Counter('slow_browser_requests')
 const heavyReaderReads = new Counter('heavy_reader_requests')
 const normalReaderOk = new Counter('normal_reader_ok')
-const thinkTimeGauge = new Gauge('last_think_time_ms')
+const thinkTime = new Trend('think_time_ms', true)
 
 // ─── Test configuration ────────────────────────────────────────────────────
 export const options = {
@@ -75,40 +75,46 @@ export function normalReader(data) {
   })
 
   const thinkMs = randomIntBetween(1000, 3000)
-  thinkTimeGauge.add(thinkMs)
+  thinkTime.add(thinkMs)
   sleep(thinkMs / 1000)
 }
 
 export function slowBrowser(data) {
+  let taskId = null
   group('slow_browse', () => {
     const listRes = listTasks(data.token, reqTags('slow_browser', 'get_tasks'))
     check(listRes, { 'slow: list 200': r => r.status === 200 })
     slowBrowserReads.add(1)
 
-    const thinkMs = randomIntBetween(8000, 20000)
-    thinkTimeGauge.add(thinkMs)
-    sleep(thinkMs / 1000)
-
     if (listRes.status === 200) {
       let tasks
       try {
         tasks = JSON.parse(listRes.body)
-      } catch {
+      } catch (e) {
         tasks = []
       }
 
       if (tasks.length > 0) {
-        const taskId = tasks[Math.floor(Math.random() * tasks.length)].id
-        const getRes = getTask(
-          data.token,
-          taskId,
-          reqTags('slow_browser', 'get_task'),
-        )
-        check(getRes, { 'slow: get task 200': r => r.status === 200 })
-        slowBrowserReads.add(1)
+        taskId = tasks[Math.floor(Math.random() * tasks.length)].id
       }
     }
   })
+
+  const thinkMs = randomIntBetween(8000, 20000)
+  thinkTime.add(thinkMs)
+  sleep(thinkMs / 1000)
+
+  if (taskId) {
+    group('slow_browse_get', () => {
+      const getRes = getTask(
+        data.token,
+        taskId,
+        reqTags('slow_browser', 'get_task'),
+      )
+      check(getRes, { 'slow: get task 200': r => r.status === 200 })
+      slowBrowserReads.add(1)
+    })
+  }
 
   sleep(randomIntBetween(2000, 5000) / 1000)
 }
@@ -129,6 +135,6 @@ export function heavyReader(data) {
   })
 
   const thinkMs = randomIntBetween(25000, 35000)
-  thinkTimeGauge.add(thinkMs)
+  thinkTime.add(thinkMs)
   sleep(thinkMs / 1000)
 }
