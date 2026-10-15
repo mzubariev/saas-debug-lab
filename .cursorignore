@@ -30,10 +30,12 @@ observability
 load-tests/config
 load-tests/scripts
 chaos
+
+# docs
 docs/incidents-playbooks
 docs/cheat-sheets
-docs/on-call
-docs/system-architechture/SERVICE_MAP.md
+docs/on-call/**
+!docs/on-call/ON_CALL_RUNBOOK.md
 docs/system-architechture/testing-architecture
 testing/docs/cursor/thoughts/DOCS_REVIEW_2026-10.md
 testing/docs/cursor/plan/00-workflow.md

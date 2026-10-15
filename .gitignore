@@ -3,7 +3,11 @@
 
 # Editor
 .vscode/
+
+# docs
 docs/**
+!docs/on-call/
+!docs/on-call/ON_CALL_RUNBOOK.md
 
 # env
 .env
