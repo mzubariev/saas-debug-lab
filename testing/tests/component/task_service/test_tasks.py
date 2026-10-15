@@ -44,6 +44,7 @@ async def test_create_task_publishes_task_created(lifecycle: TaskLifecycle) -> N
         pytest.param("", id="empty"),
         pytest.param("x" * (_TITLE_LIMIT + 1), id="over-limit"),
         pytest.param("x" * _OVERSIZE, id="oversize"),
+        pytest.param("\u0000x", id="nul"),
         pytest.param(1, id="wrong-type"),
     ],
 )
