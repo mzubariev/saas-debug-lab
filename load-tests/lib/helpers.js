@@ -263,11 +263,3 @@ export function simulateWebhookReceive(
     responseCallback: http.expectedStatuses(200, 500),
   })
 }
-
-/** POST external-service-simulator /trigger-event */
-export function triggerInboundEvent(event, data = {}, tags) {
-  return http.post(`${WEBHOOK_SIM_URL}/trigger-event`, JSON.stringify({ event, data }), {
-    headers: anonJsonHeaders(),
-    tags,
-  })
-}

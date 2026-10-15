@@ -9,8 +9,7 @@
  *   k6 run load-tests/scripts/chaos_mode.js
  *   make load-chaos
  */
-import { sleep } from 'k6'
-import { check } from 'k6'
+import { check, sleep } from 'k6'
 import {
   login,
   createTask,
@@ -42,11 +41,12 @@ export default function (data) {
   }
 
   const tags = reqTags(SCENARIO, 'create_task')
-  let res = createTask(data.token, `chaos-${__VU}-${__ITER}`, tags)
+  const title = `chaos-${__VU}-${__ITER}`
+  let res = createTask(data.token, title, tags)
 
   if (res.status !== 201) {
     sleep(randomIntBetween(0, 2000) / 1000)
-    res = createTask(data.token, `chaos-retry-${__VU}-${__ITER}`, tags)
+    res = createTask(data.token, title, tags)
   }
 
   check(res, {

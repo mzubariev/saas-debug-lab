@@ -136,6 +136,16 @@ export default function (data) {
   sleep(0.1)
 }
 
-export function teardown() {
-  console.log(`[spike_traffic] teardown (rate_limited counter: ${rateLimited.name})`)
+function metricCount(data, name) {
+  const metric = data.metrics[name]
+  if (!metric || !metric.values || typeof metric.values.count !== 'number') return 0
+  return metric.values.count
+}
+
+export function handleSummary(data) {
+  console.log(
+    `[spike_traffic] teardown rate_limited_requests=${metricCount(data, 'rate_limited_requests')} ` +
+      `tasks_created_ok=${metricCount(data, 'tasks_created_ok')} ` +
+      `non_success_status=${metricCount(data, 'non_success_status')}`,
+  )
 }
