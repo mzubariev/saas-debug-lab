@@ -22,7 +22,7 @@ The controller stores an `InfraHandle` on `config._infra`; workers load `Infra` 
 - `rows`: per-test `TaskRowFactory` and `UserRowFactory` subclasses with `__async_session__` set to `db`. `create_async` commits.
 - `events`: `KafkaEventReader` on `task_created`, `task_updated`, `webhook_inbound`, `webhook_dlq`, one consumer group per worker.
 
-task-service (`tests/component/task_service/conftest.py`): `service_app` enters `lifespan_context`, `client` is `httpx.AsyncClient` on `ASGITransport` (`raise_app_exceptions=False`) with `base_url="http://test"`, `task_cache` is `TaskCache` on `app.state.redis`, `lifecycle` is `TaskLifecycle` over `HttpTaskApi`, `events`, and `task_cache`.
+task-service (`tests/component/task_service/conftest.py`): `service_app` enters `lifespan_context`, `client` is `httpx.AsyncClient` on `ASGITransport` (`raise_app_exceptions=False`) with `base_url="http://test"`, `task_cache` is `TaskCache` on `app.state.redis`, `lifecycle` is `TaskLifecycle` over `HttpTaskApi`, `events`, and `task_cache`. `test_create_rejects_a_bad_title` expects 422 for an empty title, a title past 255 characters, a 10000-character title, a NUL byte, and a non-string. `test_create_accepts_a_title_at_the_length_limit` expects 201 at 255 characters. The `tasks.title` column stays unbounded.
 
 ## Flows and adapters
 
@@ -58,21 +58,23 @@ Repo root, via `testing/testing.mk`. `TEST_PG_URL`, `TEST_REDIS_URL`, and `TEST_
 
 ## P6.1 integration
 
-`tests/integration/conftest.py`. The controller calls `stack_up` (`BASE_URL` and `NGINX_URL` when the stack is already up) and `ensure_admin_token` (FileLock, `testing/.stack/session.json`, refresh when `exp` is close). Workers read that file and do not log in. `KEEP_STACK=1` skips `down -v`.
+`tests/integration/conftest.py`. The test stack project is `saas-test`. Compose must be at least 2.24, and `compose.py` refuses to start when `COMPOSE_PROJECT_NAME` is set to anything else. Published host ports: gateway `8010`, nginx `9080`, frontend `5174`, simulator `8002`, mailhog `8026`, Kafka `9095`, Postgres `5434`, Redis `6381`, toxiproxy `8475`. Worker metrics are `9111`–`9113`. WireMock stays on `8089`. The synthetic probe still targets the dev lab.
 
-`wait_for_stack` checks postgres, force-recreates migrations, and waits until each service kind is ready. `install_wiremock_catch_all` stubs `:8089`; `ensure_admin_token` logs in for `Stack(base_url="http://127.0.0.1:8001", nginx_url="http://127.0.0.1", owned=False)`.
+The controller calls `stack_up` (`BASE_URL` and `NGINX_URL` when the stack is already up) and `ensure_admin_token` (FileLock, `testing/.stack/session.json`). Reuse requires the compose project, the postgres container id, a stored token that is not near `exp`, and a live admin login. Otherwise it seeds and logs in. Workers read that file and do not log in. `KEEP_STACK=1` skips `down -v`.
+
+`wait_for_stack` checks postgres, force-recreates migrations, and waits until each service kind is ready. `install_wiremock_catch_all` stubs `:8089`; `ensure_admin_token` logs in for `Stack(base_url="http://127.0.0.1:8010", nginx_url="http://127.0.0.1:9080", owned=False)`.
 
 `python -m saas_testkit.infra.compose wait` runs that. `--wiremock-catch-all` and `--ensure-admin-token` turn the two options on.
 
-- `base_url`: gateway, `http://127.0.0.1:8001` unless `BASE_URL` is set.
-- `nginx_url`: `NGINX_URL` or `http://127.0.0.1`.
+- `base_url`: gateway, `http://127.0.0.1:8010` unless `BASE_URL` is set.
+- `nginx_url`: `NGINX_URL` or `http://127.0.0.1:9080`.
 - `admin_token`: seeded `admin` access token.
 - `client`: `httpx.AsyncClient` on `base_url` with that bearer token.
 - `run_context`: binds `RunContext`.
 - `auth`: `AuthFlow` over `HttpAuthApi`.
 - `lifecycle`: `TaskLifecycle` over `HttpTaskApi`.
-- `events`: `KafkaEventReader` on `127.0.0.1:9093`, one group per worker.
-- `mail`: `MailHogInbox`. `containing` returns messages whose subject or body includes the text.
+- `events`: `KafkaEventReader` on `127.0.0.1:9095`, one group per worker.
+- `mail`: `MailHogInbox` at `http://127.0.0.1:8026`. `containing` returns messages whose subject or body includes the text.
 - `wiremock`: `WireMockSink`. `install_catch_all` (priority 10, 200), `stub_for_payload` (JSONPath on `id`, unique scenario), `calls_for` (journal filtered by that id).
 
 ## P6.2 integration/services
@@ -81,13 +83,13 @@ Repo root, via `testing/testing.mk`. `TEST_PG_URL`, `TEST_REDIS_URL`, and `TEST_
 
 ## P6.3 integration/scenarios
 
-`WireMockSink.stub_for_title` and `stub_sequence`. `HttpSimulatorApi.trigger` and `ExternalReceiver.trigger`. Fixtures `delivery` (`WebhookDelivery`) and `simulator` (`ExternalReceiver` on `:8000`). A session catch-all 200 is installed once. `test_created_task_reaches_kafka_mail_and_webhooks`, `test_webhook_retries_then_delivers`, `test_permanent_failure_is_replayed_without_an_idempotency_key` (`slow`), `test_triggered_event_is_published`, `test_trigger_event_is_accepted`.
+`WireMockSink.stub_for_title` and `stub_sequence`. `HttpSimulatorApi.trigger` and `ExternalReceiver.trigger`. Fixtures `delivery` (`WebhookDelivery`) and `simulator` (`ExternalReceiver` on `:8002`). A session catch-all 200 is installed once. `test_created_task_reaches_kafka_mail_and_webhooks`, `test_webhook_retries_then_delivers`, `test_permanent_failure_is_replayed_without_an_idempotency_key` (`slow`), `test_triggered_event_is_published`, `test_trigger_event_is_accepted` (202, `status` `triggered`).
 
 ## P3.2 auth-service
 
 auth-service (`tests/component/auth_service/conftest.py`): `service_app` sets `TOKEN_EXPIRE_MINUTES=45` before import and enters `lifespan_context`. `client` is `httpx.AsyncClient` on `ASGITransport` (`raise_app_exceptions=False`) with `base_url="http://test"`. `user_cache` is `UserCache`. `auth` is `AuthFlow`.
 
-`AuthFlow.submit_login`, `me_as` (`valid`, `expired`, `tampered`, `alg_none`, `missing`, `malformed`), `ready`, `cached_user`, `replace_cached_role`. `HttpAuthApi.submit_login`, `me_header`, `ready`. `UserCache.user` and `put` (`user:{username}`, TTL 300 s). `ApiResponse.document` is the parsed JSON body. `StatusBody` is the `/ready` body.
+`AuthFlow.submit_login`, `me_as` (`valid`, `expired`, `tampered`, `alg_none`, `missing`, `malformed`), `ready`, `cached_user`, `replace_cached_role`. `HttpAuthApi.submit_login`, `me_header`, `ready`. `UserCache.user` and `put` (`user:{username}`, TTL 300 s). The cache write runs only after the password check succeeds. `test_wrong_password_leaves_no_user_cache`: a wrong password is 401 and leaves no `user:{username}`. `test_user_cache_omits_the_password_hash` is `xfail(strict=True)` (BUG-4b): a successful login still stores `hashed_password`. `ApiResponse.document` is the parsed JSON body. `StatusBody` is the `/ready` body.
 
 ## P3.3 api-gateway
 
@@ -131,13 +133,13 @@ external-service-simulator (`tests/component/external_service_simulator/conftest
 
 ## P4.2 contract/http
 
-One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_MINUTES=45` before import); event capture uses that same lifespan. `client` is the HTTP client. `fuzz_schema` is the served OpenAPI document. `check_openapi` runs Schemathesis (`not_a_server_error` and `response_schema_conformance`) on the session loop. `schema_examples` reads `SCHEMA_EXAMPLES`, default 40. Snapshots: `contracts/openapi/<service>.json` (`servers` dropped). `test_openapi_document_is_valid`, `test_openapi_matches_snapshot`, `test_generated_calls_match_openapi` (task, auth, webhook-receiver; gateway and simulator skip). `test_login_with_a_nul_username_is_not_a_server_error` is auth-service only. Consumer checks: `test_created_task_matches_consumer_model`, `test_token_matches_consumer_model`, `test_me_matches_consumer_model`, `test_inbound_receipt_matches_consumer_model`, `test_received_webhook_matches_consumer_model`, `test_proxied_body_matches_consumer_model`. `HttpTaskApi` sets `document` on the response.
+One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_MINUTES=45` before import); event capture uses that same lifespan. `client` is the HTTP client. `fuzz_schema` is the served OpenAPI document. `check_openapi` runs Schemathesis (`not_a_server_error` and `response_schema_conformance`) on the session loop. `schema_examples` reads `SCHEMA_EXAMPLES`, default 40. Snapshots: `contracts/openapi/<service>.json` (`servers` dropped). `test_openapi_document_is_valid` and `test_openapi_matches_snapshot` run for every `--service`. The gateway document validates: each proxy method has its own operationId, and `contracts/openapi/api-gateway.json` keeps those ids. `test_generated_calls_match_openapi` covers task-service, auth-service, and webhook-receiver; the gateway and the simulator skip it. `test_login_with_a_nul_username_is_not_a_server_error` is auth-service only: a NUL byte in the username is 422, and the check asserts the status is under 500. Consumer checks: `test_created_task_matches_consumer_model`, `test_token_matches_consumer_model`, `test_me_matches_consumer_model`, `test_inbound_receipt_matches_consumer_model`, `test_received_webhook_matches_consumer_model`, `test_proxied_body_matches_consumer_model`. `HttpTaskApi` sets `document` on the response.
 
 ## P7 e2e_ui
 
 `tests/e2e_ui/conftest.py`. `base_url` and the `storage_state` origin are both `KitSettings.ui_url` (`UI_URL`, default `http://127.0.0.1:5174`). `browser_context_args` sets `service_workers=block` and `storage_state` from `session.json` (`saas_debug_token`, `frontend/src/lib/apiClient.ts`) unless the test is `@pytest.mark.anonymous`. A failure keeps a trace and a screenshot (`--tracing retain-on-failure`, `--screenshot only-on-failure`). `admin` is the seeded user. `login` is `LoginPage`. `board` is `BoardPage`. `tasks` is `UiTasks` (sync httpx on the gateway): `create` may assert, `find` returns the first title match and raises when a second exists.
 
-`LoginPage.open`, `sign_in`, `expect_form`, `expect_login_page`, `expect_invalid_credentials`, `expect_board`. `BoardPage.open`, `reload`, `create_task`, `move_task`, `expect_open`, `expect_task`, `task_id`. `move_task` drags with `mouse.move(..., steps=40)` and waits for the move response. The context viewport is 1920×1080 so a long title does not push a column off screen. `KanbanColumn.reveal` walks the 10-card pages. `TaskCard.expect_visible` and `task_id` (the card's `title` attribute).
+`LoginPage.open`, `sign_in`, `expect_form`, `expect_login_page`, `expect_invalid_credentials`, `expect_board`. `BoardPage.open`, `reload`, `create_task`, `move_task`, `expect_open`, `expect_task`, `task_id`. `move_task` drags with `mouse.move(..., steps=40)` and waits for the move response. The context viewport is 1920×1080. A title with no spaces wraps inside the column. `KanbanColumn.reveal` walks the 10-card pages. `TaskCard.expect_visible` and `task_id` (the card's `title` attribute).
 
 `test_login_with_seeded_credentials_opens_the_board` (`anonymous`, `critical`), `test_login_with_a_wrong_password_shows_an_error` (`anonymous`), `test_board_without_a_session_redirects_to_login` (`anonymous`), `test_created_task_stays_in_each_column_after_reload` (`critical`).
 
@@ -147,7 +149,7 @@ One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_
 
 `test_health_through_the_edge_is_ok` (`/health`, `/external/health`), `test_login_for_a_seeded_role_returns_a_token` (`admin`, `user`), `test_created_task_is_readable`, `test_metrics_are_reachable` (`GET /metrics`), `test_frontend_returns_ok`.
 
-`.github/workflows/smoke.yml`: `workflow_call` and `workflow_dispatch`, inputs `smoke_base_url` and `start_stack`. `start_stack` brings the stack up on that runner; otherwise the caller has already started it.
+`.github/workflows/smoke.yml`: `workflow_call` and `workflow_dispatch`, inputs `smoke_base_url` and `start_stack`. `start_stack` brings the stack up on that runner; otherwise the caller has already started it. `ci.yml` runs this suite as a step inside `integration` (`SMOKE_BASE_URL=http://127.0.0.1:9080`, `UI_URL=http://127.0.0.1:5174`). `smoke.yml` stays the post-deploy workflow.
 
 ## P8.2 synthetic
 
@@ -155,8 +157,8 @@ One session `service_app` for the selected `--service` (auth sets `TOKEN_EXPIRE_
 
 ## P5 CI
 
-`.github/workflows/ci.yml`: `lint`, `security`, `unit`, `component-contract` (matrix `task-service`, `auth-service`, `api-gateway`, `webhook-receiver`, `external-service-simulator`, `webhook-dispatcher`, `notification-worker`, `scheduler-worker`), `ci-gate`. `open_app_lifespan` enters a service lifespan once per worker. Nightly Schemathesis stays the five HTTP services.
+`.github/workflows/ci.yml`: `lint`, `security`, `unit`, `component-contract` (needs `security`; matrix `task-service`, `auth-service`, `api-gateway`, `webhook-receiver`, `external-service-simulator`, `webhook-dispatcher`, `notification-worker`, `scheduler-worker`), `ci-gate`. `open_app_lifespan` enters a service lifespan once per worker. Nightly Schemathesis stays the five HTTP services.
 
 ## P9 CI
 
-`.github/workflows/ci.yml` also runs `integration` and `ui-e2e` (`shard: [1]`, `pytest-split --splits` / `--group`, cached `.test_durations`), `smoke` (`smoke.yml` with `start_stack`), and `coverage` (`coverage combine`). `ci-gate` needs all of them. `.github/workflows/nightly.yml`: `schemathesis` (`SCHEMA_EXAMPLES=500`), `stack` (`slow`/`chaos`, `--count 5`, `--store-durations`), `browsers` (`firefox`, `webkit`). The flaky pass and the duration refresh run `tests/integration` and `tests/e2e_ui` in separate pytest processes. The UI flaky pass uses `--reruns 1`. The report job sets `GH_REPO` and does not checkout.
+`.github/workflows/ci.yml` also runs `build` (the only cache writer; integration and ui-e2e bake with `cache-from: type=gha`), `integration`, `ui-e2e` (`shard: [1]`, `--randomly-seed` from `github.run_id`, `pytest-split --splits` / `--group`, cached `.test_durations`), and `coverage` (`coverage combine`). Smoke is a step inside `integration`. A pull request runs integration with `-m "not slow and not chaos"` and ui-e2e with `-m critical`. A main push runs integration with `-m "not chaos"` (`slow` included) and the full UI suite. `chaos` stays on nightly. `ci-gate` (`if: always()`) needs `changes`, `lint`, `security`, `unit`, `component-contract`, `build`, `integration`, `ui-e2e`, and `coverage`. `success` or `skipped` pass; `failure` and `cancelled` fail. `.github/workflows/nightly.yml`: `schemathesis` (`SCHEMA_EXAMPLES=500`; Schemathesis sends NUL bytes, and a NUL username is 422; Postgres rejects `0x00` in other text columns), `stack` (`slow`/`chaos`, `--count 5`, `--store-durations`), `browsers` (`firefox`, `webkit`). The flaky pass and the duration refresh run `tests/integration` and `tests/e2e_ui` in separate pytest processes. The UI flaky pass uses `--reruns 1`. The report job sets `GH_REPO` and does not checkout.
