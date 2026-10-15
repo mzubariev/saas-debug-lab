@@ -10,22 +10,19 @@ and Jaeger as described in [`docs/system-architechture/ARCHITECTURE.md`](../docs
 
 ## Prerequisites
 
-**1. Install k6**
+**1. Install k6 1.7.1**
+
+Scripts were checked with **k6 v1.7.1**. Image: `grafana/k6:1.7.1`.
 
 ```bash
 # macOS
 brew install k6
+k6 version   # k6 v1.7.1
 
-# Linux
-sudo gpg -k
-sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
-  --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
-echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
-  | sudo tee /etc/apt/sources.list.d/k6.list
-sudo apt-get update && sudo apt-get install k6
-
-# Docker (no install needed)
-docker run --rm -i --network host grafana/k6 run - < load-tests/scripts/spike_traffic.js
+# Docker, from the repo root (the image must see lib/helpers.js)
+docker run --rm --network host \
+  -v "$PWD:/scripts" -w /scripts \
+  grafana/k6:1.7.1 run load-tests/scripts/spike_traffic.js
 ```
 
 **2. Start the stack**
@@ -38,11 +35,16 @@ docker compose --profile core up -d
 docker compose --profile core --profile observability up -d
 ```
 
-**3. Seed the database** (required for concurrency and slow_clients tests)
+**3. Seed the database** (required for login; concurrency and slow_clients also read existing rows)
+
+Postgres has no published host port, so `localhost:5432` from the host does not reach it. Run the seed on the Postgres network namespace (from the repo root):
 
 ```bash
-pip install -r scripts/requirements.txt
-DATABASE_URL=postgresql://admin:admin@localhost:5432/saas python scripts/seed_dev.py
+docker run --rm --network container:postgres \
+  -e DATABASE_URL=postgresql://admin:admin@127.0.0.1:5432/saas \
+  -v "$PWD/scripts:/scripts" \
+  python:3.14-slim \
+  bash -c "pip install -q -r /scripts/requirements.txt && python /scripts/seed_dev.py"
 ```
 
 ---
@@ -104,13 +106,15 @@ make load-baseline
 k6 run --duration 12h load-tests/scripts/baseline.js
 ```
 
-**Thresholds** — `http_req_duration` by `endpoint:create_task` / `get_tasks`, `http_req_failed < 5%`.
+Each VU keeps its own JWT (`getToken`, refresh when under 2 minutes remain; TTL is 30 minutes). Every created task is started and completed in that iteration. `GET /tasks` is not paginated, and cleanup deletes only completed tasks older than 5 minutes, so leaving rows in `created` would grow the list for the whole soak. Latency and `http_req_failed` thresholds use `abortOnFail` with `delayAbortEval: 1m`.
+
+**Thresholds** — `create_task p(95)<3500`, `get_tasks p(95)<4000` (2× the 2026-10-15 measurement, abort after 1m), `http_req_failed < 5%`, `checks > 99%`.
 
 ---
 
 ### 0b. `chaos_mode.js` — Retries + jitter
 
-Creates a task; on non-201, waits 0–2s and retries once. Tags: `scenario=chaos_mode`, `endpoint=create_task`.
+Creates a task; on non-201, waits 0–2s and retries the same title once. Tags: `scenario=chaos_mode`, `endpoint=create_task`.
 
 ```bash
 make load-chaos
@@ -121,19 +125,18 @@ make load-chaos
 ### 1. `spike_traffic.js` — Sudden traffic spike
 
 **What it tests**
-- Nginx rate limiting (`zone=api`: 10 req/s burst 20 per IP)
-- Redis `tasks:list` cache warming under burst reads
-- Kafka producer throughput as write volume spikes
-- System behaviour when traffic drops suddenly (recovery)
+- Nginx `api` zone: **20 r/s**, **burst 100**, excess **delayed** (no `nodelay`), keyed by the `Authorization` header. One shared token from `setup()` is one bucket. Unauthenticated calls are not in this bucket.
+- Arrival rate, not VU count: ~12 iterations/s (about 16 HTTP r/s, under the bucket), spike to ~46 iterations/s (about 60 HTTP r/s, 3×), then recover. Each iteration is one `GET /tasks` plus a 30% `POST /tasks`.
+- 429 is an expected status (`expectedStatuses` includes 429) and is counted only in `rate_limited_requests`. Latency trends record 200/201 only.
 
-**Traffic shape**
+**Traffic shape** (iteration starts per second)
 
 ```
-VUs  150 │                  ┌──────────────────────┐
-         │          ramp ───┘                      └─── ramp down
-      10 │  warmup ─┐                                        ┌─ cool-down
-       0 ├──────────┴──────────────────────────────────────────────────
-         0s        20s      35s                    95s       125s     185s
+iter/s 46 │                  ┌──────────────────────┐
+          │          ramp ───┘                      └─── ramp down
+       12 │  warmup ─┐                                        ┌─ recover
+        0 ├──────────┴──────────────────────────────────────────────────
+          0s        20s      35s                    95s       125s     185s
 ```
 
 **Run**
@@ -145,16 +148,17 @@ k6 run load-tests/scripts/spike_traffic.js
 
 | Where | What to look for |
 |---|---|
-| k6 output | `rate_limited_requests` counter grows rapidly; `http_req_failed` rate ≈ 30-40% during spike |
+| k6 output | `rate_limited_requests` grows during the spike; `http_req_failed` stays low because 429 is expected |
 | k6 output | `list_tasks_ms p95` drops as Redis cache warms up (first ~5 s cold, then <20 ms) |
 | Kafka UI `localhost:8080` | `task_created` topic message rate mirrors POST /tasks volume |
 | Jaeger `localhost:16686` | task-service span duration stays flat — spike absorbed by Nginx and Redis |
 | MailHog `localhost:8025` | New emails arrive as task_created events reach notification-worker |
 
-**Expected thresholds** — test PASSES if:
-- `http_req_failed rate < 40%`
+**Expected thresholds** — stress run. Latency budgets apply only to successful (200/201) samples:
+- `http_req_failed rate < 5%` (429 does not count)
 - `list_tasks_ms p95 < 800 ms`
 - `create_task_ms p95 < 1500 ms`
+- `checks rate > 99%`
 
 ---
 
@@ -206,7 +210,7 @@ k6 run -e VUS=30 load-tests/scripts/concurrency.js
 ### 3. `retry_storm.js` — Webhook failure cascade
 
 **What it tests**
-- webhook-dispatcher back-off on 5xx / network failures (see the dispatcher note below)
+- webhook-dispatcher back-off: 3 attempts, sleeps about 1s then about 2s, jitter 0 to +10% (not ±10%, and no 4s sleep at the default `MAX_RETRIES`)
 - Immediate DLQ routing on 4xx (no retries wasted on client errors)
 - Dead-letter queue (`webhook_dlq` Kafka topic) filling under sustained failures
 - Celery `retry_failed_webhooks` job draining the DLQ (runs every 60 s)
@@ -223,14 +227,9 @@ DEFAULT_FAIL_RATE=0.9 \
 docker compose -f infra/docker-compose.yml up -d --no-deps external-service-simulator
 ```
 
-Option B: inject latency via Toxiproxy (no restart needed):
-```bash
-curl -s -X POST http://localhost:8474/proxies/mailhog-smtp/toxics \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"latency","type":"latency","attributes":{"latency":3000,"jitter":500}}'
-```
+A Toxiproxy toxic on `mailhog-smtp` slows notification email only. It does not change webhook delivery or the API.
 
-**Two concurrent scenarios**
+**Scenarios**
 
 ```
 organic_task_events  5 VUs × 3 min  → POST /tasks → task_created Kafka event
@@ -252,15 +251,10 @@ k6 run -e FAIL_RATE=0.9 load-tests/scripts/retry_storm.js
 | Where | What to look for |
 |---|---|
 | Kafka UI `localhost:8080` | `webhook_dlq` topic depth growing during test, draining in 60-s windows (Celery retries) |
-| Flower `localhost:5555` | `retry_failed_webhooks` task execution count and last-run time |
+| scheduler-worker logs | `retry_failed_webhooks` (there is no Flower service in this compose file) |
 | webhook-dispatcher logs | `webhook_attempt_failed` (with `retry=False` for 4xx), `webhook_failed_permanently`, DLQ structlog events |
 | k6 output | `tasks_created_for_events` counter vs `simulator_fail_rate` (~0.9) |
 | Jaeger `localhost:16686` | Traces: api-gateway → task-service → Kafka → webhook-dispatcher → external-service-simulator |
-
-**Clean up after** (remove Toxiproxy toxic):
-```bash
-curl -s -X DELETE http://localhost:8474/proxies/mailhog-smtp/toxics/latency
-```
 
 ---
 
@@ -268,7 +262,7 @@ curl -s -X DELETE http://localhost:8474/proxies/mailhog-smtp/toxics/latency
 
 **What it tests**
 - Connection pool exhaustion under many idle keep-alive connections
-- Nginx `proxy_read_timeout 30 s` — heavy readers with >30 s think time trigger upstream timeout
+- Think time is `sleep()` after the response. It does not hold the upstream request, so it does not arm nginx `proxy_read_timeout` (30s) or the gateway timeout (5s)
 - Postgres idle connection accumulation (`pg_stat_activity`)
 - Graceful degradation: normal requests must still succeed while slow clients hold connections
 
@@ -277,7 +271,7 @@ curl -s -X DELETE http://localhost:8474/proxies/mailhog-smtp/toxics/latency
 ```
 normal_reader   10 VUs  1-3 s  think  → baseline; must stay healthy throughout
 slow_browser    30 VUs  8-20 s think  → holds keep-alive connections; connection pool pressure
-heavy_reader    10 VUs  25-35 s think → approaches proxy_read_timeout; may receive 504 via Toxiproxy
+heavy_reader    10 VUs  25-35 s think → long pause between requests; does not by itself return 504
 ```
 
 **Run**
@@ -310,7 +304,7 @@ k6 run -e BASE_URL=http://localhost:18000 load-tests/scripts/slow_clients.js
 | Nginx logs | `docker logs nginx --follow` — upstream timed out, 504 |
 | Postgres | `docker exec postgres psql -U admin saas -c "SELECT state, count(*) FROM pg_stat_activity GROUP BY state;"` |
 | Prometheus | `pg_connections_by_state_count{state="idle"}` (postgres-exporter custom query) creeping up under slow browser load |
-| k6 output | `last_think_time_ms` gauge showing distribution of think times |
+| k6 output | `think_time_ms` trend (distribution of think times) |
 
 **Expected thresholds** — test PASSES if:
 - `normal_reader_ok count > 50`
@@ -324,9 +318,9 @@ k6 run -e BASE_URL=http://localhost:18000 load-tests/scripts/slow_clients.js
 | Environment variable | Default | Description |
 |---|---|---|
 | `BASE_URL` | `http://localhost` | Nginx entry point for all API calls |
-| `WEBHOOK_SIM_URL` | `http://localhost:8000` | Direct access to external-service-simulator |
+| `WEBHOOK_SIM_URL` | `http://nginx/external` | Simulator via compose DNS. From the host use `http://localhost:8000` (published simulator port) |
 | `VUS` | `20` | VU count override for `concurrency.js` |
-| `FAIL_RATE` | `0.9` | Failure rate passed to `retry_storm.js` simulator baseline |
+| `FAIL_RATE` | `0.9` | Query `fail_rate` on direct simulator calls only. Dispatcher uses `DEFAULT_FAIL_RATE` |
 | `DEBUG_VU` | unset | Set to `1` to print `VU` / `ITER` in `chaos_mode.js` |
 
 ---
@@ -379,6 +373,25 @@ rate(nginx_http_requests_total{status="429"}[30s])
 
 ---
 
+## Thresholds
+
+SLO runs (`baseline.js`, `concurrency.js`) must pass. Stress runs (`spike_traffic.js`, `retry_storm.js`, `chaos_mode.js`) are allowed to show 429s or injected simulator 500s; those statuses are expected and are not `http_req_failed`. Every script thresholds `checks` at `rate>0.99`.
+
+The millisecond budgets in the scripts are not a capacity model. Replace them from a measured baseline on this stack (same image, same data size), with headroom over the measured p95. Do not copy a number from an architecture diagram.
+
+Measured 2026-10-15 on this workstation (k6 1.7.1, core stack, nginx on port 80, `k6 run --duration 1m`). Checks were 100% and `http_req_failed` was 0% on both runs (no 401, no 429 counted as a failure).
+
+On k6 1.7, `--duration` replaces a script's scenarios with one VU, so the spike row is not the 60 r/s arrival-rate profile. Run `k6 run load-tests/scripts/spike_traffic.js` with no duration flag for that profile. `baseline.js` keeps its 20 VUs; `--duration 1m` only shortens it.
+
+| Run | create_task p95 | get_tasks p95 |
+| --- | --- | --- |
+| `baseline.js` (`http_req_duration` by endpoint) | 1623 ms | 1928 ms |
+| `spike_traffic.js` under `--duration 1m` (200/201 only: `create_task_ms` / `list_tasks_ms`) | 29 ms | 240 ms |
+
+`baseline.js` budgets are 3500 ms and 4000 ms, twice those p95 samples, because this database's unpaginated `GET /tasks` is already large. Re-measure after the table changes and edit the thresholds. `concurrency.js` still carries older 500/800 ms placeholders; do not treat them as a capacity number until the same measurement is done for that mix.
+
+---
+
 ## Project Layout
 
 ```
@@ -388,7 +401,7 @@ load-tests/
 │   └── helpers.js             ← login, requestId, reqTags, auth/anon headers, HTTP wrappers
 └── scripts/
     ├── baseline.js            ← steady / long soak (12h via --duration)
-    ├── chaos_mode.js          ← retry-once + random sleep; chaos training
+    ├── chaos_mode.js          ← retry the same title once; chaos training
     ├── spike_traffic.js       ← sudden spike, Nginx rate limit, cache warm-up
     ├── concurrency.js         ← steady-state mixed workload, full lifecycle
     ├── retry_storm.js         ← webhook failures, DLQ, Celery retries

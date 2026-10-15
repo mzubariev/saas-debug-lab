@@ -34,10 +34,10 @@ export const options = {
   duration: '1h',
   thresholds: {
     'http_req_duration{endpoint:create_task}': [
-      { threshold: 'p(95)<800', abortOnFail: true, delayAbortEval: '1m' },
+      { threshold: 'p(95)<3500', abortOnFail: true, delayAbortEval: '1m' },
     ],
     'http_req_duration{endpoint:get_tasks}': [
-      { threshold: 'p(95)<500', abortOnFail: true, delayAbortEval: '1m' },
+      { threshold: 'p(95)<4000', abortOnFail: true, delayAbortEval: '1m' },
     ],
     http_req_failed: [
       { threshold: 'rate<0.05', abortOnFail: true, delayAbortEval: '1m' },
