@@ -2,21 +2,14 @@
  * spike_traffic.js — Sudden traffic spike scenario
  *
  * PURPOSE
- *   Simulate a burst of traffic that exceeds the Nginx rate limit.
- *   Observe how the system degrades gracefully under sudden load:
- *     - Nginx starts returning 429 Too Many Requests (zone=api: 10 req/s, burst 20)
- *     - Redis absorbs the read pressure (GET /tasks cache-aside, TTL 60s)
- *     - Postgres connection pool stays bounded while write pressure increases
- *     - Kafka producer throughput grows with POST /tasks volume
- *
- * TRAFFIC SHAPE
- *
- *   VUs │                 ┌────────────────────────┐
- *   150 │                 │                        │
- *       │         ramp ───┘                        └─── ramp down
- *    10 │ warmup ─┐                                           ┌─ cool-down
- *     0 ├─────────┴──────────────────────────────────────────┴──────────
- *       0s       20s      35s                     95s        125s       185s
+ *   Open-loop spike against the real nginx api zone: 20 r/s, burst 100,
+ *   excess delayed (no nodelay), keyed by Authorization. setup() shares one
+ *   token, so every VU is one bucket. Each iteration is one GET /tasks plus
+ *   a 30% POST /tasks (~1.3 HTTP calls).
+ *     - baseline ~12 iter/s ≈ 16 r/s (under the bucket)
+ *     - spike ~46 iter/s ≈ 60 r/s (about 3x)
+ *     - 429s are expected and are not http_req_failed
+ *     - latency Trends record 200/201 only
  *
  * RUN
  *   k6 run load-tests/scripts/spike_traffic.js
@@ -30,8 +23,7 @@
  *   Metrics             : http://localhost:9090  (Prometheus → http_requests_total)
  *
  * THRESHOLDS
- *   Per-endpoint latency applies to all tagged requests (including 429s, which are fast).
- *   Primary SLO signals remain custom Trends (list_tasks_ms, create_task_ms).
+ *   list_tasks_ms and create_task_ms include only status 200/201.
  */
 
 import http from 'k6/http'
@@ -59,20 +51,27 @@ const createLatency = new Trend('create_task_ms', true)
 
 // ─── Test configuration ────────────────────────────────────────────────────
 export const options = {
-  stages: [
-    { duration: '20s', target: 10 },
-    { duration: '15s', target: 150 },
-    { duration: '60s', target: 150 },
-    { duration: '30s', target: 10 },
-    { duration: '60s', target: 10 },
-  ],
+  scenarios: {
+    spike: {
+      executor: 'ramping-arrival-rate',
+      startRate: 5,
+      timeUnit: '1s',
+      preAllocatedVUs: 80,
+      maxVUs: 400,
+      stages: [
+        { duration: '20s', target: 12 },
+        { duration: '15s', target: 46 },
+        { duration: '60s', target: 46 },
+        { duration: '30s', target: 12 },
+        { duration: '60s', target: 12 },
+      ],
+    },
+  },
 
   thresholds: {
-    http_req_failed: ['rate<0.40'],
-    'http_req_duration{endpoint:get_tasks}': ['p(95)<800'],
-    'http_req_duration{endpoint:create_task}': ['p(95)<1500'],
-    'list_tasks_ms': ['p(95)<800'],
-    'create_task_ms': ['p(95)<1500'],
+    http_req_failed: ['rate<0.05'],
+    list_tasks_ms: ['p(95)<800'],
+    create_task_ms: ['p(95)<1500'],
     checks: ['rate>0.99'],
   },
 }
