@@ -1,16 +1,19 @@
 /**
  * retry_storm.js — Webhook failure cascade and DLQ retry behaviour
  *
+ * FAIL_RATE is only the fail_rate query param on direct simulator calls
+ * (simulator_baseline). It does not change webhook-dispatcher traffic.
+ * Dispatcher posts use the simulator's DEFAULT_FAIL_RATE. Set that on the
+ * simulator process before the run if the organic path should fail.
+ *
  * RUN
  *   k6 run load-tests/scripts/retry_storm.js
  *   k6 run -e FAIL_RATE=0.9 load-tests/scripts/retry_storm.js
  *
- * Two concurrent scenarios:
- *   organic_task_events  — POST /tasks → Kafka task_created → webhook-dispatcher → external-service-simulator
- *   simulator_baseline   — POST external-service-simulator /receive-webhook directly (fail injection)
- *
- * Outbound dispatch is triggered exclusively via Kafka events. Use organic_task_events
- * to exercise the full retry pipeline.
+ * Scenarios:
+ *   organic_task_events  — POST /tasks → Kafka task_created → webhook-dispatcher → simulator
+ *   simulator_baseline   — direct POST /receive-webhook?fail_rate=FAIL_RATE
+ *   duplicate_key        — same Idempotency-Key twice, second body status is "duplicate"
  */
 
 import http from 'k6/http'
@@ -18,6 +21,7 @@ import { check, group, sleep } from 'k6'
 import { Counter, Rate } from 'k6/metrics'
 import {
   login,
+  floatEnv,
   randomTitle,
   createTask,
   simulateWebhookReceive,
@@ -31,8 +35,6 @@ const SCENARIO_SIM = 'retry_storm_simulator'
 const taskCreated = new Counter('tasks_created_for_events')
 const simFailures = new Counter('simulator_direct_failures')
 const simFailRate = new Rate('simulator_fail_rate')
-
-const FAIL_RATE = parseFloat(__ENV.FAIL_RATE || '0.9')
 
 // ─── Test configuration ───────────────────────────────────────────────────
 export const options = {
@@ -52,6 +54,14 @@ export const options = {
       exec: 'simulatorBaseline',
       gracefulStop: '10s',
     },
+
+    duplicate_key: {
+      executor: 'constant-vus',
+      vus: 1,
+      duration: '3m',
+      exec: 'duplicateKey',
+      gracefulStop: '10s',
+    },
   },
 
   thresholds: {
@@ -63,13 +73,14 @@ export const options = {
 
 // ─── Shared setup ─────────────────────────────────────────────────────────
 export function setup() {
+  const failRate = floatEnv('FAIL_RATE', 0.9)
   const session = login('admin', 'admin123', reqTags('retry_storm', 'login'))
   if (!session) throw new Error('Setup failed: could not obtain JWT')
   console.log(
-    `[retry_storm] configured FAIL_RATE=${FAIL_RATE}. ` +
-      `Ensure external-service-simulator DEFAULT_FAIL_RATE >= ${FAIL_RATE} for end-to-end testing.`,
+    `[retry_storm] FAIL_RATE=${failRate} is the direct-call query param only. ` +
+      'Dispatcher traffic uses external-service-simulator DEFAULT_FAIL_RATE.',
   )
-  return { token: session.token }
+  return { token: session.token, failRate }
 }
 
 export function organicFlow(data) {
@@ -90,15 +101,16 @@ export function organicFlow(data) {
   sleep(0.5)
 }
 
-export function simulatorBaseline() {
+export function simulatorBaseline(data) {
   http.setResponseCallback(http.expectedStatuses(200, 500))
   group('simulator_direct', () => {
     const res = simulateWebhookReceive(
       'load_test.baseline',
       { source: 'k6', vu: __VU },
-      FAIL_RATE,
+      data.failRate,
       0,
       reqTags(SCENARIO_SIM, 'simulator_receive_webhook'),
+      `storm-${__VU}-${__ITER}`,
     )
 
     const failed = res.status >= 400 || res.status === 0
@@ -111,5 +123,34 @@ export function simulatorBaseline() {
     })
   })
 
+  sleep(1)
+}
+
+export function duplicateKey() {
+  http.setResponseCallback(http.expectedStatuses(200, 500))
+  const key = `dup-${__VU}-${__ITER}-${Date.now()}`
+  const tags = reqTags('retry_storm_duplicate', 'simulator_receive_webhook')
+  const first = simulateWebhookReceive('load_test.duplicate', { source: 'k6' }, 0, 0, tags, key)
+  check(first, {
+    'duplicate setup: 200': r => r.status === 200,
+    'duplicate setup: stored': r => {
+      try {
+        return JSON.parse(r.body).status === 'received'
+      } catch (e) {
+        return false
+      }
+    },
+  })
+  const second = simulateWebhookReceive('load_test.duplicate', { source: 'k6' }, 0, 0, tags, key)
+  check(second, {
+    'duplicate: 200': r => r.status === 200,
+    'duplicate: status': r => {
+      try {
+        return JSON.parse(r.body).status === 'duplicate'
+      } catch (e) {
+        return false
+      }
+    },
+  })
   sleep(1)
 }

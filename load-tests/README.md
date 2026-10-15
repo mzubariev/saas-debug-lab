@@ -206,12 +206,14 @@ k6 run -e VUS=30 load-tests/scripts/concurrency.js
 ### 3. `retry_storm.js` — Webhook failure cascade
 
 **What it tests**
-- webhook-dispatcher exponential back-off (1 s → 2 s → 4 s) with ±10 % jitter on 5xx / network failures
+- webhook-dispatcher back-off on 5xx / network failures (see the dispatcher note below)
 - Immediate DLQ routing on 4xx (no retries wasted on client errors)
 - Dead-letter queue (`webhook_dlq` Kafka topic) filling under sustained failures
 - Celery `retry_failed_webhooks` job draining the DLQ (runs every 60 s)
 - Notification-worker receiving `task_created` events while the webhook storm runs
 - Idempotency deduplication in external-service-simulator (already-processed keys return `duplicate`)
+
+`FAIL_RATE` is only the `fail_rate` query param on **direct** simulator calls (`simulator_baseline`). It does not control webhook-dispatcher. Dispatcher posts use the simulator process `DEFAULT_FAIL_RATE`. The `duplicate_key` scenario sends the same `Idempotency-Key` twice with `fail_rate=0` and expects body status `duplicate`.
 
 **Setup — configure webhook failures before running**
 
@@ -232,8 +234,9 @@ curl -s -X POST http://localhost:8474/proxies/mailhog-smtp/toxics \
 
 ```
 organic_task_events  5 VUs × 3 min  → POST /tasks → task_created Kafka event
-                                       → webhook-dispatcher → POST /receive-webhook (fail_rate=FAIL_RATE)
-simulator_baseline   2 VUs × 3 min  → POST external-service-simulator /receive-webhook directly (fail_rate=FAIL_RATE)
+                                       → webhook-dispatcher → simulator (DEFAULT_FAIL_RATE)
+simulator_baseline   2 VUs × 3 min  → direct POST /receive-webhook?fail_rate=FAIL_RATE
+duplicate_key        1 VU  × 3 min  → same Idempotency-Key twice, second status "duplicate"
 ```
 
 > Outbound dispatch is triggered exclusively via Kafka events. The organic task flow

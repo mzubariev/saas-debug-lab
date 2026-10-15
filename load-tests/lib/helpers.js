@@ -240,18 +240,27 @@ export function completeTask(token, taskId, tags) {
   })
 }
 
-/** POST external-service-simulator /receive-webhook */
+/**
+ * POST external-service-simulator /receive-webhook.
+ * failRate is only the query param on this direct call. Dispatcher traffic
+ * uses the simulator process DEFAULT_FAIL_RATE and ignores this value.
+ * idempotencyKey is sent as Idempotency-Key (one key per logical event).
+ */
 export function simulateWebhookReceive(
   event,
   data = {},
   failRate = 0.0,
   delaySeconds = 0,
   tags,
+  idempotencyKey,
 ) {
+  const headers = anonJsonHeaders()
+  headers['Idempotency-Key'] = idempotencyKey || requestId()
   const url = `${WEBHOOK_SIM_URL}/receive-webhook?fail_rate=${failRate}&delay=${delaySeconds}`
   return http.post(url, JSON.stringify({ event, data }), {
-    headers: anonJsonHeaders(),
+    headers,
     tags,
+    responseCallback: http.expectedStatuses(200, 500),
   })
 }
 
