@@ -62,13 +62,13 @@ export const options = {
 
 // ─── Shared setup ─────────────────────────────────────────────────────────
 export function setup() {
-  const token = login('admin', 'admin123', reqTags('retry_storm', 'login'))
-  if (!token) throw new Error('Setup failed: could not obtain JWT')
+  const session = login('admin', 'admin123', reqTags('retry_storm', 'login'))
+  if (!session) throw new Error('Setup failed: could not obtain JWT')
   console.log(
     `[retry_storm] configured FAIL_RATE=${FAIL_RATE}. ` +
       `Ensure external-service-simulator DEFAULT_FAIL_RATE >= ${FAIL_RATE} for end-to-end testing.`,
   )
-  return { token }
+  return { token: session.token }
 }
 
 export function organicFlow(data) {

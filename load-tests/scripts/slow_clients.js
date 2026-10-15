@@ -56,9 +56,9 @@ export const options = {
 
 // ─── One-time setup ────────────────────────────────────────────────────────
 export function setup() {
-  const token = login('admin', 'admin123', reqTags('slow_clients', 'login'))
-  if (!token) throw new Error('Setup failed: could not obtain JWT')
-  return { token }
+  const session = login('admin', 'admin123', reqTags('slow_clients', 'login'))
+  if (!session) throw new Error('Setup failed: could not obtain JWT')
+  return { token: session.token }
 }
 
 export function normalReader(data) {

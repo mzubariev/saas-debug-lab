@@ -73,9 +73,9 @@ export const options = {
 
 // ─── One-time setup ────────────────────────────────────────────────────────
 export function setup() {
-  const token = login('admin', 'admin123', reqTags(SCENARIO, 'login'))
-  if (!token) throw new Error('Setup failed: could not obtain JWT')
-  return { token }
+  const session = login('admin', 'admin123', reqTags(SCENARIO, 'login'))
+  if (!session) throw new Error('Setup failed: could not obtain JWT')
+  return { token: session.token }
 }
 
 // ─── Main VU loop ──────────────────────────────────────────────────────────

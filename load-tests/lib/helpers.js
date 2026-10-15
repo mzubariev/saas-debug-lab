@@ -2,24 +2,65 @@
  * Shared helpers for all k6 load-test scripts.
  *
  * Import example:
- *   import { login, authHeaders, reqTags, randomTitle } from '../lib/helpers.js'
+ *   import { login, getToken, authHeaders, reqTags, randomTitle } from '../lib/helpers.js'
  */
 import http from 'k6/http'
 import { check } from 'k6'
+import encoding from 'k6/encoding'
+
+const TOKEN_TTL_MS = 30 * 60 * 1000
+const REFRESH_BEFORE_MS = 2 * 60 * 1000
+
+function stripTrailingSlash(url) {
+  return String(url).replace(/\/+$/, '')
+}
 
 // ─── Base URLs ────────────────────────────────────────────────────────────────
 // Override via k6 env:
 //   k6 run -e BASE_URL=http://localhost scripts/spike_traffic.js
-export const BASE_URL = __ENV.BASE_URL || 'http://localhost'
-export const WEBHOOK_SIM_URL = __ENV.WEBHOOK_SIM_URL || 'http://nginx/external'
+export const BASE_URL = stripTrailingSlash(__ENV.BASE_URL || 'http://localhost')
+export const WEBHOOK_SIM_URL = stripTrailingSlash(__ENV.WEBHOOK_SIM_URL || 'http://nginx/external')
+
+/**
+ * Integer env. Empty means fallback. NaN throws — call from setup().
+ * @param {string} name
+ * @param {number} fallback
+ */
+export function intEnv(name, fallback) {
+  const raw = __ENV[name]
+  if (raw === undefined || raw === '') return fallback
+  const n = parseInt(raw, 10)
+  if (Number.isNaN(n)) {
+    throw new Error(`env ${name} must be an integer, got ${JSON.stringify(raw)}`)
+  }
+  return n
+}
+
+/**
+ * Float env. Empty means fallback. NaN throws — call from setup().
+ * @param {string} name
+ * @param {number} fallback
+ */
+export function floatEnv(name, fallback) {
+  const raw = __ENV[name]
+  if (raw === undefined || raw === '') return fallback
+  const n = parseFloat(raw)
+  if (Number.isNaN(n)) {
+    throw new Error(`env ${name} must be a number, got ${JSON.stringify(raw)}`)
+  }
+  return n
+}
 
 // ─── Trace correlation ─────────────────────────────────────────────────────────
-/** Unique id per request for log/trace correlation (gateway can forward as X-Request-ID). */
+let _requestSeq = 0
+
+/** Unique id per call (VU + iteration + counter + random suffix). */
 export function requestId() {
-  // __VU / __ITER exist only in the default function (per-VU iteration). setup/teardown/init do not define __ITER.
   const vu = typeof __VU !== 'undefined' ? __VU : 'setup'
   const iter = typeof __ITER !== 'undefined' ? __ITER : 0
-  return `k6-${vu}-${iter}-${Date.now()}`
+  _requestSeq += 1
+  const suffix = Math.random().toString(36).slice(2, 10)
+  return `k6-${vu}-${iter}-${_requestSeq}-${suffix}`
 }
 
 /** Standard k6 HTTP tags: scenario name + logical endpoint (for thresholds & dashboards). */
@@ -27,11 +68,31 @@ export function reqTags(scenario, endpoint) {
   return { scenario, endpoint }
 }
 
+function withName(tags, name) {
+  return Object.assign({}, tags, { name })
+}
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
+/** Per-VU cache. Each VU has its own JS runtime, so this is not shared across VUs. */
+let _session = null
+
+function tokenExpMs(token) {
+  try {
+    const part = token.split('.')[1]
+    const payload = JSON.parse(encoding.b64decode(part, 'rawurl', 's'))
+    if (typeof payload.exp === 'number') return payload.exp * 1000
+  } catch (e) {
+    // Fall back to the known access-token TTL.
+  }
+  return Date.now() + TOKEN_TTL_MS
+}
+
 /**
- * POST /auth/token and return the JWT access_token string.
- * Returns null and logs on failure — callers should bail out if null.
- * @param {object} [tags] - optional k6 tags e.g. reqTags('my_script', 'login')
+ * POST /auth/token.
+ * Returns { token, exp } (exp is epoch ms) or null on failure.
+ * @param {string} [username]
+ * @param {string} [password]
+ * @param {object} [tags]
  */
 export function login(username = 'admin', password = 'admin123', tags) {
   const opts = {
@@ -52,7 +113,26 @@ export function login(username = 'admin', password = 'admin123', tags) {
     console.error(`[login] failed — status=${res.status} body=${res.body}`)
     return null
   }
-  return res.json('access_token')
+  const token = res.json('access_token')
+  if (!token) {
+    console.error('[login] 200 without access_token')
+    return null
+  }
+  return { token, exp: tokenExpMs(token) }
+}
+
+/**
+ * Bearer token for this VU. Re-logins when under 2 minutes remain (TTL is 30 min).
+ * @param {string} [username]
+ * @param {string} [password]
+ * @param {object} [tags]
+ */
+export function getToken(username = 'admin', password = 'admin123', tags) {
+  if (!_session || _session.exp - Date.now() < REFRESH_BEFORE_MS) {
+    _session = login(username, password, tags)
+    if (!_session) throw new Error('login failed')
+  }
+  return _session.token
 }
 
 /**
@@ -107,6 +187,21 @@ export function randomIntBetween(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
+/**
+ * Add latency to okTrend only for 200/201. Any other status increments otherCounter.
+ * @param {object} res
+ * @param {object} okTrend k6 Trend
+ * @param {object} otherCounter k6 Counter
+ */
+export function trackOutcome(res, okTrend, otherCounter) {
+  if (res.status === 200 || res.status === 201) {
+    okTrend.add(res.timings.duration)
+    return true
+  }
+  otherCounter.add(1)
+  return false
+}
+
 // ─── HTTP wrappers (tags required at call sites for observability) ─────────────
 /** GET /tasks */
 export function listTasks(token, tags) {
@@ -123,14 +218,17 @@ export function createTask(token, title, tags) {
 
 /** GET /tasks/{id} */
 export function getTask(token, taskId, tags) {
-  return http.get(`${BASE_URL}/tasks/${taskId}`, { headers: authHeaders(token), tags })
+  return http.get(`${BASE_URL}/tasks/${taskId}`, {
+    headers: authHeaders(token),
+    tags: withName(tags, 'GET /tasks/{id}'),
+  })
 }
 
 /** PATCH /tasks/{id}/start */
 export function startTask(token, taskId, tags) {
   return http.patch(`${BASE_URL}/tasks/${taskId}/start`, null, {
     headers: authHeaders(token),
-    tags,
+    tags: withName(tags, 'PATCH /tasks/{id}/start'),
   })
 }
 
@@ -138,7 +236,7 @@ export function startTask(token, taskId, tags) {
 export function completeTask(token, taskId, tags) {
   return http.patch(`${BASE_URL}/tasks/${taskId}/complete`, null, {
     headers: authHeaders(token),
-    tags,
+    tags: withName(tags, 'PATCH /tasks/{id}/complete'),
   })
 }
 

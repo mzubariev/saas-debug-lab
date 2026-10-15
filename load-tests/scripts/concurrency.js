@@ -20,6 +20,8 @@ import { check, group, sleep } from 'k6'
 import { Counter, Rate, Trend } from 'k6/metrics'
 import {
   login,
+  getToken,
+  intEnv,
   randomTitle,
   listTasks,
   createTask,
@@ -27,6 +29,7 @@ import {
   startTask,
   completeTask,
   reqTags,
+  trackOutcome,
 } from '../lib/helpers.js'
 
 const SCENARIO = 'concurrency'
@@ -37,8 +40,9 @@ const lifecycleFailed = new Counter('lifecycle_failed')
 const cacheHitRate = new Rate('cache_hint_likely')
 const readLatency = new Trend('read_ms', true)
 const writeLatency = new Trend('write_ms', true)
+const otherStatus = new Counter('non_success_status')
 
-const TARGET_VUS = parseInt(__ENV.VUS || '20')
+const TARGET_VUS = intEnv('VUS', 20)
 
 // ─── Test configuration ────────────────────────────────────────────────────
 export const options = {
@@ -63,20 +67,20 @@ export const options = {
 
 // ─── One-time setup ────────────────────────────────────────────────────────
 export function setup() {
-  const token = login('admin', 'admin123', reqTags(SCENARIO, 'login'))
-  if (!token) throw new Error('Setup failed: could not obtain JWT')
-  return { token }
+  intEnv('VUS', 20)
+  const session = login('admin', 'admin123', reqTags(SCENARIO, 'login'))
+  if (!session) throw new Error('Setup failed: could not obtain JWT')
 }
 
 // ─── Main VU loop ──────────────────────────────────────────────────────────
-export default function (data) {
-  const { token } = data
+export default function () {
+  const token = getToken('admin', 'admin123', reqTags(SCENARIO, 'login'))
   const roll = Math.random()
 
   if (roll < 0.60) {
     group('list_tasks', () => {
       const res = listTasks(token, reqTags(SCENARIO, 'get_tasks'))
-      readLatency.add(res.timings.duration)
+      trackOutcome(res, readLatency, otherStatus)
 
       cacheHitRate.add(res.timings.duration < 20)
 
@@ -94,7 +98,7 @@ export default function (data) {
   } else if (roll < 0.80) {
     group('create_task', () => {
       const res = createTask(token, randomTitle(), reqTags(SCENARIO, 'create_task'))
-      writeLatency.add(res.timings.duration)
+      trackOutcome(res, writeLatency, otherStatus)
 
       check(res, {
         'create: 201': r => r.status === 201,
@@ -114,7 +118,7 @@ export default function (data) {
         `[lifecycle] ${randomTitle()}`,
         reqTags(SCENARIO, 'create_task'),
       )
-      writeLatency.add(createRes.timings.duration)
+      trackOutcome(createRes, writeLatency, otherStatus)
       if (!check(createRes, { 'lifecycle create: 201': r => r.status === 201 })) {
         lifecycleFailed.add(1)
         return
@@ -131,7 +135,7 @@ export default function (data) {
       sleep(0.5)
 
       const startRes = startTask(token, task.id, reqTags(SCENARIO, 'start_task'))
-      writeLatency.add(startRes.timings.duration)
+      trackOutcome(startRes, writeLatency, otherStatus)
       if (!check(startRes, { 'lifecycle start: 200': r => r.status === 200 })) {
         lifecycleFailed.add(1)
         return
@@ -144,7 +148,7 @@ export default function (data) {
         task.id,
         reqTags(SCENARIO, 'complete_task'),
       )
-      writeLatency.add(completeRes.timings.duration)
+      trackOutcome(completeRes, writeLatency, otherStatus)
       if (!check(completeRes, { 'lifecycle complete: 200': r => r.status === 200 })) {
         lifecycleFailed.add(1)
         return
@@ -167,7 +171,7 @@ export default function (data) {
 
       const taskId = tasks[Math.floor(Math.random() * tasks.length)].id
       const getRes = getTask(token, taskId, reqTags(SCENARIO, 'get_task'))
-      readLatency.add(getRes.timings.duration)
+      trackOutcome(getRes, readLatency, otherStatus)
 
       check(getRes, {
         'get single: 200': r => r.status === 200,

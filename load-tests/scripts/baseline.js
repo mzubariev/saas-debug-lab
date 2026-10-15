@@ -8,7 +8,7 @@
  * See load-tests/README.md and Makefile targets (load-baseline).
  */
 import { sleep } from 'k6'
-import { login, createTask, listTasks, reqTags } from '../lib/helpers.js'
+import { login, getToken, createTask, listTasks, reqTags } from '../lib/helpers.js'
 
 const SCENARIO = 'baseline'
 
@@ -23,17 +23,17 @@ export const options = {
 }
 
 export function setup() {
-  const token = login('admin', 'admin123', reqTags(SCENARIO, 'login'))
-  if (!token) throw new Error('Setup failed: could not obtain JWT')
-  return { token }
+  const session = login('admin', 'admin123', reqTags(SCENARIO, 'login'))
+  if (!session) throw new Error('Setup failed: could not obtain JWT')
 }
 
-export default function (data) {
-  createTask(data.token, `task-${__VU}-${__ITER}`, reqTags(SCENARIO, 'create_task'))
+export default function () {
+  const token = getToken('admin', 'admin123', reqTags(SCENARIO, 'login'))
+  createTask(token, `task-${__VU}-${__ITER}`, reqTags(SCENARIO, 'create_task'))
 
   sleep(1)
 
-  listTasks(data.token, reqTags(SCENARIO, 'get_tasks'))
+  listTasks(token, reqTags(SCENARIO, 'get_tasks'))
 
   sleep(1)
 }
