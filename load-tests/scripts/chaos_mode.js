@@ -26,6 +26,7 @@ export const options = {
   thresholds: {
     'http_req_duration{endpoint:create_task}': ['p(95)<1200'],
     http_req_failed: ['rate<0.15'],
+    checks: ['rate>0.99'],
   },
 }
 

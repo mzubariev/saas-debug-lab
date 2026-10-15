@@ -13,6 +13,7 @@
  * to exercise the full retry pipeline.
  */
 
+import http from 'k6/http'
 import { check, group, sleep } from 'k6'
 import { Counter, Rate } from 'k6/metrics'
 import {
@@ -54,9 +55,9 @@ export const options = {
   },
 
   thresholds: {
-    http_req_failed: ['rate<0.10'],
     'http_req_duration{endpoint:create_task}': ['p(95)<2000'],
     'http_req_duration{endpoint:simulator_receive_webhook}': ['p(95)<3000'],
+    checks: ['rate>0.99'],
   },
 }
 
@@ -90,6 +91,7 @@ export function organicFlow(data) {
 }
 
 export function simulatorBaseline() {
+  http.setResponseCallback(http.expectedStatuses(200, 500))
   group('simulator_direct', () => {
     const res = simulateWebhookReceive(
       'load_test.baseline',

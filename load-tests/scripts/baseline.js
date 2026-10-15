@@ -19,6 +19,7 @@ export const options = {
     'http_req_duration{endpoint:create_task}': ['p(95)<800'],
     'http_req_duration{endpoint:get_tasks}': ['p(95)<500'],
     http_req_failed: ['rate<0.05'],
+    checks: ['rate>0.99'],
   },
 }
 

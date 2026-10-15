@@ -62,6 +62,7 @@ export const options = {
     'read_ms': ['p(95)<500', 'p(99)<1000'],
     'write_ms': ['p(95)<1500'],
     lifecycle_failed: ['count<50'],
+    checks: ['rate>0.99'],
   },
 }
 

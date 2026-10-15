@@ -34,6 +34,7 @@
  *   Primary SLO signals remain custom Trends (list_tasks_ms, create_task_ms).
  */
 
+import http from 'k6/http'
 import { check, group, sleep } from 'k6'
 import { Counter, Trend } from 'k6/metrics'
 import {
@@ -42,13 +43,17 @@ import {
   listTasks,
   createTask,
   reqTags,
+  trackOutcome,
 } from '../lib/helpers.js'
+
+http.setResponseCallback(http.expectedStatuses({ min: 200, max: 299 }, 429))
 
 const SCENARIO = 'spike_traffic'
 
 // ─── Custom metrics ────────────────────────────────────────────────────────
 const rateLimited = new Counter('rate_limited_requests')
 const taskCreateOk = new Counter('tasks_created_ok')
+const otherStatus = new Counter('non_success_status')
 const listLatency = new Trend('list_tasks_ms', true)
 const createLatency = new Trend('create_task_ms', true)
 
@@ -68,6 +73,7 @@ export const options = {
     'http_req_duration{endpoint:create_task}': ['p(95)<1500'],
     'list_tasks_ms': ['p(95)<800'],
     'create_task_ms': ['p(95)<1500'],
+    checks: ['rate>0.99'],
   },
 }
 
@@ -85,12 +91,12 @@ export default function (data) {
 
   group('list_tasks', () => {
     const res = listTasks(data.token, tGet)
-    listLatency.add(res.timings.duration)
 
     if (res.status === 429) {
       rateLimited.add(1)
       return
     }
+    trackOutcome(res, listLatency, otherStatus)
 
     check(res, {
       'list: status 200': r => r.status === 200,
@@ -107,12 +113,12 @@ export default function (data) {
   if (Math.random() < 0.30) {
     group('create_task', () => {
       const res = createTask(data.token, randomTitle(), tCreate)
-      createLatency.add(res.timings.duration)
 
       if (res.status === 429) {
         rateLimited.add(1)
         return
       }
+      trackOutcome(res, createLatency, otherStatus)
       if (res.status === 201) taskCreateOk.add(1)
 
       check(res, {

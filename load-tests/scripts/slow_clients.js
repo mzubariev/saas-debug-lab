@@ -51,6 +51,7 @@ export const options = {
     http_req_failed: ['rate<0.15'],
     nginx_504_timeouts: ['count<100'],
     'http_req_duration{endpoint:get_tasks}': ['p(95)<10000'],
+    checks: ['rate>0.99'],
   },
 }
 
