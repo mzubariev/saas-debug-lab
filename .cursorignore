@@ -27,9 +27,6 @@ package-lock.json
 
 # Folders to ignore
 observability
-load-tests/config
-load-tests/scripts
-chaos
 
 # docs
 docs/incidents-playbooks
