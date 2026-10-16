@@ -70,9 +70,11 @@ export const options = {
 
   thresholds: {
     http_req_failed: ['rate<0.05'],
-    list_tasks_ms: ['p(95)<800'],
-    create_task_ms: ['p(95)<1500'],
+    // nginx delay queue cap = burst/rate = 5s, plus margin
+    list_tasks_ms: ['p(95)<5300'],
+    create_task_ms: ['p(95)<5300'],
     checks: ['rate>0.99'],
+    dropped_iterations: ['count<100'],
   },
 }
 

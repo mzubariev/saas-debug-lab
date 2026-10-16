@@ -114,7 +114,7 @@ k6 run --duration 12h load-tests/scripts/baseline.js
 
 Each VU keeps its own JWT (`getToken`, refresh when under 2 minutes remain; TTL is 30 minutes). Every created task is started and completed in that iteration. `GET /tasks` is not paginated, and cleanup deletes only completed tasks older than 5 minutes, so leaving rows in `created` would grow the list for the whole soak. Latency and `http_req_failed` thresholds use `abortOnFail` with `delayAbortEval: 1m`.
 
-**Thresholds** — `create_task p(95)<3500`, `get_tasks p(95)<4000` (2× the 2026-10-15 measurement, abort after 1m), `http_req_failed < 5%`, `checks > 99%`.
+**Thresholds** — `create_task p(95)<1000`, `get_tasks p(95)<1500` (2026-10-16 clean-DB measurement, abort after 1m), `http_req_failed < 5%`, `checks > 99%`.
 
 ---
 
@@ -160,11 +160,12 @@ k6 run load-tests/scripts/spike_traffic.js
 | Jaeger `localhost:16686` | task-service span duration stays flat — spike absorbed by Nginx and Redis |
 | MailHog `localhost:8025` | New emails arrive as task_created events reach notification-worker |
 
-**Expected thresholds** — stress run. Latency budgets apply only to successful (200/201) samples:
+**Expected thresholds** — limiter invariant on successful (200/201) samples. The delay-queue cap is burst/rate = 5s; the budget is 5.3s:
 - `http_req_failed rate < 5%` (429 does not count)
-- `list_tasks_ms p95 < 800 ms`
-- `create_task_ms p95 < 1500 ms`
+- `list_tasks_ms p95 < 5300 ms`
+- `create_task_ms p95 < 5300 ms`
 - `checks rate > 99%`
+- `dropped_iterations count < 100`
 
 ---
 
@@ -382,20 +383,20 @@ rate(nginx_http_requests_total{status="429"}[30s])
 
 ## Thresholds
 
-SLO runs (`baseline.js`, `concurrency.js`) must pass. Stress runs (`spike_traffic.js`, `retry_storm.js`, `chaos_mode.js`) are allowed to show 429s or injected simulator 500s; those statuses are expected and are not `http_req_failed`. Every script thresholds `checks` at `rate>0.99`.
+`baseline.js` is the latency SLO: `create_task` p95 under 1000 ms and `get_tasks` p95 under 1500 ms, with `http_req_failed` under 5% and `checks` above 99%. Those budgets abort the soak after 1 minute.
 
-The millisecond budgets in the scripts are not a capacity model. Replace them from a measured baseline on this stack (same image, same data size), with headroom over the measured p95. Do not copy a number from an architecture diagram.
+`spike_traffic.js` asserts the nginx limiter invariant, not that latency SLO. One shared token is one 20 r/s bucket with burst 100 and no `nodelay`, so excess requests wait at most burst/rate = 5s. Successful samples (`list_tasks_ms`, `create_task_ms`) must stay under 5300 ms. `http_req_failed` stays under 5% (429 is expected and is not a failure) and `checks` stay above 99%, so the spike must not produce 5xx. `dropped_iterations` stays under 100.
 
-Measured 2026-10-15 on this workstation (k6 1.7.1, core stack, nginx on port 80, `k6 run --duration 1m`). Checks were 100% and `http_req_failed` was 0% on both runs (no 401, no 429 counted as a failure).
+`CHAOS=1` still clears every threshold. `concurrency.js` still carries older 500/800 ms placeholders.
 
-On k6 1.7, `--duration` replaces a script's scenarios with one VU, so the spike row is not the 60 r/s arrival-rate profile. Run `k6 run load-tests/scripts/spike_traffic.js` with no duration flag for that profile. `baseline.js` keeps its 20 VUs; `--duration 1m` only shortens it.
+### Measured baseline
 
-| Run | create_task p95 | get_tasks p95 |
-| --- | --- | --- |
-| `baseline.js` (`http_req_duration` by endpoint) | 1623 ms | 1928 ms |
-| `spike_traffic.js` under `--duration 1m` (200/201 only: `create_task_ms` / `list_tasks_ms`) | 29 ms | 240 ms |
+2026-10-16, clean database, k6 1.7.1, nginx on port 80.
 
-`baseline.js` budgets are 3500 ms and 4000 ms, twice those p95 samples, because this database's unpaginated `GET /tasks` is already large. Re-measure after the table changes and edit the thresholds. `concurrency.js` still carries older 500/800 ms placeholders; do not treat them as a capacity number until the same measurement is done for that mix.
+| Run | Result |
+| --- | --- |
+| `baseline.js`, 20 VUs, 1h | `create_task` p95 520 ms, `get_tasks` p95 750 ms, 0% failed |
+| `spike_traffic.js`, peak about 3× the nginx limit | p95 5.01 s on both `list_tasks_ms` and `create_task_ms` (the 5s queue cap), 0 failed, 0 non-2xx besides 429 |
 
 ---
 
