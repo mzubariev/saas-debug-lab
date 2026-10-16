@@ -55,6 +55,9 @@ export const options = {
   },
 }
 
+const CHAOS = __ENV.CHAOS === '1'
+if (CHAOS) options.thresholds = {}
+
 // ─── One-time setup ────────────────────────────────────────────────────────
 export function setup() {
   const session = login('admin', 'admin123', reqTags('slow_clients', 'login'))

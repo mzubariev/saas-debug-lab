@@ -71,6 +71,9 @@ export const options = {
   },
 }
 
+const CHAOS = __ENV.CHAOS === '1'
+if (CHAOS) options.thresholds = {}
+
 // ─── Shared setup ─────────────────────────────────────────────────────────
 export function setup() {
   const failRate = floatEnv('FAIL_RATE', 0.9)

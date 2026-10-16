@@ -3,7 +3,7 @@
 set -euo pipefail
 
 DELAY="${DELAY_SECONDS:-2}"
-URL="${WEBHOOK_SIM_URL:-http://nginx/external}/receive-webhook?delay=${DELAY}"
+URL="${WEBHOOK_SIM_URL:-http://localhost/external}/receive-webhook?delay=${DELAY}"
 
 echo "[chaos] POST $URL (chaos probe with delay=${DELAY}s)"
 curl -sS -X POST "$URL" \

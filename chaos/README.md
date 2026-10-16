@@ -8,6 +8,9 @@ Aligned with [Failure primitives](../docs/incidents-playbooks/PROD_INCIDENTS.md)
 1. **Prefer scenarios** (`runner.sh`, `random_scenario.sh`, `make chaos-scenario`) over running primitives directly during exercises.
 2. **Recover** after each run (unpause containers, restart services, remove toxics) — scripts print hints where needed.
 3. Run from a host with **Docker** and (for spike scenario) **k6** on `PATH`.
+4. Scenarios call `make load-* CHAOS=1` (metrics print, thresholds cleared). A plain `make load-*` is SLO mode: thresholds and `abortOnFail` stay on.
+5. Each scenario registers `trap cleanup EXIT`. Cleanup unpauses `webhook-dispatcher`, restores `--cpus=4.0`, recreates the simulator with `EXTERNAL_SIMULATOR_DEFAULT_FAIL_RATE=0`, terminates `chaos_db_pool` / `FOR UPDATE` backends, and deletes the mailhog-smtp latency toxic. A non-zero k6 exit does not skip it.
+6. Direct simulator probes default to `http://localhost/external`. Override with `WEBHOOK_SIM_URL=http://nginx/external` only when that name resolves.
 
 ## Layout
 
@@ -130,7 +133,7 @@ Matches `infra/.env` Postgres settings if exported:
 ## Workflow (from ROADMAP)
 
 1. Start stack: `docker compose --profile core up -d` (under `infra/`).
-2. Optional baseline load: `make load-baseline`.
-3. Trigger chaos: `make chaos-random`.
+2. Optional baseline load while you inject faults: `make load-baseline CHAOS=1` (stays up when thresholds would have aborted). `make load-baseline` without `CHAOS` is the SLO run and goes red on a breached budget.
+3. Trigger chaos: `make chaos-random`. Scenarios pass `CHAOS=1` into k6.
 4. Observe Grafana / Kibana / Jaeger / Kafka UI as in `[docs/incidents-playbooks/DEBUGGING_SCENARIOS.md](../docs/incidents-playbooks/DEBUGGING_SCENARIOS.md)`.
 

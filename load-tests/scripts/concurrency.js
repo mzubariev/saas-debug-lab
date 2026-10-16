@@ -66,6 +66,9 @@ export const options = {
   },
 }
 
+const CHAOS = __ENV.CHAOS === '1'
+if (CHAOS) options.thresholds = {}
+
 // ─── One-time setup ────────────────────────────────────────────────────────
 export function setup() {
   intEnv('VUS', 20)

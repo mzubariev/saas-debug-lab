@@ -69,6 +69,12 @@ make load-concurrency   # concurrency.js
 make load-slow-clients  # slow_clients.js
 ```
 
+### Modes
+
+**SLO** (default). `make load-baseline` with `CHAOS` unset. Thresholds stay in the script, including `abortOnFail` on the soak. A breached budget exits non-zero.
+
+**Chaos** (observe only). `make load-baseline CHAOS=1`, or any `make load-* CHAOS=1`. k6 still prints metrics and the summary, and `options.thresholds` is cleared so a failure under injection does not abort the run. Chaos scenarios call the targets this way. Direct simulator calls default to `http://localhost/external` (host nginx). Set `WEBHOOK_SIM_URL=http://nginx/external` only when that Compose DNS name resolves.
+
 ### k6 CLI
 
 ```bash
@@ -318,7 +324,8 @@ k6 run -e BASE_URL=http://localhost:18000 load-tests/scripts/slow_clients.js
 | Environment variable | Default | Description |
 |---|---|---|
 | `BASE_URL` | `http://localhost` | Nginx entry point for all API calls |
-| `WEBHOOK_SIM_URL` | `http://nginx/external` | Simulator via compose DNS. From the host use `http://localhost:8000` (published simulator port) |
+| `WEBHOOK_SIM_URL` | `http://localhost/external` | Simulator through host nginx. `http://nginx/external` only if you set this env (Compose DNS) |
+| `CHAOS` | unset | `1` clears thresholds (observe only). Unset keeps SLO thresholds and `abortOnFail` |
 | `VUS` | `20` | VU count override for `concurrency.js` |
 | `FAIL_RATE` | `0.9` | Query `fail_rate` on direct simulator calls only. Dispatcher uses `DEFAULT_FAIL_RATE` |
 | `DEBUG_VU` | unset | Set to `1` to print `VU` / `ITER` in `chaos_mode.js` |

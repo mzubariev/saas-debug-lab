@@ -19,7 +19,7 @@ function stripTrailingSlash(url) {
 // Override via k6 env:
 //   k6 run -e BASE_URL=http://localhost scripts/spike_traffic.js
 export const BASE_URL = stripTrailingSlash(__ENV.BASE_URL || 'http://localhost')
-export const WEBHOOK_SIM_URL = stripTrailingSlash(__ENV.WEBHOOK_SIM_URL || 'http://nginx/external')
+export const WEBHOOK_SIM_URL = stripTrailingSlash(__ENV.WEBHOOK_SIM_URL || 'http://localhost/external')
 
 /**
  * Integer env. Empty means fallback. NaN throws — call from setup().

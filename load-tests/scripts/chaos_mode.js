@@ -29,6 +29,9 @@ export const options = {
   },
 }
 
+const CHAOS = __ENV.CHAOS === '1'
+if (CHAOS) options.thresholds = {}
+
 export function setup() {
   const session = login('admin', 'admin123', reqTags(SCENARIO, 'login'))
   if (!session) throw new Error('Setup failed: could not obtain JWT')

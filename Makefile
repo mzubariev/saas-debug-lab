@@ -6,22 +6,22 @@
 .PHONY: cache-stampede kafka-backlog retry-storm
 
 load-baseline:
-	k6 run load-tests/scripts/baseline.js
+	k6 run -e CHAOS=$(CHAOS) load-tests/scripts/baseline.js
 
 load-chaos:
-	k6 run load-tests/scripts/chaos_mode.js
+	k6 run -e CHAOS=$(CHAOS) load-tests/scripts/chaos_mode.js
 
 load-spike:
-	k6 run load-tests/scripts/spike_traffic.js
+	k6 run -e CHAOS=$(CHAOS) load-tests/scripts/spike_traffic.js
 
 load-retry-storm:
-	k6 run load-tests/scripts/retry_storm.js
+	k6 run -e CHAOS=$(CHAOS) load-tests/scripts/retry_storm.js
 
 load-concurrency:
-	k6 run load-tests/scripts/concurrency.js
+	k6 run -e CHAOS=$(CHAOS) load-tests/scripts/concurrency.js
 
 load-slow-clients:
-	k6 run load-tests/scripts/slow_clients.js
+	k6 run -e CHAOS=$(CHAOS) load-tests/scripts/slow_clients.js
 
 # ─── Chaos (Part 2 — primitives / scenarios; see chaos/README.md) ────────────
 
