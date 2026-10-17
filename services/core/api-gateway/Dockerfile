@@ -10,5 +10,4 @@ RUN pip install --no-deps -e /app/shared
 
 COPY services/core/api-gateway/app ./app
 
-# Datadog APM (`ddtrace-run`) is applied only via `docker-compose.datadog.yml` override.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--no-access-log"]

@@ -135,5 +135,5 @@ Matches `infra/.env` Postgres settings if exported:
 1. Start stack: `docker compose --profile core up -d` (under `infra/`).
 2. Optional baseline load while you inject faults: `make load-baseline CHAOS=1` (stays up when thresholds would have aborted). `make load-baseline` without `CHAOS` is the SLO run and goes red on a breached budget.
 3. Trigger chaos: `make chaos-random`. Scenarios pass `CHAOS=1` into k6.
-4. Observe Grafana / Kibana / Jaeger / Kafka UI as in `[docs/incidents-playbooks/DEBUGGING_SCENARIOS.md](../docs/incidents-playbooks/DEBUGGING_SCENARIOS.md)`.
+4. Observe Grafana / Kibana / Jaeger as in `[docs/incidents-playbooks/DEBUGGING_SCENARIOS.md](../docs/incidents-playbooks/DEBUGGING_SCENARIOS.md)`.
 

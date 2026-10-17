@@ -4,7 +4,7 @@ k6-based load tests that exercise every layer of the stack: Nginx rate limiting,
 Redis cache, Postgres connection pool, Kafka event throughput, and the webhook
 retry pipeline. With **`core` + `observability`** up, you can correlate runs with
 Prometheus (including **kafka-exporter** and **postgres-exporter** scrapes), Grafana,
-and Jaeger as described in [`docs/system-architechture/ARCHITECTURE.md`](../docs/system-architechture/ARCHITECTURE.md).
+and Jaeger as described in [`docs/system-architecture/ARCHITECTURE.md`](../docs/system-architecture/ARCHITECTURE.md).
 
 ---
 
@@ -156,7 +156,7 @@ k6 run load-tests/scripts/spike_traffic.js
 |---|---|
 | k6 output | `rate_limited_requests` grows during the spike; `http_req_failed` stays low because 429 is expected |
 | k6 output | `list_tasks_ms p95` drops as Redis cache warms up (first ~5 s cold, then <20 ms) |
-| Kafka UI `localhost:8080` | `task_created` topic message rate mirrors POST /tasks volume |
+| Kafka | `task_created` topic message rate mirrors POST /tasks volume |
 | Jaeger `localhost:16686` | task-service span duration stays flat — spike absorbed by Nginx and Redis |
 | MailHog `localhost:8025` | New emails arrive as task_created events reach notification-worker |
 
@@ -202,8 +202,8 @@ k6 run -e VUS=30 load-tests/scripts/concurrency.js
 | k6 output | `read_ms p95 < 500 ms`, `write_ms p95 < 1500 ms` |
 | k6 output | `cache_hint_likely rate` (proxy for Redis hit ratio) should rise above 70% within ~2 min |
 | k6 output | `lifecycle_completed` vs `lifecycle_failed` — failures indicate state machine or DB issues |
-| Redis Insight `localhost:5540` | `tasks:list` key TTL resets on every create; watch hit/miss counters |
-| Kafka UI `localhost:8080` | Consumer group `webhook-dispatcher` lag should stay < 100 messages |
+| Redis     | `tasks:list` key TTL resets on every create; watch hit/miss counters |
+| Kafka     | Consumer group `webhook-dispatcher` lag should stay < 100 messages |
 | Prometheus `localhost:9090` | `http_requests_total{job="task-service"}` rate, `http_request_duration_seconds` histogram |
 
 **Expected thresholds** — test PASSES if:
@@ -257,8 +257,8 @@ k6 run -e FAIL_RATE=0.9 load-tests/scripts/retry_storm.js
 
 | Where | What to look for |
 |---|---|
-| Kafka UI `localhost:8080` | `webhook_dlq` topic depth growing during test, draining in 60-s windows (Celery retries) |
-| scheduler-worker logs | `retry_failed_webhooks` (there is no Flower service in this compose file) |
+| Kafka | `webhook_dlq` topic depth growing during test, draining in 60-s windows (Celery retries) |
+| scheduler-worker logs | `retry_failed_webhooks`  |
 | webhook-dispatcher logs | `webhook_attempt_failed` (with `retry=False` for 4xx), `webhook_failed_permanently`, DLQ structlog events |
 | k6 output | `tasks_created_for_events` counter vs `simulator_fail_rate` (~0.9) |
 | Jaeger `localhost:16686` | Traces: api-gateway → task-service → Kafka → webhook-dispatcher → external-service-simulator |

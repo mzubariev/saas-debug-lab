@@ -1,8 +1,8 @@
 # SUT map
 
-Combined living map: common facts plus one section per service. The agent pack keeps the same text split under `testing/docs/cursor/sut/`. Scratch-run evidence, including the removed Datadog notes and the P0.1 prep list, is in `testing/docs/cursor/sut/_recon-log.md` and `_prep.md`.
+Combined living map: common facts plus one section per service. The agent pack keeps the same text split under `testing/docs/cursor/sut/`. Scratch-run evidence and the P0.1 prep list are in `testing/docs/cursor/sut/_recon-log.md` and `_prep.md`.
 
-Facts below come from the service code, `infra/nginx/nginx.conf`, `infra/docker-compose.yml`, and a scratch import on Python 3.14.6 (2026-10-05). Service images are `python:3.11-slim`. `docs/system-architechture/ARCHITECTURE.md` disagrees with this file in the places called out below; this file wins.
+Facts below come from the service code, `infra/nginx/nginx.conf`, `infra/docker-compose.yml`, and a scratch import on Python 3.14.6 (2026-10-05). Service images are `python:3.11-slim`. `docs/system-architecture/ARCHITECTURE.md` disagrees with this file in the places called out below; this file wins.
 
 Scratch run: one venv, each service's `requirements.txt`, plus `shared[services]` (the Dockerfiles install that extra; the requirements files do not). Environment was the service `.env.example`, loaded by pydantic-settings from a copy of that file, or exported from it when the file has no inline comments. `httpx.ASGITransport` does not run lifespan, so `/openapi.json` does not connect to Postgres, Redis, or Kafka. Worker checks imported the entry module and did not call `main` / `run`.
 
@@ -25,9 +25,7 @@ A request with no `Authorization` header has an empty zone key. nginx does not a
 
 ## Postgres, Redis, Kafka images
 
-`infra/docker-compose.yml` service `postgres` uses image `postgres:15` (major 15; the tag is not minor-pinned). No host port is published. Command sets `shared_preload_libraries=pg_stat_statements`. Redis image `redis:7`, no host port. Kafka is `confluentinc/cp-kafka:7.5.0` in KRaft combined mode (`broker,controller`, no ZooKeeper). Listeners `PLAINTEXT://kafka:9092`, `CONTROLLER://kafka:9094`, and `PLAINTEXT_HOST://localhost:9093`; none is published in this compose file.
-
-There is no Flower service in `infra/docker-compose.yml`.
+`infra/docker-compose.yml` service `postgres` uses image `postgres:15` (major 15; the tag is not minor-pinned). No host port is published. Command sets `shared_preload_libraries=pg_stat_statements`. Redis image `redis:7`, no host port. Kafka is `confluentinc/cp-kafka:7.5.0` in KRaft combined mode (`broker,controller`). Listeners `PLAINTEXT://kafka:9092`, `CONTROLLER://kafka:9094`, and `PLAINTEXT_HOST://localhost:9093`; none is published in this compose file.
 
 ## JWT
 
@@ -62,11 +60,11 @@ Installed in every Python image as `pip install -e /app/shared[services]` (migra
 | `prometheus_http.py` | HTTP middleware. Path label replaces UUIDs and integer segments with `{id}` and strips a trailing slash. Skips `/metrics`. |
 | `telemetry.py` | `setup_telemetry` / `setup_worker_telemetry` build a `TracerProvider`, `BatchSpanProcessor`, and OTLP gRPC exporter. FastAPI setup also calls `FastAPIInstrumentor.instrument_app`. An empty `otlp_endpoint` skips the exporter and still installs the client instrumentors. |
 | `sentry_setup.py` | Empty `dsn` returns before `sentry_sdk.init`. `traces_sample_rate=0.1` when a DSN is set. |
-| `logging.py` | `setup_logging` configures structlog JSON on stdout. No Datadog fields. |
+| `logging.py` | `setup_logging` configures structlog JSON on stdout. |
 | `redis_cache.py` | `start_redis` sets `app.state.redis`. Cache get/set/delete swallow errors and log a warning. |
 | `models/` | `User` table `users` (`id`, `username` unique, `hashed_password`, `role` default `user`). `Task` table `tasks` (`id` UUID, `title` as `sa.String()` with no length, `status` enum `taskstatus`: `created`, `in_progress`, `completed`, `created_at`, `updated_at`). Indexes `ix_tasks_status`, `ix_tasks_created_at`. |
 
-Base Dockerfiles run uvicorn or `python -m`. Datadog (`ddtrace`, `docker-compose.datadog.yml`, `ddtrace-run`) is removed.
+Base Dockerfiles run uvicorn or `python -m`.
 
 ## migrations (`migrations/`)
 

@@ -59,11 +59,11 @@ cd infra
 docker compose --profile core up -d
 ```
 
-This starts Nginx, api-gateway, auth-service, task-service, webhook-receiver, webhook-dispatcher, external-service-simulator, workers (notification-worker, **scheduler-worker**), Flower, Kafka (+ **kafka-exporter**), Redis, Postgres (+ **postgres-exporter**), frontend, Kafka UI, MailHog, Toxiproxy, and a one-shot `**migrations`** container (`alembic upgrade head` for `users` + `tasks`) before auth-service and task-service start.
+This starts Nginx, api-gateway, auth-service, task-service, webhook-receiver, webhook-dispatcher, external-service-simulator, workers (notification-worker, **scheduler-worker**), Kafka (+ **kafka-exporter**), Redis, Postgres (+ **postgres-exporter**), frontend, MailHog, Toxiproxy, and a one-shot `**migrations`** container (`alembic upgrade head` for `users` + `tasks`) before auth-service and task-service start.
 
 **Database:** set `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB` in `**infra/.env`** — the same file is used by the Postgres service and the `migrations` job.
 
-**Optional — full observability** (Jaeger, OpenTelemetry Collector, Prometheus, Grafana, Elasticsearch, Kibana, Fluent Bit, Redis Insight):
+**Optional — full observability** (Jaeger, OpenTelemetry Collector, Prometheus, Grafana, Elasticsearch, Kibana, Fluent Bit):
 
 ```bash
 docker compose --profile core --profile observability up -d
@@ -76,7 +76,7 @@ Tracing is OpenTelemetry to the Collector and Jaeger (`observability` profile). 
 All HTTP API traffic from the host goes through **Nginx on port 80**:
 
 - **Base URL:** `http://localhost`
-- **Health (via gateway):** `GET http://localhost/health` (and service-specific `/health` routes behind the gateway as documented in `[docs/system-architechture/SERVICE_MAP.md](docs/system-architechture/SERVICE_MAP.md)`)
+- **Health (via gateway):** `GET http://localhost/health` (and service-specific `/health` routes behind the gateway as documented in `[docs/system-architecture/SERVICE_MAP.md](docs/system-architecture/SERVICE_MAP.md)`)
 
 Default **JWT login** (after seeding, step 5):
 
@@ -132,15 +132,11 @@ cd infra && docker compose --profile core up -d --build frontend
 | Check           | URL / command                                              |
 | --------------- | ---------------------------------------------------------- |
 | Kanban / UI     | `http://localhost:5173` — log in with `admin` / `admin123` |
-| Kafka UI        | `http://localhost:8080`                                    |
-| Redis Insight   | `http://localhost:5540`                                    |
-| Flower (Celery) | `http://localhost:5555`                                    |
 | MailHog         | `http://localhost:8025`                                    |
 | Jaeger          | `http://localhost:16686`                                   |
 | Prometheus      | `http://localhost:9090`                                    |
 | Grafana         | `http://localhost:3000`                                    |
 | Kibana          | `http://localhost:5601`                                    |
-| Pyroscope       | `http://localhost:4040`                                    |
 
 
 
@@ -211,10 +207,10 @@ The system follows a microservices architecture with synchronous and asynchronou
 - **webhook-dispatcher** — consumes Kafka (`task_created`, `task_updated`), delivers outbound webhooks with exponential backoff + jitter, no retry on 4xx, DLQ on permanent failure
 - **external-service-simulator** — external webhook test double (`fail_rate`, `delay`, `status`, idempotency deduplication)
 - **notification-worker** — consumes `task_created`, sends SMTP (via Toxiproxy → MailHog)
-- **scheduler-worker** — Celery + Beat: DLQ replay, old-task cleanup; **Flower** on port 5555
+- **scheduler-worker** — Celery + Beat: DLQ replay, old-task cleanup
 - **Postgres**, **Redis**, **Kafka** — data, cache, events
 
-For ports, envelopes, and request diagrams, see `[docs/system-architechture/SERVICE_MAP.md](docs/system-architechture/SERVICE_MAP.md)` and `[docs/system-architechture/ARCHITECTURE.md](docs/system-architechture/ARCHITECTURE.md)`. Repository layout: `[docs/system-architechture/FILE_STRUCTURE.md](docs/system-architechture/FILE_STRUCTURE.md)`.
+For ports, envelopes, and request diagrams, see `[docs/system-architecture/SERVICE_MAP.md](docs/system-architecture/SERVICE_MAP.md)` and `[docs/system-architecture/ARCHITECTURE.md](docs/system-architecture/ARCHITECTURE.md)`. Repository layout: `[docs/system-architecture/FILE_STRUCTURE.md](docs/system-architecture/FILE_STRUCTURE.md)`.
 
 ---
 
@@ -251,7 +247,7 @@ Base compose + the `**observability**` profile. Apps export OTLP to `otel-collec
 
 ## Investigation documentation
 
-Guided exercises and playbooks live under `[docs/incidents-playbooks/](docs/incidents-playbooks/)` (see also `[docs/system-architechture/FILE_STRUCTURE.md](docs/system-architechture/FILE_STRUCTURE.md)`). Highlights: [Debugging scenarios](docs/incidents-playbooks/DEBUGGING_SCENARIOS.md), [Incident patterns](docs/incidents-playbooks/1_INCIDENT_PATTERNS.md), [Incident playbooks](docs/incidents-playbooks/2_INCIDENT_PLAYBOOKS.md), [Failure primitives](docs/incidents-playbooks/PROD_INCIDENTS.md).
+Guided exercises and playbooks live under `[docs/incidents-playbooks/](docs/incidents-playbooks/)` (see also `[docs/system-architecture/FILE_STRUCTURE.md](docs/system-architecture/FILE_STRUCTURE.md)`). Highlights: [Debugging scenarios](docs/incidents-playbooks/DEBUGGING_SCENARIOS.md), [Incident patterns](docs/incidents-playbooks/1_INCIDENT_PATTERNS.md), [Incident playbooks](docs/incidents-playbooks/2_INCIDENT_PLAYBOOKS.md), [Failure primitives](docs/incidents-playbooks/PROD_INCIDENTS.md).
 
 ---
 
@@ -259,7 +255,7 @@ Guided exercises and playbooks live under `[docs/incidents-playbooks/](docs/inci
 
 ## Learning artifacts
 
-- Incident-style playbooks and step-by-step labs under `[docs/incidents-playbooks/](docs/incidents-playbooks/)` and stack reference under `[docs/system-architechture/](docs/system-architechture/)`
+- Incident-style playbooks and step-by-step labs under `[docs/incidents-playbooks/](docs/incidents-playbooks/)` and stack reference under `[docs/system-architecture/](docs/system-architecture/)`
 - **Load tests:** `load-tests/README.md`
 - **Chaos:** `chaos/README.md`
 

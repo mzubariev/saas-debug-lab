@@ -1,0 +1,13 @@
+---
+alwaysApply: true
+---
+DOCS RULES (apply to every task)
+1. Source of truth, highest first: real code and configs (infra/*.yml, nginx.conf, Makefile, testing/testing.mk, workflows) > KNOWN_ISSUES.md > KIT_MAP.md > testing/docs/human/SUT_MAP_FULL.md > older root README/ARCHITECTURE/SERVICE_MAP/FILE_STRUCTURE (structure and wording only, never facts).
+2. Never invent ports, numbers, env vars, commands, or file paths. Check each only against the files I @-mention. If unverifiable, write "TBD" and list it in your final reply.
+3. Text work only. Do NOT run commands, write scripts, search the repo, or re-verify your own output after writing it.
+4. Read ONLY the files I @-mention. Never read or edit anything listed in .cursorignore, node_modules, .venv, or lock files.
+5. Never read or edit testing/docs/cursor/ except KIT_MAP.md. Never read or edit testing/docs/human/ except SUT_MAP_FULL.md.
+6. Removed from the project, must not appear in current docs: Redis Insight, Kafka UI, Flower, Pyroscope, Datadog/ddtrace/dd.trace_id, ZooKeeper (Kafka is KRaft). Allowed only as historical notes in KNOWN_ISSUES.md and testing/docs/cursor/_recon-log.md. Compose profiles: only core and observability.
+7. Docs path is docs/system-architecture (typo fixed). The old spelling must not appear anywhere.
+8. Do not change production or test code unless the task says so. Do not commit. End with a proposed one-line commit message and a list of open questions.
+9. Language: English. Concise, no filler, tables for reference data, mermaid only where order or topology matters.

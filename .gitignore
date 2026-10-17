@@ -6,6 +6,9 @@
 
 # docs
 docs/**
+!docs/system-architecture/
+!docs/system-architecture/**
+docs/system-architecture/testing-architecture
 !docs/on-call/
 !docs/on-call/ON_CALL_RUNBOOK.md
 
