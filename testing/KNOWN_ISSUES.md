@@ -124,6 +124,7 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P9-isolate: the test stack project is `saas-test`. `container_name` is reset. The ports file is removed. Compose >= 2.24 is required so `!override` replaces lab host ports in `docker-compose.test.yml`: nginx `9080`, frontend `5174` (`UI_URL`), simulator `8002`, mailhog `8026`, toxiproxy `8475`. Postgres `5434`, Redis `6381`, Kafka `9095`, gateway `8010`, and worker metrics `9111`–`9113` stay off the ports the current `infra` project already publishes. `compose.py` refuses to start when `COMPOSE_PROJECT_NAME` is set to anything else, and when Compose is older than 2.24. The synthetic probe and `testing/synthetic/compose.probe.yml` still target the dev lab (`infra_default`).
 - P10-session-stale: `testing/.stack/session.json` outlived `down -v`. Tmpfs Postgres was empty, but an unexpired JWT skipped seed and login, so UI and `POST /auth/token` as admin returned 401. Reuse now requires the compose project, the postgres container id, and a live admin login.
 - BUG-13: migration 0002 `tasks.title` is `sa.String()` with no length, so `max_length` stays 255 (BUG-2). A NUL byte and a lone surrogate in the title are 422.
+- `infra/nginx/nginx.conf`: api zone is `$limit_key` at 20r/s (Authorization, or `$binary_remote_addr` when the header is empty). `limit_req_log_level warn`. Auth zone stays `$http_authorization` (BUG-1).
 
 
 
