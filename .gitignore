@@ -6,9 +6,13 @@
 
 # docs
 docs/**
+!docs/images/
+!docs/images/**
 !docs/system-architecture/
 !docs/system-architecture/ARCHITECTURE.md
 !docs/system-architecture/SERVICE_MAP.md
+!docs/system-architecture/observability.md
+!docs/system-architecture/setup.md
 docs/system-architecture/testing-architecture
 !docs/on-call/
 !docs/on-call/ON_CALL_RUNBOOK.md
