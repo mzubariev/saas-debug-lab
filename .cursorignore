@@ -34,6 +34,7 @@ docs/cheat-sheets
 docs/on-call/**
 !docs/on-call/ON_CALL_RUNBOOK.md
 docs/system-architecture/testing-architecture
+docs/system-architecture/FILE_STRUCTURE.md
 testing/docs/cursor/design
 testing/docs/cursor/plan
 testing/docs/cursor/sut

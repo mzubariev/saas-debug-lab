@@ -7,7 +7,8 @@
 # docs
 docs/**
 !docs/system-architecture/
-!docs/system-architecture/**
+!docs/system-architecture/ARCHITECTURE.md
+!docs/system-architecture/SERVICE_MAP.md
 docs/system-architecture/testing-architecture
 !docs/on-call/
 !docs/on-call/ON_CALL_RUNBOOK.md
