@@ -21,8 +21,8 @@ groups:
           severity: critical
         annotations:
           summary: "Service {{ $labels.job }} is not responding"
-          dashboard: "http://127.0.0.1:3000/d/global-overview-v2"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/global-overview-v2"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -59,8 +59,8 @@ groups:
           severity: critical
         annotations:
           summary: "{{ $labels.job }} HTTP 5xx error rate exceeded 5%"
-          dashboard: "http://127.0.0.1:3000/d/service-drilldown-v2?var-job={{ $labels.job }}"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/service-drilldown-v2?var-job={{ $labels.job }}"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -104,8 +104,8 @@ groups:
           severity: critical
         annotations:
           summary: "Downstream calls to {{ $labels.service }} failing above 5%"
-          dashboard: "http://127.0.0.1:3000/d/service-drilldown-v2?var-job=api-gateway"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/service-drilldown-v2?var-job=api-gateway"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -149,8 +149,8 @@ groups:
           severity: critical
         annotations:
           summary: "Webhook delivery failure rate exceeded 5% — check DLQ"
-          dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/pipelines-v2"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -194,8 +194,8 @@ groups:
           severity: critical
         annotations:
           summary: "No Celery task throughput for 15m while scheduler-worker is UP — Beat may be stuck or workers not consuming the queue"
-          dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/pipelines-v2"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -231,8 +231,8 @@ groups:
           severity: critical
         annotations:
           summary: "Kafka message processing errors detected in {{ $labels.job }}"
-          dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/pipelines-v2"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A

@@ -21,8 +21,8 @@ groups:
           severity: warning
         annotations:
           summary: "{{ $labels.job }} P95 latency exceeded 1s"
-          dashboard: "http://127.0.0.1:3000/d/service-drilldown-v2?var-job={{ $labels.job }}"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/service-drilldown-v2?var-job={{ $labels.job }}"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -63,8 +63,8 @@ groups:
           severity: warning
         annotations:
           summary: "No HTTP traffic detected for {{ $labels.job }}"
-          dashboard: "http://127.0.0.1:3000/d/global-overview-v2"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/global-overview-v2"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -99,8 +99,8 @@ groups:
           severity: warning
         annotations:
           summary: "Kafka consumer group {{ $labels.consumergroup }} is {{ $value }} messages behind on {{ $labels.topic }} — pipeline backing up"
-          dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/pipelines-v2"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -133,8 +133,8 @@ groups:
           severity: warning
         annotations:
           summary: "Webhook DLQ is receiving new messages — deliveries permanently failing"
-          dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/pipelines-v2"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -169,8 +169,8 @@ groups:
           severity: warning
         annotations:
           summary: "Celery queue backlog — tasks are accumulating faster than workers consume"
-          dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/pipelines-v2"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -208,8 +208,8 @@ groups:
           severity: warning
         annotations:
           summary: "{{ $labels.job }} file descriptor usage above 80% — risk of connection exhaustion"
-          dashboard: "http://127.0.0.1:3000/d/resources-deps-v2?var-job={{ $labels.job }}"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/resources-deps-v2?var-job={{ $labels.job }}"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -246,8 +246,8 @@ groups:
           severity: warning
         annotations:
           summary: "{{ $labels.job }} CPU saturation above 80% of machine cores — runaway loop or overload"
-          dashboard: "http://127.0.0.1:3000/d/resources-deps-v2?var-job={{ $labels.job }}"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/resources-deps-v2?var-job={{ $labels.job }}"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -282,8 +282,8 @@ groups:
           severity: warning
         annotations:
           summary: "{{ $labels.job }} memory usage above 85% of container limit — OOM risk"
-          dashboard: "http://127.0.0.1:3000/d/resources-deps-v2?var-job={{ $labels.job }}"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/resources-deps-v2?var-job={{ $labels.job }}"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -324,8 +324,8 @@ groups:
         annotations:
           summary: "task-service DB operation p95 latency above 200ms — slow DB, lock contention, or index missing"
           description: "PromQL threshold is 0.2 (seconds) = 200ms. Uses task_processing_duration_seconds (app histogram)."
-          dashboard: "http://127.0.0.1:3000/d/resources-deps-v2"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/resources-deps-v2"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -362,8 +362,8 @@ groups:
           severity: warning
         annotations:
           summary: "PostgreSQL connection count above 80% of max_connections — risk of 'too many connections' errors"
-          dashboard: "http://127.0.0.1:3000/d/resources-deps-v2"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/resources-deps-v2"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -398,8 +398,8 @@ groups:
           severity: warning
         annotations:
           summary: "PostgreSQL has queries running for more than 1 second — possible missing index or lock contention"
-          dashboard: "http://127.0.0.1:3000/d/resources-deps-v2"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/resources-deps-v2"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -432,8 +432,8 @@ groups:
           severity: warning
         annotations:
           summary: "More than 30% of DLQ retry deliveries are failing — external endpoint may be rejecting payloads"
-          dashboard: "http://127.0.0.1:3000/d/pipelines-v2"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/pipelines-v2"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A
@@ -468,8 +468,8 @@ groups:
           severity: warning
         annotations:
           summary: "auth-service 401 Unauthorized rate exceeded 10% — possible credential storm or attack"
-          dashboard: "http://127.0.0.1:3000/d/service-drilldown-v2?var-job=auth-service"
-          runbook: "https://github.com/mzubariev/saas-debug-lab/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
+          dashboard: "${GRAFANA_BASE_URL_IP}/d/service-drilldown-v2?var-job=auth-service"
+          runbook: "${GITHUB_REPO_URL}/blob/main/docs/on-call/ON_CALL_RUNBOOK.md"
 
         data:
           - refId: A

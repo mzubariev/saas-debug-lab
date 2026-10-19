@@ -31,7 +31,7 @@ datasources:
         datasourceUid: elasticsearch
         filterByTraceID: true
         filterBySpanID: false
-        customQuery: "trace_id:${__value.raw}"
+        customQuery: "trace_id:$${__value.raw}"
         spanStartTimeShift: 0
         spanEndTimeShift: 0
       # Trace → Metrics: clicking "Metrics" opens Prometheus around ±2 min
@@ -62,20 +62,20 @@ datasources:
       dataLinks:
         # 1. Grafana Explore — opens built-in Jaeger trace timeline
         - field: trace_id
-          url: "${__value.raw}"
+          url: "$${__value.raw}"
           datasourceUid: jaeger
           urlDisplayLabel: "Explore trace (Grafana)"
         # 2. Jaeger UI — opens the native Jaeger trace detail page
         - field: trace_id
-          url: "${JAEGER_BASE_URL}/trace/${__value.raw}"
+          url: "${JAEGER_BASE_URL}/trace/$${__value.raw}"
           urlDisplayLabel: "Jaeger"
         # 3. Kibana Discover — pre-filtered to this trace_id with preset columns
         - field: trace_id
-          url: "${KIBANA_BASE_URL}/app/discover#/?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now-15m,to:now))&_a=(columns:!('@timestamp',log_source,service.name,event_name,method,path,level,status,downstream,message,exception,trace_id,request_id),filters:!(),grid:(columns:('@timestamp':(width:121),level:(width:75),log_source:(width:68),status:(width:66))),hideChart:!f,interval:auto,query:(language:kuery,query:'trace_id:${__value.raw}'),sort:!(!('@timestamp',desc)))"
+          url: "${KIBANA_BASE_URL}/app/discover#/?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now-15m,to:now))&_a=(columns:!('@timestamp',log_source,service.name,event_name,method,path,level,status,downstream,message,exception,trace_id,request_id),filters:!(),grid:(columns:('@timestamp':(width:121),level:(width:75),log_source:(width:68),status:(width:66))),hideChart:!f,interval:auto,query:(language:kuery,query:'trace_id:$${__value.raw}'),sort:!(!('@timestamp',desc)))"
           urlDisplayLabel: "Kibana"
         # 4. Sentry — issues filtered by this otel_trace_id
         - field: trace_id
-          url: "https://nz-j9.sentry.io/issues/?project=4511529052667984&query=otel_trace_id%3A${__value.raw}%20is%3Aunresolved&referrer=issue-list&statsPeriod=14d"
+          url: "${SENTRY_BASE_URL_PROJECT}&query=otel_trace_id%3A$${__value.raw}%20is%3Aunresolved&referrer=issue-list&statsPeriod=14d"
           urlDisplayLabel: "Sentry"
 
       # Derived fields — regex/label match used to surface the trace_id Jaeger
@@ -84,6 +84,6 @@ datasources:
         - name: trace_id
           matcherType: label
           matcherRegex: trace_id
-          url: "${__value.raw}"
+          url: "$${__value.raw}"
           datasourceUid: jaeger
           urlDisplayLabel: "Open trace in Jaeger"
