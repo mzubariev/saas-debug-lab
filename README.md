@@ -180,20 +180,7 @@ You need Docker with Compose. The full guide with every command, env variable, p
 1. Copy the env files ([Environment](docs/system-architecture/setup.md#environment)).
 2. Start the `core` profile, then `observability` ([Start](docs/system-architecture/setup.md#start)).
 3. Seed users and tasks ([Seed](docs/system-architecture/setup.md#seed)). Postgres is not published to the host, so the seed runs inside its network.
-4. Do the four manual steps below ([Manual steps](docs/system-architecture/setup.md#manual-steps)).
-5. Open the UI at `http://localhost:5173` and log in as `admin` / `admin123`.
-
-
-
-### Known issues and manual steps
-
-- [Kibana data view](docs/system-architecture/setup.md#kibana-data-view): create `saas-debug-lab` by hand after the first start.
-- [Grafana Telegram contact point](docs/system-architecture/setup.md#grafana-telegram): set the bot token and chat id before the first Grafana start.
-- [Grafana interlinking](docs/system-architecture/setup.md#grafana-interlinking): paste `${__value.raw}` into every Elasticsearch data link by hand.
-- [Grafana Explore traces](docs/system-architecture/setup.md#grafana-explore-traces): select the TraceID query type by hand after jumping from an exemplar.
-- Product defects found by the tests: [Findings](testing/README.md#findings).
-
-
+4. Open the UI at `http://localhost:5173` and log in as `admin` / `admin123`.
 
 ## Roadmap
 
