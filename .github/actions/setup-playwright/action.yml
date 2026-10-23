@@ -1,0 +1,35 @@
+# The caller must actions/checkout and astral-sh/setup-uv, then `uv sync --locked`,
+# before this action. Composite `run` steps do not inherit defaults.run.
+name: Setup Playwright
+description: Switch the apt mirror, restore the Playwright browser cache, and install the browser plus its system dependencies.
+inputs:
+  browser:
+    description: Playwright browser to install (chromium, firefox, or webkit).
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Switch apt mirror
+      shell: bash
+      working-directory: ${{ github.workspace }}/testing
+      run: echo "http://archive.ubuntu.com/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
+    - name: Playwright version
+      id: pw
+      shell: bash
+      working-directory: ${{ github.workspace }}/testing
+      run: echo "version=$(uv run python -c 'from importlib.metadata import version; print(version("playwright"))')" >> "$GITHUB_OUTPUT"
+    - id: pw-cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/ms-playwright
+        key: pw-${{ runner.os }}-${{ steps.pw.outputs.version }}-${{ inputs.browser }}
+    - name: Install Playwright browser
+      if: ${{ steps.pw-cache.outputs.cache-hit != 'true' }}
+      shell: bash
+      working-directory: ${{ github.workspace }}/testing
+      run: uv run playwright install --with-deps ${{ inputs.browser }}
+    - name: Install Playwright system dependencies
+      if: ${{ steps.pw-cache.outputs.cache-hit == 'true' }}
+      shell: bash
+      working-directory: ${{ github.workspace }}/testing
+      run: uv run playwright install-deps ${{ inputs.browser }}

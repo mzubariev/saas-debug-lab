@@ -373,17 +373,10 @@ jobs:
           cache-dependency-glob: testing/uv.lock
           python-version: "3.14"
       - run: uv sync --locked
-      - id: pw
-        run: echo "version=$(uv run python -c 'from importlib.metadata import version; print(version("playwright"))')" >> "$GITHUB_OUTPUT"
-      - id: pw-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - uses: ./.github/actions/setup-playwright
+        timeout-minutes: 10
         with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ steps.pw.outputs.version }}
-      - if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: uv run playwright install --with-deps chromium
-      - if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: uv run playwright install-deps chromium
+          browser: chromium
       - uses: ./.github/actions/test-stack
         with:
           install-wiremock-catch-all: true
