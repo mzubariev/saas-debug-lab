@@ -185,6 +185,7 @@ You need Docker with Compose. The full guide with every command, env variable, p
 ## Roadmap
 
 - Full R0: a `pyproject` per service, a uv workspace, and `src/`.
+- `Dependabot` for regular lock files auto-updates for security checks
 - BUG-1: nginx zone-key fix, together with the test-stack and k6 rework.
 - BUG-3: transactional outbox.
 - BUG-7: idempotency key (product decision).
