@@ -127,6 +127,8 @@ flowchart TB
 A needed job passes when its result is `success` or `skipped`. `failure` and `cancelled` fail the gate.
 `needs` is passed through `env` (`NEEDS`) and is not interpolated into the script.
 
+`coverage` combines branch coverage from `component-contract`: each service and `shared/saas_shared`. It does not include unit self-tests, integration, e2e, smoke, or synthetic. Those layers run the services in containers, so `--cov` cannot see them; scenario and edge coverage is the measure for those layers. A pull request report is partial because of the path filter, so there is no diff-cover. The job writes HTML (`coverage-html`) and appends a markdown report to the step summary. `--fail-under=85` is not enabled: the branch-plus-shared total was not measured. A skipped `coverage` job still passes `ci-gate`.
+
 Pull request (`ci.yml`): cancel in progress. `stack` is on when any of the eight services, `frontend/**`, or the broad paths change, so `build`, `integration`, and `ui-e2e` run. Integration marker `-m "not slow and not chaos"`. UI marker `-m critical` (Chromium). Schemathesis uses 40 examples. The smoke step runs inside `integration` with `SMOKE_BASE_URL=http://127.0.0.1:9080` and `UI_URL=http://127.0.0.1:5174`. `integration` and `ui-e2e` each use `shard: [1]`.
 
 Main push: the path filter runs every service and the stack. Integration marker `-m "not chaos"` (`slow` included). UI job runs the full Chromium suite. `chaos` stays on nightly.

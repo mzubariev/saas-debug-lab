@@ -126,6 +126,7 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - BUG-13: migration 0002 `tasks.title` is `sa.String()` with no length, so `max_length` stays 255 (BUG-2). A NUL byte and a lone surrogate in the title are 422.
 - `infra/nginx/nginx.conf`: api zone is `$limit_key` at 20r/s (Authorization, or `$binary_remote_addr` when the header is empty). `limit_req_log_level warn`. Auth zone stays `$http_authorization` (BUG-1).
 - CI: `stack` is true when any of the eight services changed, as well as `frontend/**` or the broad paths. A one-service pull request runs `build`, `integration` (`-m "not slow and not chaos"`), and `ui-e2e` (`-m critical`). `docs/**` alone still skips them. `ci-gate` still accepts `skipped`.
+- CI coverage: `component-contract` also passes `--cov=../shared/saas_shared`. Branch coverage is on. `[tool.coverage.paths]` maps each runner tree to `/app`, and `../shared/saas_shared` to `/app/shared/saas_shared` and `/shared/saas_shared`. Every service image uses `/app`, so a container file that exists in more than one image maps to the first tree that has it. CI records the runner paths, which combine does not rewrite. `tests/` and `migrations/` are omitted. No diff-cover: a pull request report is partial because of the path filter. `--fail-under=85` is not enabled; the branch-plus-shared total was not measured (dependency containers were not running). `coverage` stays on `ci-gate`; `skipped` still passes.
 
 
 

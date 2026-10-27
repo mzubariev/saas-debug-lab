@@ -206,3 +206,54 @@ exclude = [".venv", "**/__pycache__"]
 parallel = true
 concurrency = ["thread", "greenlet"]
 sigterm = true
+branch = true
+relative_files = true
+omit = [
+    "tests/*",
+    "*/tests/*",
+    "*/migrations/*",
+]
+
+# First path is the runner tree (cwd is testing/). Later paths are the same
+# tree inside an image. Shared is first so /app/shared is not rewritten onto a
+# service. Every service image uses /app, so a container file that exists in
+# more than one image maps to the first tree that has it. Runner paths do not
+# match those aliases, so combine of CI data is unchanged.
+[tool.coverage.paths]
+shared = [
+    "../shared/saas_shared",
+    "/app/shared/saas_shared",
+    "/shared/saas_shared",
+]
+task-service = [
+    "../services/core/task-service",
+    "/app",
+]
+auth-service = [
+    "../services/core/auth-service",
+    "/app",
+]
+api-gateway = [
+    "../services/core/api-gateway",
+    "/app",
+]
+webhook-receiver = [
+    "../services/core/webhook-receiver",
+    "/app",
+]
+webhook-dispatcher = [
+    "../services/core/webhook-dispatcher",
+    "/app",
+]
+external-service-simulator = [
+    "../services/external/external-service-simulator",
+    "/app",
+]
+notification-worker = [
+    "../workers/notification-worker",
+    "/app",
+]
+scheduler-worker = [
+    "../workers/scheduler-worker",
+    "/app",
+]
