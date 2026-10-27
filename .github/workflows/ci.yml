@@ -437,6 +437,8 @@ jobs:
       actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           enable-cache: true
@@ -455,7 +457,18 @@ jobs:
         with:
           name: coverage-html
           path: testing/htmlcov
+      - run: uv run coverage xml -o coverage.xml
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage-xml
+          path: testing/coverage.xml
       - run: uv run coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+      # Drift guard. The plan is to ratchet this up to 85 as shared gets covered.
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: uv run coverage report --fail-under=80
+      - if: github.event_name == 'pull_request'
+        run: uv run --with diff-cover diff-cover coverage.xml --compare-branch=origin/${{ github.base_ref }} --fail-under=85
 
   ci-gate:
     if: always()
