@@ -280,8 +280,26 @@ jobs:
           provenance: false
           allow: fs.read=*
           set: |
-            *.cache-from=type=gha
-            *.cache-to=type=gha,mode=max
+            migrations.cache-from=type=gha,scope=migrations
+            migrations.cache-to=type=gha,mode=max,scope=migrations
+            auth-service.cache-from=type=gha,scope=auth-service
+            auth-service.cache-to=type=gha,mode=max,scope=auth-service
+            task-service.cache-from=type=gha,scope=task-service
+            task-service.cache-to=type=gha,mode=max,scope=task-service
+            webhook-receiver.cache-from=type=gha,scope=webhook-receiver
+            webhook-receiver.cache-to=type=gha,mode=max,scope=webhook-receiver
+            webhook-dispatcher.cache-from=type=gha,scope=webhook-dispatcher
+            webhook-dispatcher.cache-to=type=gha,mode=max,scope=webhook-dispatcher
+            external-service-simulator.cache-from=type=gha,scope=external-service-simulator
+            external-service-simulator.cache-to=type=gha,mode=max,scope=external-service-simulator
+            notification-worker.cache-from=type=gha,scope=notification-worker
+            notification-worker.cache-to=type=gha,mode=max,scope=notification-worker
+            scheduler-worker.cache-from=type=gha,scope=scheduler-worker
+            scheduler-worker.cache-to=type=gha,mode=max,scope=scheduler-worker
+            api-gateway.cache-from=type=gha,scope=api-gateway
+            api-gateway.cache-to=type=gha,mode=max,scope=api-gateway
+            frontend.cache-from=type=gha,scope=frontend
+            frontend.cache-to=type=gha,mode=max,scope=frontend
 
   integration:
     needs: [lint, security, unit, build]
