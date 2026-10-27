@@ -30,12 +30,12 @@ flowchart TB
 | unit | `saas_testkit` self-tests | none | `-n auto` | PR and main |
 | contract | OpenAPI validity and snapshots, Schemathesis, consumer models, event schemas | Postgres, Redis, Redpanda | `-n auto` | PR and main, inside `component-contract`, `SCHEMA_EXAMPLES=40`. Nightly: five HTTP services, `SCHEMA_EXAMPLES=500` |
 | component | One service in-process (`--service`), ASGI, real commits | Worker database, worker Redis index, Redpanda | `-n auto` | PR: services in the path filter. Main: all eight |
-| integration | Cross-service effects and the nginx edge | Test stack, project `saas-test` | `-n 3`, `--dist loadgroup` | PR: `-m "not slow and not chaos"`, when `stack` is on (any of the eight services, `frontend/**`, or the broad paths). Main: `-m "not chaos"`. Nightly: `slow` and `chaos`, then `--count 5` |
-| e2e_ui | Sync Playwright | Same stack. `UI_URL` `http://127.0.0.1:5174` | `-n 2` | PR: `-m critical`, same `stack` condition as integration. Main: full Chromium. Nightly: Firefox and WebKit |
+| integration | Cross-service effects and the nginx edge | Test stack, project `saas-test`. Images from per-target GHA scopes written by `build` | `-n 3`, `--dist loadgroup` | PR: `-m "not slow and not chaos"`, when `stack` is on (any of the eight services, `frontend/**`, or the broad paths). Main: `-m "not chaos"`. Nightly: `slow` and `chaos`, then `--count 5` |
+| e2e_ui | Sync Playwright | Same stack and image cache. `UI_URL` `http://127.0.0.1:5174` | `-n 2` | PR: `-m critical`, same `stack` condition as integration. Main: full Chromium. Nightly: Firefox and WebKit |
 | smoke | Edge health, seeded login, create/read, `/metrics`, frontend | `SMOKE_BASE_URL` | `-n 0` | Step inside `integration` on PR and main. `smoke.yml` is `workflow_call` / `workflow_dispatch` |
 | synthetic | `testing/synthetic/k6/critical_path.js` | Dev lab | one k6 iteration | Not a job in `ci.yml`, `nightly.yml`, or `smoke.yml` |
 
-On a pull request, `changes` limits `component-contract` to touched services. `build`, `integration`, and `ui-e2e` run when the push is to `main`, or when the diff touches any of the eight services, `frontend/**`, `testing/**`, `shared/**`, `infra/**`, `migrations/**`, `.github/**`, or a `uv.lock`. A diff that matches none of those paths (for example `docs/**` only) leaves those jobs skipped. A skipped job is a passing input to `ci-gate`. A pull request that changes any service now pays for the image build, integration, and ui-e2e. The smoke step runs with integration.
+On a pull request, `changes` limits `component-contract` to touched services. `build`, `integration`, and `ui-e2e` run when the push is to `main`, or when the diff touches any of the eight services, `frontend/**`, `testing/**`, `shared/**`, `infra/**`, `migrations/**`, `.github/**`, or a `uv.lock`. A diff that matches none of those paths (for example `docs/**` only) leaves those jobs skipped. A skipped job is a passing input to `ci-gate`. A pull request that changes any service now pays for the image build, integration, and ui-e2e. The smoke step runs with integration. Stack images use one GHA cache scope per target. `build` in `ci.yml` and `nightly.yml` writes each scope; integration and ui-e2e only read them.
 
 ## How to run
 
@@ -137,6 +137,8 @@ Nightly (`nightly.yml`, cron `0 2 * * *`, also `workflow_dispatch`): `build`, th
 
 `smoke.yml` is the post-deploy workflow (`workflow_call` and `workflow_dispatch`). Inputs are `smoke_base_url` and `start_stack` (default false). `start_stack` builds on that runner; otherwise the caller has already started the target. It is not a `ci-gate` job.
 
+Image cache. `build` in `ci.yml` and `build` in `nightly.yml` are the only writers. Each bake target has its own scope: `<target>.cache-from=type=gha,scope=<target>` and `<target>.cache-to=type=gha,mode=max,scope=<target>`. Targets: `migrations`, `auth-service`, `task-service`, `webhook-receiver`, `webhook-dispatcher`, `external-service-simulator`, `notification-worker`, `scheduler-worker`, `api-gateway`, `frontend`. `.github/actions/test-stack` (used by `integration` and `ui-e2e`) sets the same `cache-from` scopes and does not set `cache-to`.
+
 ## Tracing
 
 `make t-int-traced` sets `TRACING=1`. `compose.py` adds `infra/docker-compose.test.tracing.yml` only then. Jaeger (`jaegertracing/all-in-one:1.55`) publishes the UI on host `16687` and OTLP gRPC on host `4319`. The file points `OTLP_ENDPOINT` at `http://jaeger:4317` for api-gateway, auth-service, task-service, webhook-receiver, external-service-simulator, webhook-dispatcher, notification-worker, and scheduler-worker. The base test overlay leaves `OTLP_ENDPOINT` empty. Spans stay in memory.
@@ -154,7 +156,7 @@ The Jaeger UI shows the OTLP spans those services export for one call. The kit s
 | dev | `infra/docker-compose.yml`, project `infra` (the directory name). Fixed `container_name`. Host ports: nginx 80, frontend 5173, simulator 8000. | Not the pytest stack. |
 | test-stack | `infra/docker-compose.yml` + `infra/docker-compose.test.yml`, project `saas-test`. `down -v` removes only that project's volumes. Host ports: gateway `8010`, nginx `9080`, frontend `5174`, simulator `8002`, mailhog `8026`, toxiproxy `8475`, Postgres `5434`, Redis `6381`, Kafka `9095`, WireMock `8089`, worker metrics `9111`–`9113`. | `tests/integration` (`make t-int`), `tests/e2e_ui` (`make t-ui`). `UI_URL` default `http://127.0.0.1:5174`. |
 | in-process | One service in-process. Postgres, Redis, and Redpanda from `make deps-up` (`testing/compose.deps.yml`: `5432`, `6379`, `9092`) or Testcontainers. | `tests/unit`, `tests/component`, `tests/contract`. |
-| CI | GitHub Actions, project `saas-test`. `BASE_URL` `http://127.0.0.1:8010`. | integration, ui-e2e, the smoke step on that stack, nightly. |
+| CI | GitHub Actions, project `saas-test`. Per-target GHA image scopes; `build` writes, test-stack reads. `BASE_URL` `http://127.0.0.1:8010`. | integration, ui-e2e, the smoke step on that stack, nightly. |
 | any-URL | Nothing is started. Smoke reads `SMOKE_BASE_URL`. Set `UI_URL` when the frontend is not the test stack. | `tests/smoke`. Synthetic uses the dev lab row. |
 
 ## Findings

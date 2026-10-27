@@ -60,7 +60,16 @@ runs:
         provenance: false
         allow: fs.read=*
         set: |
-          *.cache-from=type=gha
+          migrations.cache-from=type=gha,scope=migrations
+          auth-service.cache-from=type=gha,scope=auth-service
+          task-service.cache-from=type=gha,scope=task-service
+          webhook-receiver.cache-from=type=gha,scope=webhook-receiver
+          webhook-dispatcher.cache-from=type=gha,scope=webhook-dispatcher
+          external-service-simulator.cache-from=type=gha,scope=external-service-simulator
+          notification-worker.cache-from=type=gha,scope=notification-worker
+          scheduler-worker.cache-from=type=gha,scope=scheduler-worker
+          api-gateway.cache-from=type=gha,scope=api-gateway
+          frontend.cache-from=type=gha,scope=frontend
     - name: Record image phase
       if: ${{ always() && inputs.start == 'true' }}
       shell: bash
