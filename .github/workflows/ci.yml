@@ -146,7 +146,7 @@ jobs:
               or "all" in changed
           )
           services = full if run_all else [name for name in full if name in changed]
-          stack = run_all or "frontend" in changed
+          stack = run_all or "frontend" in changed or bool(services)
           with open(os.environ["GITHUB_OUTPUT"], "a") as handle:
               handle.write(f"services={json.dumps(services)}\n")
               handle.write(f"stack={'true' if stack else 'false'}\n")
