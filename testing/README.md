@@ -30,12 +30,12 @@ flowchart TB
 | unit | `saas_testkit` self-tests | none | `-n auto` | PR and main |
 | contract | OpenAPI validity and snapshots, Schemathesis, consumer models, event schemas | Postgres, Redis, Redpanda | `-n auto` | PR and main, inside `component-contract`, `SCHEMA_EXAMPLES=40`. Nightly: five HTTP services, `SCHEMA_EXAMPLES=500` |
 | component | One service in-process (`--service`), ASGI, real commits | Worker database, worker Redis index, Redpanda | `-n auto` | PR: services in the path filter. Main: all eight |
-| integration | Cross-service effects and the nginx edge | Test stack, project `saas-test` | `-n 3`, `--dist loadgroup` | PR: `-m "not slow and not chaos"`, only when the stack filter is on. Main: `-m "not chaos"`. Nightly: `slow` and `chaos`, then `--count 5` |
-| e2e_ui | Sync Playwright | Same stack. `UI_URL` `http://127.0.0.1:5174` | `-n 2` | PR: `-m critical`. Main: full Chromium. Nightly: Firefox and WebKit |
+| integration | Cross-service effects and the nginx edge | Test stack, project `saas-test` | `-n 3`, `--dist loadgroup` | PR: `-m "not slow and not chaos"`, when `stack` is on (any of the eight services, `frontend/**`, or the broad paths). Main: `-m "not chaos"`. Nightly: `slow` and `chaos`, then `--count 5` |
+| e2e_ui | Sync Playwright | Same stack. `UI_URL` `http://127.0.0.1:5174` | `-n 2` | PR: `-m critical`, same `stack` condition as integration. Main: full Chromium. Nightly: Firefox and WebKit |
 | smoke | Edge health, seeded login, create/read, `/metrics`, frontend | `SMOKE_BASE_URL` | `-n 0` | Step inside `integration` on PR and main. `smoke.yml` is `workflow_call` / `workflow_dispatch` |
 | synthetic | `testing/synthetic/k6/critical_path.js` | Dev lab | one k6 iteration | Not a job in `ci.yml`, `nightly.yml`, or `smoke.yml` |
 
-On a pull request, `changes` limits `component-contract` to touched services. `build`, `integration`, and `ui-e2e` run when the push is to `main`, or when the diff touches `testing/**`, `shared/**`, `infra/**`, `migrations/**`, `.github/**`, a `uv.lock`, or `frontend/**`. A skipped job is a passing input to `ci-gate`.
+On a pull request, `changes` limits `component-contract` to touched services. `build`, `integration`, and `ui-e2e` run when the push is to `main`, or when the diff touches any of the eight services, `frontend/**`, `testing/**`, `shared/**`, `infra/**`, `migrations/**`, `.github/**`, or a `uv.lock`. A diff that matches none of those paths (for example `docs/**` only) leaves those jobs skipped. A skipped job is a passing input to `ci-gate`. A pull request that changes any service now pays for the image build, integration, and ui-e2e. The smoke step runs with integration.
 
 ## How to run
 
@@ -127,7 +127,7 @@ flowchart TB
 A needed job passes when its result is `success` or `skipped`. `failure` and `cancelled` fail the gate.
 `needs` is passed through `env` (`NEEDS`) and is not interpolated into the script.
 
-Pull request (`ci.yml`): cancel in progress. Integration marker `-m "not slow and not chaos"`. UI marker `-m critical` (Chromium). Schemathesis uses 40 examples. The smoke step runs inside `integration` with `SMOKE_BASE_URL=http://127.0.0.1:9080` and `UI_URL=http://127.0.0.1:5174`. `integration` and `ui-e2e` each use `shard: [1]`.
+Pull request (`ci.yml`): cancel in progress. `stack` is on when any of the eight services, `frontend/**`, or the broad paths change, so `build`, `integration`, and `ui-e2e` run. Integration marker `-m "not slow and not chaos"`. UI marker `-m critical` (Chromium). Schemathesis uses 40 examples. The smoke step runs inside `integration` with `SMOKE_BASE_URL=http://127.0.0.1:9080` and `UI_URL=http://127.0.0.1:5174`. `integration` and `ui-e2e` each use `shard: [1]`.
 
 Main push: the path filter runs every service and the stack. Integration marker `-m "not chaos"` (`slow` included). UI job runs the full Chromium suite. `chaos` stays on nightly.
 

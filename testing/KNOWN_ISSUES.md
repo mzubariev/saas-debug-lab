@@ -125,6 +125,7 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - P10-session-stale: `testing/.stack/session.json` outlived `down -v`. Tmpfs Postgres was empty, but an unexpired JWT skipped seed and login, so UI and `POST /auth/token` as admin returned 401. Reuse now requires the compose project, the postgres container id, and a live admin login.
 - BUG-13: migration 0002 `tasks.title` is `sa.String()` with no length, so `max_length` stays 255 (BUG-2). A NUL byte and a lone surrogate in the title are 422.
 - `infra/nginx/nginx.conf`: api zone is `$limit_key` at 20r/s (Authorization, or `$binary_remote_addr` when the header is empty). `limit_req_log_level warn`. Auth zone stays `$http_authorization` (BUG-1).
+- CI: `stack` is true when any of the eight services changed, as well as `frontend/**` or the broad paths. A one-service pull request runs `build`, `integration` (`-m "not slow and not chaos"`), and `ui-e2e` (`-m critical`). `docs/**` alone still skips them. `ci-gate` still accepts `skipped`.
 
 
 
