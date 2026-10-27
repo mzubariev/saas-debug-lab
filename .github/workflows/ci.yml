@@ -215,7 +215,7 @@ jobs:
         run: timeout 60 bash -c 'until (echo > /dev/tcp/localhost/9092) 2>/dev/null; do sleep 1; done'
       - run: >-
           uv run pytest tests/component tests/contract/http --service ${{ matrix.service }}
-          -n auto -q --cov=../${{ steps.svc.outputs.path }} --cov-report=
+          -n auto -q --cov=../${{ steps.svc.outputs.path }} --cov=../shared/saas_shared --cov-report=
           --junitxml=reports/junit-${{ matrix.service }}.xml
       - if: ${{ !cancelled() && matrix.service == 'task-service' }}
         run: uv run pytest tests/contract/events -q --junitxml=reports/junit-events.xml
@@ -448,7 +448,14 @@ jobs:
           pattern: reports-*
           path: testing/coverage-parts
           merge-multiple: true
-      - run: uv run coverage combine coverage-parts && uv run coverage report
+      - run: uv run coverage combine coverage-parts
+      - run: uv run coverage html -d htmlcov
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage-html
+          path: testing/htmlcov
+      - run: uv run coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
 
   ci-gate:
     if: always()
