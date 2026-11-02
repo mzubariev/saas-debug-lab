@@ -133,7 +133,7 @@ Pull request (`ci.yml`): cancel in progress. `stack` is on when any of the eight
 
 Main push: the path filter runs every service and the stack. Integration marker `-m "not chaos"` (`slow` included). UI job runs the full Chromium suite. `chaos` stays on nightly.
 
-Nightly (`nightly.yml`, cron `0 2 * * *`, also `workflow_dispatch`): `build`, then `schemathesis` (five HTTP services, `SCHEMA_EXAMPLES=500`), `stack` (`-m "slow or chaos"`, then integration and `e2e_ui` in separate processes with `--count 5`; the UI pass adds `--reruns 1`; durations are stored), and `browsers` (`firefox`, `webkit`). The `report` job skips `workflow_dispatch` and, when a needed job is not `success`, opens or updates the issue titled `nightly failed`.
+Nightly (`nightly.yml`, cron `0 2 * * *`, also `workflow_dispatch`): `build`, then `schemathesis` (five HTTP services, `SCHEMA_EXAMPLES=500`), `stack` (`-m "slow or chaos"`, then integration and `e2e_ui` in separate processes with `--count 5`; the UI pass adds `--reruns 1`; durations are stored), and `browsers` (`firefox`, `webkit`, pinned to `ubuntu-24.04`). The `report` job skips `workflow_dispatch` and, when a needed job is not `success`, opens or updates the issue titled `nightly failed`.
 
 `smoke.yml` is the post-deploy workflow (`workflow_call` and `workflow_dispatch`). Inputs are `smoke_base_url` and `start_stack` (default false). `start_stack` builds on that runner; otherwise the caller has already started the target. It is not a `ci-gate` job.
 
