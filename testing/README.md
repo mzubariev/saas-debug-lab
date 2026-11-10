@@ -35,7 +35,7 @@ flowchart TB
 | smoke | Edge health, seeded login, create/read, `/metrics`, frontend | `SMOKE_BASE_URL` | `-n 0` | Step inside `integration` on PR and main. `smoke.yml` is `workflow_call` / `workflow_dispatch` |
 | synthetic | `testing/synthetic/k6/critical_path.js` | Dev lab | one k6 iteration | Not a job in `ci.yml`, `nightly.yml`, or `smoke.yml` |
 
-On a pull request, `changes` limits `component-contract` to touched services. `build`, `integration`, and `ui-e2e` run when the push is to `main`, or when the diff touches any of the eight services, `frontend/**`, `testing/**`, `shared/**`, `infra/**`, `migrations/**`, `.github/**`, or a `uv.lock`. A diff that matches none of those paths (for example `docs/**` only) leaves those jobs skipped. A skipped job is a passing input to `ci-gate`. A pull request that changes any service now pays for the image build, integration, and ui-e2e. The smoke step runs with integration. Stack images use one GHA cache scope per target. `build` in `ci.yml` and `nightly.yml` writes each scope; integration and ui-e2e only read them.
+On a pull request, `changes` limits `component-contract` to touched services. `build`, `integration`, and `ui-e2e` run when the push is to `main`, or when the diff touches any of the eight services, `frontend/**`, `testing/**`, `shared/**`, `infra/**`, `migrations/**`, `.github/**`, or a `uv.lock`. A diff that matches none of those paths (for example `docs/**` only) leaves those jobs skipped. A skipped job is a passing input to `ci-gate`. A pull request that changes any service now pays for the image build, integration, and ui-e2e. The smoke step runs with integration. Stack images use one GHA cache scope per target. `build` in `ci.yml` and `nightly.yml` writes each scope; integration and ui-e2e only read them. `security` runs on every pull request and main push. It is a CI job, not a test layer.
 
 ## How to run
 
@@ -126,6 +126,9 @@ flowchart TB
 `ci-gate` uses `if: always()`, so a skipped dependency still leaves a completed gate.
 A needed job passes when its result is `success` or `skipped`. `failure` and `cancelled` fail the gate.
 `needs` is passed through `env` (`NEEDS`) and is not interpolated into the script.
+`ci-gate` needs stay `changes`, `lint`, `security`, `unit`, `component-contract`, `build`, `integration`, `ui-e2e`, and `coverage`.
+
+`security` runs pip-audit on the testing lock export, gitleaks, a report-only Trivy config scan, then `npm audit --audit-level=high` in `frontend`. CodeQL is a separate workflow (`codeql.yml`) and is outside this diagram. Add its checks to required status checks by hand. Details are in Security.
 
 `coverage` combines branch coverage from `component-contract`: each service and `shared/saas_shared`. The measured total with shared and branch coverage is 81%. It does not include unit self-tests, integration, e2e, smoke, or synthetic. Those layers run the services in containers, so `--cov` cannot see them; scenario and edge coverage is the measure for those layers. The job writes HTML (`coverage-html`), XML (`coverage-xml`), and appends a markdown report to the step summary. A push to `main` fails under 80% (`--fail-under=80`), a drift guard; the plan is to ratchet that to 85 as shared gets covered. A pull request runs diff-cover on changed lines at 85% (`--compare-branch=origin/<base>`). The combined pull request report is partial because of the path filter; diff-cover only looks at changed lines, and a diff with no Python lines passes. A skipped `coverage` job still passes `ci-gate`.
 
@@ -138,6 +141,34 @@ Nightly (`nightly.yml`, cron `0 2 * * *`, also `workflow_dispatch`): `build`, th
 `smoke.yml` is the post-deploy workflow (`workflow_call` and `workflow_dispatch`). Inputs are `smoke_base_url` and `start_stack` (default false). `start_stack` builds on that runner; otherwise the caller has already started the target. It is not a `ci-gate` job.
 
 Image cache. `build` in `ci.yml` and `build` in `nightly.yml` are the only writers. Each bake target has its own scope: `<target>.cache-from=type=gha,scope=<target>` and `<target>.cache-to=type=gha,mode=max,scope=<target>`. Targets: `migrations`, `auth-service`, `task-service`, `webhook-receiver`, `webhook-dispatcher`, `external-service-simulator`, `notification-worker`, `scheduler-worker`, `api-gateway`, `frontend`. `.github/actions/test-stack` (used by `integration` and `ui-e2e`) sets the same `cache-from` scopes and does not set `cache-to`.
+
+## Security
+
+| Check | Where | What it does |
+| --- | --- | --- |
+| pip-audit | `ci.yml` `security` | Audits the testing lock export (`uv export --locked --all-groups`). Fails the job on a finding. |
+| gitleaks | `ci.yml` `security` | Secret scan of the git history. Fails the job on a finding. |
+| Trivy config | `ci.yml` `security` | Trivy v0.70.0 via `aquasecurity/setup-trivy` v0.2.6. Dockerfile misconfig scan of `services`, `workers`, `frontend`, and `migrations`, then `.github/workflows`. `--exit-code 0` (report-only). Runs before npm audit. |
+| npm audit | `ci.yml` `security` | `npm audit --audit-level=high` with `working-directory: frontend` (overrides the workflow default `testing`). High and critical fail the job. |
+| CodeQL | `.github/workflows/codeql.yml` | Languages `python` and `javascript-typescript`, `build-mode: none`. `pull_request`, `push` to `main`, and `cron: "0 6 * * 1"` (Monday 06:00 UTC). Permissions: `contents: read`, `security-events: write`. |
+| Dependabot | `.github/dependabot.yml` | Weekly. Minor and patch updates are grouped (`patterns: ["*"]`); major updates stay separate. |
+
+Dependabot directories:
+
+| Ecosystem | Directories |
+| --- | --- |
+| github-actions | `/`. Dependabot searches `.github/workflows` and a root `action.yml`. |
+| uv | `/testing`, `/shared` (each has `pyproject.toml` and `uv.lock`) |
+| npm | `/frontend` (`package.json`, `package-lock.json`) |
+| docker | `/frontend`, `/migrations`, `/services/core/api-gateway`, `/services/core/auth-service`, `/services/core/task-service`, `/services/core/webhook-dispatcher`, `/services/core/webhook-receiver`, `/services/external/external-service-simulator`, `/workers/notification-worker`, `/workers/scheduler-worker` |
+
+Docker updates are base-image tags in those Dockerfiles. Service `requirements.lock` files are exported by `make lock` and are not a Dependabot ecosystem. `.github/actions/setup-playwright` and `.github/actions/test-stack` are outside the github-actions directory `/` search.
+
+Trivy v0.70.0 reports the same two results on all ten Dockerfiles: DS-0002 HIGH (no non-root `USER`) and DS-0026 LOW (no `HEALTHCHECK`). The step prints them and does not fail the job. They are not ignored. The workflows path is scanned with the default misconfig scanners. That version has no GitHub Actions scanner, so the path reports no supported files.
+
+CodeQL check names are `codeql / python` and `codeql / javascript-typescript`. The workflow is separate from `ci.yml`. `ci-gate` does not need it. Add both checks to required status checks manually in branch protection.
+
+Deliberately omitted: DAST, image signing, and SBOM attestations. This is a lab project and nothing is deployed to production yet.
 
 ## Tracing
 
@@ -198,4 +229,4 @@ Tests run Python 3.14. CI sets `python-version: "3.14"`. Every service image, bo
 
 ## Branch protection
 
-The required status check is `ci-gate` only. Personal-account repositories have no merge queue, so the workflow does not define `merge_group`.
+The required status check is `ci-gate` only. CodeQL is a separate workflow. Add `codeql / python` and `codeql / javascript-typescript` to required status checks manually in branch protection. Personal-account repositories have no merge queue, so the workflow does not define `merge_group`.

@@ -56,6 +56,23 @@ jobs:
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          version: v0.70.0
+      # Report-only. Every Dockerfile is DS-0002 (HIGH, no USER) and DS-0026 (LOW, no HEALTHCHECK).
+      # Trivy 0.70 has no GitHub Actions scanner; the workflows path reports no supported files.
+      # Runs before npm audit so a failing audit still leaves this log.
+      - name: Trivy config
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -eu
+          for target in services workers frontend migrations; do
+            trivy config --misconfig-scanners dockerfile --exit-code 0 --skip-version-check "$target"
+          done
+          trivy config --exit-code 0 --skip-version-check .github/workflows
+      - name: npm audit
+        working-directory: frontend
+        run: npm audit --audit-level=high
 
   unit:
     runs-on: ubuntu-latest

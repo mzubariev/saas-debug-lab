@@ -1,0 +1,61 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "uv"
+    directories:
+      - "/testing"
+      - "/shared"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "docker"
+    directories:
+      - "/frontend"
+      - "/migrations"
+      - "/services/core/api-gateway"
+      - "/services/core/auth-service"
+      - "/services/core/task-service"
+      - "/services/core/webhook-dispatcher"
+      - "/services/core/webhook-receiver"
+      - "/services/external/external-service-simulator"
+      - "/workers/notification-worker"
+      - "/workers/scheduler-worker"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
