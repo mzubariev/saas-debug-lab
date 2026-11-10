@@ -134,7 +134,7 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - Security: DAST, image signing, and SBOM attestations are omitted. This is a lab project with no production deployment yet.
 - Security: Dependabot github-actions uses directory `/` (`.github/workflows` and a root `action.yml`). `.github/actions/setup-playwright` and `.github/actions/test-stack` are outside that search. Service `requirements.lock` files are not a Dependabot ecosystem. A uv update does not run `make lock`; lint fails until the eight `requirements.lock` files are exported and committed.
 - Security: `npm audit --audit-level=high` failed on nanoid (GHSA-2v37-7h3g-55p8), source-map-js (GHSA-68fv-2mgg-jv7q), and vite `<=6.4.3`. `npm audit fix` clears the first two. `vite` is `^6.4.6` (`@vitejs/plugin-react` 4 allows vite 6). Moderates remain, including react-router.
-- Dependabot groups `github/codeql-action/*` for every update type, so init and analyze move together. npm groups `@opentelemetry/*` the same way. Ignored: sqlalchemy minor and major (`shared` stays `>=2.0,<2.1`, BUG-10); OpenTelemetry `>=0.300` and `@opentelemetry/resources`, `sdk-trace-base`, and `sdk-trace-web` `>=3` (those need `@opentelemetry/api` 1.10, and sdk-trace 2.x needs api `<1.10`).
+- Dependabot groups `github/codeql-action/*` for every update type, so init and analyze move together. npm groups `@opentelemetry/*` the same way. Ignored: sqlalchemy minor and major (`shared` stays `>=2.0,<2.1`, BUG-10); OpenTelemetry `>=0.300`, `@opentelemetry/api` `>=1.10`, and `@opentelemetry/resources`, `sdk-trace-base`, and `sdk-trace-web` `>=3` (those need api 1.10, and sdk-trace 2.x needs api `<1.10`).
 
 
 

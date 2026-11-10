@@ -151,7 +151,7 @@ Image cache. `build` in `ci.yml` and `build` in `nightly.yml` are the only write
 | Trivy config | `ci.yml` `security` | Trivy v0.70.0 via `aquasecurity/setup-trivy` v0.2.6. Dockerfile misconfig scan of `services`, `workers`, `frontend`, and `migrations`, then `.github/workflows`. `--exit-code 0` (report-only). Runs before npm audit. |
 | npm audit | `ci.yml` `security` | `npm audit --audit-level=high` with `working-directory: frontend` (overrides the workflow default `testing`). High and critical fail the job. |
 | CodeQL | `.github/workflows/codeql.yml` | Languages `python` and `javascript-typescript`, `build-mode: none`. `pull_request`, `push` to `main`, and `cron: "0 6 * * 1"` (Monday 06:00 UTC). Permissions: `contents: read`, `security-events: write`. |
-| Dependabot | `.github/dependabot.yml` | Weekly. Minor and patch updates are grouped. `github/codeql-action/*` and `@opentelemetry/*` are grouped for every update type. sqlalchemy minor/major and OpenTelemetry `>=0.300` (and resources/sdk `>=3`) are ignored. |
+| Dependabot | `.github/dependabot.yml` | Weekly. Minor and patch updates are grouped. `github/codeql-action/*` and `@opentelemetry/*` are grouped for every update type. sqlalchemy minor/major, OpenTelemetry `>=0.300`, `@opentelemetry/api` `>=1.10`, and resources/sdk `>=3` are ignored. |
 
 Dependabot directories:
 
@@ -162,7 +162,7 @@ Dependabot directories:
 | npm | `/frontend` (`package.json`, `package-lock.json`) |
 | docker | `/frontend`, `/migrations`, `/services/core/api-gateway`, `/services/core/auth-service`, `/services/core/task-service`, `/services/core/webhook-dispatcher`, `/services/core/webhook-receiver`, `/services/external/external-service-simulator`, `/workers/notification-worker`, `/workers/scheduler-worker` |
 
-Docker updates are base-image tags in those Dockerfiles. Service `requirements.lock` files are exported by `make lock` and are not a Dependabot ecosystem, so a uv update fails lint until `make lock` is committed. `.github/actions/setup-playwright` and `.github/actions/test-stack` are outside the github-actions directory `/` search. `github/codeql-action` init and analyze are one group because a split major fails CodeQL. OpenTelemetry `0.300+` needs `@opentelemetry/api` 1.10, and sdk-trace 2.x needs api `<1.10`, so those ranges are ignored. sqlalchemy minor and major updates are ignored so `shared` stays `>=2.0,<2.1` (BUG-10).
+Docker updates are base-image tags in those Dockerfiles. Service `requirements.lock` files are exported by `make lock` and are not a Dependabot ecosystem, so a uv update fails lint until `make lock` is committed. `.github/actions/setup-playwright` and `.github/actions/test-stack` are outside the github-actions directory `/` search. `github/codeql-action` init and analyze are one group because a split major fails CodeQL. OpenTelemetry `0.300+` and `@opentelemetry/api` `1.10` need each other, and sdk-trace 2.x needs api `<1.10`, so those ranges are ignored. sqlalchemy minor and major updates are ignored so `shared` stays `>=2.0,<2.1` (BUG-10).
 
 Trivy v0.70.0 reports the same two results on all ten Dockerfiles: DS-0002 HIGH (no non-root `USER`) and DS-0026 LOW (no `HEALTHCHECK`). The step prints them and does not fail the job. They are not ignored. The workflows path is scanned with the default misconfig scanners. That version has no GitHub Actions scanner, so the path reports no supported files.
 
