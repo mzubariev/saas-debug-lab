@@ -132,7 +132,9 @@ Confirm in the layer that can observe the behaviour, then assign a BUG-n and `xf
 - Security: Trivy config in the `security` job is report-only (`--exit-code 0`, Trivy v0.70.0). All ten Dockerfiles are DS-0002 HIGH (no non-root USER) and DS-0026 LOW (no HEALTHCHECK). Those need image changes and are not ignored. `.github/workflows` is scanned; Trivy 0.70 has no GitHub Actions misconfig scanner, so that path reports no supported files.
 - Security: CodeQL is `.github/workflows/codeql.yml` (python, javascript-typescript, `build-mode: none`, weekly `0 6 * * 1`). It is outside `ci-gate`. Branch protection still requires `ci-gate` only until `codeql / python` and `codeql / javascript-typescript` are added by hand.
 - Security: DAST, image signing, and SBOM attestations are omitted. This is a lab project with no production deployment yet.
-- Security: Dependabot github-actions uses directory `/` (`.github/workflows` and a root `action.yml`). `.github/actions/setup-playwright` and `.github/actions/test-stack` are outside that search. Service `requirements.lock` files are not a Dependabot ecosystem.
+- Security: Dependabot github-actions uses directory `/` (`.github/workflows` and a root `action.yml`). `.github/actions/setup-playwright` and `.github/actions/test-stack` are outside that search. Service `requirements.lock` files are not a Dependabot ecosystem. A uv update does not run `make lock`; lint fails until the eight `requirements.lock` files are exported and committed.
+- Security: `npm audit --audit-level=high` failed on nanoid (GHSA-2v37-7h3g-55p8), source-map-js (GHSA-68fv-2mgg-jv7q), and vite `<=6.4.3`. `npm audit fix` clears the first two. `vite` is `^6.4.6` (`@vitejs/plugin-react` 4 allows vite 6). Moderates remain, including react-router.
+- Dependabot groups `github/codeql-action/*` for every update type, so init and analyze move together. npm groups `@opentelemetry/*` the same way. Ignored: sqlalchemy minor and major (`shared` stays `>=2.0,<2.1`, BUG-10); OpenTelemetry `>=0.300` and `@opentelemetry/resources`, `sdk-trace-base`, and `sdk-trace-web` `>=3` (those need `@opentelemetry/api` 1.10, and sdk-trace 2.x needs api `<1.10`).
 
 
 
