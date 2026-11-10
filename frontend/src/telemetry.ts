@@ -10,7 +10,7 @@ import { registerInstrumentations } from "@opentelemetry/instrumentation"
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http"
 import { FetchInstrumentation } from "@opentelemetry/instrumentation-fetch"
 import { XMLHttpRequestInstrumentation } from "@opentelemetry/instrumentation-xml-http-request"
-import { Resource } from "@opentelemetry/resources"
+import { resourceFromAttributes } from "@opentelemetry/resources"
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base"
 import { WebTracerProvider } from "@opentelemetry/sdk-trace-web"
 
@@ -38,7 +38,7 @@ export function initTelemetry(): void {
 
   const provider = new WebTracerProvider({
     spanProcessors: [new BatchSpanProcessor(exporter)],
-    resource: new Resource({
+    resource: resourceFromAttributes({
       "service.name": "saas-debug-lab-frontend",
     }),
   })
