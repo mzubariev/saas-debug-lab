@@ -1,0 +1,46 @@
+{
+  "venvPath": "testing",
+  "venv": ".venv",
+  "extraPaths": ["shared", "testing/src"],
+  "executionEnvironments": [
+    {
+      "root": "services/core/api-gateway",
+      "extraPaths": ["shared"]
+    },
+    {
+      "root": "services/core/auth-service",
+      "extraPaths": ["shared"]
+    },
+    {
+      "root": "services/core/task-service",
+      "extraPaths": ["shared"]
+    },
+    {
+      "root": "services/core/webhook-dispatcher",
+      "extraPaths": ["shared"]
+    },
+    {
+      "root": "services/core/webhook-receiver",
+      "extraPaths": ["shared"]
+    },
+    {
+      "root": "services/external/external-service-simulator",
+      "extraPaths": ["shared"]
+    },
+    {
+      "root": "workers/notification-worker",
+      "extraPaths": ["shared"]
+    },
+    {
+      "root": "workers/scheduler-worker",
+      "extraPaths": ["shared"]
+    },
+    {
+      "root": "testing",
+      "extraPaths": ["shared", "testing/src"]
+    },
+    {
+      "root": "."
+    }
+  ]
+}
